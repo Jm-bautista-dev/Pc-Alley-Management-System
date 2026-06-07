@@ -1,0 +1,34 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Backend (Express)",
+      "program": "${workspaceFolder}/backend/src/server.js",
+      "cwd": "${workspaceFolder}/backend",
+      "envFile": "${workspaceFolder}/backend/.env",
+      "console": "integratedTerminal",
+      "runtimeExecutable": "C:\\Users\\Maerelle\\AppData\\Local\\Microsoft\\WinGet\\Packages\\OpenJS.NodeJS.LTS_Microsoft.Winget.Source_8wekyb3d8bbwe\\node-v24.16.0-win-x64\\node.exe",
+      "preLaunchTask": "npm-install-backend"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Frontend (Next.js)",
+      "program": "${workspaceFolder}/frontend/node_modules/next/dist/bin/next",
+      "args": ["dev"],
+      "cwd": "${workspaceFolder}/frontend",
+      "console": "integratedTerminal",
+      "env": { "NEXT_TELEMETRY_DISABLED": "1" },
+      "runtimeExecutable": "C:\\Users\\Maerelle\\AppData\\Local\\Microsoft\\WinGet\\Packages\\OpenJS.NodeJS.LTS_Microsoft.Winget.Source_8wekyb3d8bbwe\\node-v24.16.0-win-x64\\node.exe",
+      "preLaunchTask": "npm-install-frontend"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full System (F5)",
+      "configurations": ["Backend (Express)", "Frontend (Next.js)"]
+    }
+  ]
+}
