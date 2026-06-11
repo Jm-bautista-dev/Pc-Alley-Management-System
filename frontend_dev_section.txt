@@ -1,0 +1,220 @@
+// src/app/reports/stock/page.js
+"use client";
+
+import { useEffect, useState, useMemo, useRef } from "react";
+import Sidebar from "@/components/Sidebar";
+import TopBar from "@/components/TopBar";
+import { PackageCheck, Search, Download, Plus, RefreshCw, AlertCircle, TrendingUp, Edit, Clock, ShieldAlert, CheckCircle2, FileDown, Trash2, UploadCloud, Image as ImageIcon } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { apiUrl } from "@/lib/api";
+import { useTheme } from "@/context/ThemeContext";
+import toast, { Toaster } from "react-hot-toast";
+import { useRouter } from "next/navigation";
+import RestockRequestModal from "@/components/restock/RestockRequestModal";
+import { exportToExcel } from "@/lib/excelExport";
+
+// --- Modals ---
+// Removed old RestockModal implementation in favor of shared component
+
+const AddProductModal = ({ isOpen, onClose, onSave }) => {
+  const [formData, setFormData] = useState({ name: '', sku: '', description: '', category_id: '', price: '', branch_id: '', initial_stock: '0' });
+  const [categories, setCategories] = useState([]);
+  const [branches, setBranches] = useState([]);
+  const [user, setUser] = useState(null);
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef(null);
+
+  // Helper: generate SKU from category name
+  const buildSkuFromCategory = (catId) => {
+    const category = categories.find(c => String(c.id) === String(catId));
+    const catPart = category
+      ? category.name.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)
+      : 'PCA';
+    const randPart = Math.floor(100000 + Math.random() * 900000);
+    return `${catPart}-${randPart}`;
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      const fetchData = async () => {
+        const token = localStorage.getItem('token');
+        try {
+          const [catRes, branchRes] = await Promise.all([
+            fetch(apiUrl("/api/categories"), { headers: { Authorization: `Bearer ${token}` } }),
+            fetch(apiUrl("/api/branches"), { headers: { Authorization: `Bearer ${token}` } })
+          ]);
+          if (catRes.ok) setCategories(await catRes.json());
+          if (branchRes.ok) setBranches(await branchRes.json());
+        } catch (e) {}
+      };
+      fetchData();
+
+      const loggedInUser = JSON.parse(localStorage.getItem("user"));
+      setUser(loggedInUser);
+
+      setFormData({ 
+        name: '', 
+        sku: '', 
+        description: '', 
+        category_id: '', 
+        price: '',
+        branch_id: loggedInUser?.role === 'branch_admin' ? String(loggedInUser.branch_id) : '',
+        initial_stock: '0'
+      });
+      setImageFile(null);
+      setImagePreview(null);
+    }
+  }, [isOpen]);
+
+  const processImageFile = (file) => {
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("File size exceeds 5MB limit.");
+      return;
+    }
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+    if (!validTypes.includes(file.type)) {
+      toast.error("Unsupported file format. Please upload JPG, JPEG, PNG, or WEBP.");
+      return;
+    }
+    setImageFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => setImagePreview(reader.result);
+    reader.readAsDataURL(file);
+  };
+
+  if (!isOpen) return null;
+
+
+
+  if (!isOpen) return null;
+
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-brand-surface border border-brand-neonblue/30 rounded-2xl p-6 lg:p-8 max-w-lg w-full shadow-2xl relative overflow-y-auto max-h-[90vh] custom-scrollbar">
+        <h2 className="text-2xl font-rajdhani font-black uppercase text-main mb-6">Create New Product</h2>
+        <div className="space-y-4 mb-8">
+          <div>
+            <label className="block text-[10px] uppercase font-black tracking-widest text-muted mb-1">Product Name</label>
+            <input type="text" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full bg-brand-bgbase border border-border text-main rounded-lg px-4 py-2.5 font-bold outline-none focus:border-brand-neonblue" placeholder="e.g. NVIDIA RTX 5090" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-[10px] uppercase font-black tracking-widest text-muted">SKU Code</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData(prev => ({ ...prev, sku: buildSkuFromCategory(prev.category_id) }));
+                  }}
+                  className="text-[9px] font-black text-brand-neonblue uppercase tracking-wider hover:underline"
+                >
+                  Regenerate
+                </button>
+              </div>
+              <input type="text" value={formData.sku} onChange={e => setFormData({ ...formData, sku: e.target.value })} className="w-full bg-brand-bgbase border border-border text-main rounded-lg px-4 py-2.5 font-bold outline-none focus:border-brand-neonblue" placeholder="PCA-GPU-..." />
+            </div>
+            <div>
+              <label className="block text-[10px] uppercase font-black tracking-widest text-muted mb-1">Price (₱)</label>
+              <input type="number" value={formData.price} onChange={e => setFormData({ ...formData, price: e.target.value })} className="w-full bg-brand-bgbase border border-border text-main rounded-lg px-4 py-2.5 font-bold outline-none focus:border-brand-neonblue" placeholder="0.00" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[10px] uppercase font-black tracking-widest text-muted mb-1">Hardware Category</label>
+              <select 
+                value={formData.category_id} 
+                onChange={e => {
+                  const catId = e.target.value;
+                  const category = categories.find(c => String(c.id) === String(catId));
+                  const catPart = category ? category.name.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) : 'PCA';
+                  const randPart = Math.floor(100000 + Math.random() * 900000);
+                  setFormData(prev => ({ 
+                    ...prev, 
+                    category_id: catId,
+                    sku: catId ? `${catPart}-${randPart}` : prev.sku
+                  }));
+                }} 
+                className="w-full bg-brand-bgbase border border-border text-main rounded-lg px-4 py-2.5 font-bold outline-none focus:border-brand-neonblue h-11 appearance-none cursor-pointer"
+              >
+                <option value="">Select Category...</option>
+                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] uppercase font-black tracking-widest text-muted mb-1">Product Description</label>
+              <input type="text" value={formData.description || ''} onChange={e => setFormData({ ...formData, description: e.target.value })} className="w-full bg-brand-bgbase border border-border text-main rounded-lg px-4 py-2.5 font-bold outline-none focus:border-brand-neonblue" placeholder="Brief details..." />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[10px] uppercase font-black tracking-widest text-muted mb-1">Target Branch</label>
+              <select 
+                value={formData.branch_id} 
+                onChange={e => setFormData({ ...formData, branch_id: e.target.value })} 
+                disabled={user?.role === 'branch_admin'}
+                className="w-full bg-brand-bgbase border border-border text-main rounded-lg px-4 py-2.5 font-bold outline-none focus:border-brand-neonblue h-11 appearance-none cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
+              >
+                <option value="">No Initial Branch (0 Stock)</option>
+                {branches.map(br => <option key={br.id} value={br.id}>{br.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] uppercase font-black tracking-widest text-muted mb-1">Initial Stock Quantity</label>
+              <input type="number" value={formData.initial_stock} onChange={e => setFormData({ ...formData, initial_stock: e.target.value })} className="w-full bg-brand-bgbase border border-border text-main rounded-lg px-4 py-2.5 font-bold outline-none focus:border-brand-neonblue" placeholder="0" min="0" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase font-black tracking-widest text-muted mb-1.5">Product Image</label>
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={e => { e.preventDefault(); setIsDragging(false); processImageFile(e.dataTransfer.files[0]); }}
+              className={`w-full h-36 border-2 border-dashed rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all relative overflow-hidden group ${
+                isDragging ? 'border-brand-neonblue bg-brand-neonblue/10 scale-[1.01]' : 'border-border hover:border-brand-neonblue hover:bg-brand-neonblue/5'
+              }`}
+            >
+              {imagePreview ? (
+                <>
+                  <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity gap-2">
+                    <span className="text-white text-[10px] font-black uppercase tracking-widest bg-brand-surface/20 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-1.5">
+                      <UploadCloud size={12} /> Replace
+                    </span>
+                    <button
+                      onClick={e => { e.stopPropagation(); setImageFile(null); setImagePreview(null); }}
+                      className="text-white text-[10px] font-black uppercase tracking-widest bg-brand-crimson/80 hover:bg-brand-crimson px-3 py-1.5 rounded-full transition-colors flex items-center gap-1.5"
+                    >
+                      <Trash2 size={12} /> Remove
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center p-4">
+                  <UploadCloud size={20} className="text-muted mx-auto mb-2 group-hover:text-brand-neonblue transition-colors" />
+                  <p className="text-xs font-bold text-main">Drag & Drop or click to upload</p>
+                  <p className="text-[9px] text-muted uppercase tracking-widest mt-0.5">JPG, PNG, or WEBP (Max. 5MB)</p>
+                </div>
+              )}
+              <input type="file" ref={fileInputRef} onChange={e => processImageFile(e.target.files[0])} accept="image/jpeg,image/png,image/webp" className="hidden" />
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-4">
+          <button onClick={onClose} className="flex-1 py-3 rounded-lg border border-border text-main font-bold uppercase tracking-widest hover:bg-brand-bgbase transition-colors">Cancel</button>
+          <button onClick={() => onSave(formData, imageFile)} className="flex-1 py-3 rounded-lg bg-brand-neonblue text-white font-black uppercase tracking-[2px] shadow-[0_0_20px_rgba(14,165,233,0.3)] hover:scale-[1.02] transition-transform">Save Product</button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+// Placeholder components for EditProductModal, HistoryModal, DeleteActionModal – import them if they exist
+import EditProductModal from "./EditProductModal";
+import HistoryModal from "./HistoryModal";
+import DeleteActionModal from "./DeleteActionModal";
+
