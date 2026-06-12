@@ -23,12 +23,12 @@ router.get('/search', [
 router.get('/', getAllCustomers);
 
 router.get('/:id', [
-  param('id').isInt().withMessage('Invalid customer ID.'),
+  param('id').isUUID().withMessage('Invalid customer ID.'),
   validate
 ], getCustomerById);
 
 router.get('/:id/history', [
-  param('id').isInt().withMessage('Invalid customer ID.'),
+  param('id').isUUID().withMessage('Invalid customer ID.'),
   validate
 ], getCustomerHistory);
 
@@ -42,7 +42,7 @@ router.post('/', [
 ], createCustomer);
 
 router.put('/:id', [
-  param('id').isInt().withMessage('Invalid customer ID.'),
+  param('id').isUUID().withMessage('Invalid customer ID.'),
   body('name').optional().notEmpty().trim().withMessage('Name cannot be empty.'),
   body('email').optional({ checkFalsy: true }).isEmail().withMessage('Valid email is required.'),
   body('phone').optional({ checkFalsy: true }).isString().trim(),
@@ -52,7 +52,7 @@ router.put('/:id', [
 ], updateCustomer);
 
 router.delete('/:id', [
-  param('id').isInt().withMessage('Invalid customer ID.'),
+  param('id').isUUID().withMessage('Invalid customer ID.'),
   validate
 ], deleteCustomer);
 
