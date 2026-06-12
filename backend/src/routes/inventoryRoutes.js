@@ -14,7 +14,6 @@ router.post('/products', [
   authorizeRoles('super_admin', 'branch_admin'),
   upload.single('image'),
   body('name').notEmpty().withMessage('Product designation is required'),
-  body('sku').notEmpty().withMessage('SKU code required for tracking'),
   body('price').isFloat({ min: 0 }).withMessage('Price must be a positive numerical value'),
   validate,
   createProduct

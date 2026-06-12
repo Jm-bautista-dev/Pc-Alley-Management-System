@@ -43,7 +43,21 @@ import {
   ArcElement,
   Filler
 } from 'chart.js';
-import { Line, Doughnut, Bar } from 'react-chartjs-2';
+
+import dynamic from 'next/dynamic';
+const Line = dynamic(() => import('react-chartjs-2').then((mod) => mod.Line), {
+  ssr: false,
+  loading: () => <div className="h-full w-full bg-brand-surface/10 animate-pulse rounded-xl" />
+});
+const Doughnut = dynamic(() => import('react-chartjs-2').then((mod) => mod.Doughnut), {
+  ssr: false,
+  loading: () => <div className="h-[250px] w-full bg-brand-surface/10 animate-pulse rounded-xl" />
+});
+const Bar = dynamic(() => import('react-chartjs-2').then((mod) => mod.Bar), {
+  ssr: false,
+  loading: () => <div className="h-full w-full bg-brand-surface/10 animate-pulse rounded-xl" />
+});
+
 import StatCard from "@/components/StatCard";
 import { useTheme } from "@/context/ThemeContext";
 import { apiUrl, SOCKET_BASE_URL } from "@/lib/api";
@@ -55,7 +69,19 @@ ChartJS.register(
   CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, ArcElement, Filler
 );
 
-const TARGET_REVENUE = 2000000;
+
+const SkeletonCard = () => (
+  <div className="glass-card p-5 md:p-6 border border-border/50 bg-brand-surface/[0.02] animate-pulse flex flex-col justify-between h-[140px]">
+    <div className="flex flex-col gap-3">
+      <div className="flex justify-between items-center">
+        <div className="w-24 h-2.5 bg-main/10 rounded" />
+        <div className="w-7 h-7 bg-main/10 rounded-lg" />
+      </div>
+      <div className="w-32 h-7 bg-main/10 rounded mt-1" />
+    </div>
+    <div className="w-28 h-3.5 bg-main/10 rounded mt-3" />
+  </div>
+);
 
 export default function Dashboard() {
   const [user, setUser] = useState(null);
@@ -69,16 +95,35 @@ export default function Dashboard() {
   const [branchPerformance, setBranchPerformance] = useState([]);
   const [bestSellers, setBestSellers] = useState([]);
   const [dateFilter, setDateFilter] = useState("30");
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
   const [loading, setLoading] = useState(false);
   const [myRestockRequests, setMyRestockRequests] = useState([]);
   const [pendingRestockRequests, setPendingRestockRequests] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [staffInventory, setStaffInventory] = useState([]);
 
+  const cacheRef = useRef({});
+  const dateFilterRef = useRef(dateFilter);
+  const customStartDateRef = useRef(customStartDate);
+  const customEndDateRef = useRef(customEndDate);
+
   const inventoryRef = useRef(null);
   const trendsRef = useRef(null);
   const { theme } = useTheme();
   const chartTheme = getChartTheme();
+
+  useEffect(() => {
+    dateFilterRef.current = dateFilter;
+  }, [dateFilter]);
+
+  useEffect(() => {
+    customStartDateRef.current = customStartDate;
+  }, [customStartDate]);
+
+  useEffect(() => {
+    customEndDateRef.current = customEndDate;
+  }, [customEndDate]);
 
   useEffect(() => {
     const userData = localStorage.getItem("user");
@@ -92,14 +137,28 @@ export default function Dashboard() {
       if (isStaff) {
         fetchStaffData(parsedUser);
       } else {
-        fetchAllData();
+        // Initial setup for non-staff
         if (isAdmin) fetchPendingRestocks();
         const socket = io(SOCKET_BASE_URL, { path: "/socket.io/" });
-        socket.on('dashboard_update', () => fetchAllData());
+        socket.on('dashboard_update', () => {
+          cacheRef.current = {}; // clear cache
+          fetchAllData(dateFilterRef.current);
+        });
         return () => socket.disconnect();
       }
     }
   }, []);
+
+  // Reactive effect to load data when filters change
+  useEffect(() => {
+    if (user && user.role !== 'employee' && user.role !== 'staff') {
+      if (dateFilter !== 'custom') {
+        fetchAllData(dateFilter);
+      } else if (customStartDate && customEndDate) {
+        fetchAllData('custom');
+      }
+    }
+  }, [user, dateFilter, customStartDate, customEndDate]);
 
   const fetchStaffData = async (parsedUser) => {
     setLoading(true);
@@ -146,34 +205,118 @@ export default function Dashboard() {
     }
   };
 
+  const getQueryString = (daysArg) => {
+    if (daysArg === 'custom') {
+      return `startDate=${customStartDateRef.current}&endDate=${customEndDateRef.current}`;
+    }
+    return `days=${daysArg}`;
+  };
+
+  const getCacheKey = (daysArg) => {
+    if (daysArg === 'custom') {
+      return `custom-${customStartDateRef.current}-${customEndDateRef.current}`;
+    }
+    return String(daysArg);
+  };
+
   const fetchAllData = async (days = dateFilter) => {
+    if (days === 'custom' && (!customStartDateRef.current || !customEndDateRef.current)) return;
+
+    const cacheKey = getCacheKey(days);
+    if (cacheRef.current[cacheKey]) {
+      const cached = cacheRef.current[cacheKey];
+      setSalesHistory(cached.salesHistory);
+      setInventory(cached.inventory);
+      setComparative(cached.comparative);
+      setDailyTrends(cached.dailyTrends);
+      setPerformance(cached.performance);
+      setAnalyticsMetrics(cached.analyticsMetrics);
+      setBranchPerformance(cached.branchPerformance);
+      setBestSellers(cached.bestSellers);
+      return;
+    }
+
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
       const headers = { Authorization: `Bearer ${token}` };
+      const qs = getQueryString(days);
+
       const [
         salesRes, invRes, compRes, dailyRes, perfRes, stockRes,
         analyticsRes, branchPerfRes, bestSellersRes
       ] = await Promise.all([
-        fetch(apiUrl(`/api/sales/history?days=${days}`), { headers }),
+        fetch(apiUrl(`/api/sales/history?${qs}`), { headers }),
         fetch(apiUrl("/api/inventory"), { headers }),
-        fetch(apiUrl(`/api/sales/comparative?days=${days}`), { headers }),
-        fetch(apiUrl("/api/sales/daily-trends"), { headers }),
-        fetch(apiUrl("/api/sales/performance"), { headers }),
+        fetch(apiUrl(`/api/sales/comparative?${qs}`), { headers }),
+        fetch(apiUrl(`/api/sales/daily-trends?${qs}`), { headers }),
+        fetch(apiUrl(`/api/sales/performance?${qs}`), { headers }),
         fetch(apiUrl("/api/inventory/global-status"), { headers }),
-        fetch(apiUrl("/api/analytics/dashboard"), { headers }),
-        fetch(apiUrl("/api/analytics/branch-performance"), { headers }),
-        fetch(apiUrl("/api/analytics/best-sellers"), { headers })
+        fetch(apiUrl(`/api/analytics/dashboard?${qs}`), { headers }),
+        fetch(apiUrl(`/api/analytics/branch-performance?${qs}`), { headers }),
+        fetch(apiUrl(`/api/analytics/best-sellers?${qs}`), { headers })
       ]);
-      if (salesRes.ok) setSalesHistory(limitData(await salesRes.json(), 1000));
-      if (invRes.ok) { const d = await invRes.json(); setInventory(Array.isArray(d) ? d : d?.data ?? []); }
-      if (compRes.ok) setComparative(await compRes.json());
-      if (dailyRes.ok) setDailyTrends(await dailyRes.json());
-      if (perfRes.ok) setPerformance(await perfRes.json());
-      if (stockRes.ok) setGlobalStock(await stockRes.json());
-      if (analyticsRes.ok) setAnalyticsMetrics(await analyticsRes.json());
-      if (branchPerfRes.ok) setBranchPerformance(await branchPerfRes.json());
-      if (bestSellersRes.ok) setBestSellers(await bestSellersRes.json());
+
+      let salesArr = [];
+      let invArr = [];
+      let compArr = [];
+      let dailyArr = [];
+      let perfArr = [];
+      let stockVal = { branches: [], data: [] };
+      let analyticsArr = null;
+      let branchPerfArr = [];
+      let bestSellersArr = [];
+
+      if (salesRes.ok) {
+        const d = await salesRes.json();
+        salesArr = limitData(Array.isArray(d) ? d : d?.data ?? [], 1000);
+        setSalesHistory(salesArr);
+      }
+      if (invRes.ok) {
+        const d = await invRes.json();
+        invArr = Array.isArray(d) ? d : d?.data ?? [];
+        setInventory(invArr);
+      }
+      if (compRes.ok) {
+        compArr = await compRes.json();
+        setComparative(compArr);
+      }
+      if (dailyRes.ok) {
+        dailyArr = await dailyRes.json();
+        setDailyTrends(dailyArr);
+      }
+      if (perfRes.ok) {
+        perfArr = await perfRes.json();
+        setPerformance(perfArr);
+      }
+      if (stockRes.ok) {
+        stockVal = await stockRes.json();
+        setGlobalStock(stockVal);
+      }
+      if (analyticsRes.ok) {
+        analyticsArr = await analyticsRes.json();
+        setAnalyticsMetrics(analyticsArr);
+      }
+      if (branchPerfRes.ok) {
+        branchPerfArr = await branchPerfRes.json();
+        setBranchPerformance(branchPerfArr);
+      }
+      if (bestSellersRes.ok) {
+        bestSellersArr = await bestSellersRes.json();
+        setBestSellers(bestSellersArr);
+      }
+
+      cacheRef.current[cacheKey] = {
+        salesHistory: salesArr,
+        inventory: invArr,
+        comparative: compArr,
+        dailyTrends: dailyArr,
+        performance: perfArr,
+        analyticsMetrics: analyticsArr,
+        branchPerformance: branchPerfArr,
+        bestSellers: bestSellersArr
+      };
+
     } catch (err) {
       console.error("Error fetching dashboard data:", err);
       showError("Failed to sync intelligence matrix.");
@@ -188,7 +331,7 @@ export default function Dashboard() {
 
   // --- Process Analytics ---
   const kpis = getKPIs(salesHistory, inventory);
-  const trends = getTrendData(salesHistory);
+  const trends = getTrendData(salesHistory, dateFilter, customStartDate, customEndDate);
   const burnRates = getBurnRates(salesHistory, inventory);
   const correlations = getCrossSellCorrelations(salesHistory);
   const { starProducts, deadStock } = getProductPerformance(salesHistory, inventory, correlations);
@@ -201,10 +344,10 @@ export default function Dashboard() {
 
   // --- Chart Data ---
   const lineChartData = {
-    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+    labels: trends.labels,
     datasets: [
-      { label: 'Revenue', data: trends.revenueByMonth, borderColor: '#0EA5E9', backgroundColor: 'rgba(14,165,233,0.1)', borderWidth: 3, tension: 0.4, fill: true, pointRadius: 0, pointHoverRadius: 6 },
-      { label: 'Est. Profit', data: trends.profitByMonth, borderColor: '#10B981', backgroundColor: 'transparent', borderWidth: 2, tension: 0.4, fill: false, pointRadius: 0, pointHoverRadius: 6 }
+      { label: 'Revenue', data: trends.revenue, borderColor: '#0EA5E9', backgroundColor: 'rgba(14,165,233,0.1)', borderWidth: 3, tension: 0.4, fill: true, pointRadius: 0, pointHoverRadius: 6 },
+      { label: 'Est. Profit', data: trends.profit, borderColor: '#10B981', backgroundColor: 'transparent', borderWidth: 2, tension: 0.4, fill: false, pointRadius: 0, pointHoverRadius: 6 }
     ]
   };
   const lineChartOptions = {
@@ -218,18 +361,7 @@ export default function Dashboard() {
 
   const currentMonth = new Date().getMonth();
   const currentRevenue = trends.revenueByMonth[currentMonth] || 0;
-  const currentDay = new Date().getDate();
-  const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
-  const predictedRevenue = currentDay > 0 ? (currentRevenue / currentDay) * daysInMonth : 0;
-  const targetAchieved = Math.min((currentRevenue / TARGET_REVENUE) * 100, 100);
-  const targetRemaining = Math.max(100 - targetAchieved, 0);
-  let gaugeColor = '#EF4444';
-  if (targetAchieved >= 100) gaugeColor = '#10B981';
-  else if (targetAchieved >= 81) gaugeColor = '#22C55E';
-  else if (targetAchieved >= 61) gaugeColor = '#84CC16';
-  else if (targetAchieved >= 31) gaugeColor = '#F59E0B';
 
-  const gaugeData = { datasets: [{ data: [targetAchieved, targetRemaining], backgroundColor: [gaugeColor, theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'], borderWidth: 0, circumference: 180, rotation: 270, cutout: '80%' }] };
 
   const barChartData = {
     labels: correlations.map(c => c.pair),
@@ -260,13 +392,13 @@ export default function Dashboard() {
   const outOfStockItems = staffInventory.filter(i => (i.quantity ?? 0) === 0);
 
   const statusBadge = (status) => ({
-    pending:  'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
+    pending: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
     approved: 'bg-green-500/10 text-green-400 border-green-500/20',
     rejected: 'bg-red-500/10 text-red-400 border-red-500/20',
   }[status] ?? 'bg-muted/10 text-muted border-border/20');
 
   const statusIcon = (status) => ({
-    pending:  <Clock size={12} />,
+    pending: <Clock size={12} />,
     approved: <CheckCircle size={12} />,
     rejected: <XCircle size={12} />,
   }[status] ?? <Clock size={12} />);
@@ -479,7 +611,7 @@ export default function Dashboard() {
             </div>
 
             {/* Action Bar */}
-            <div className="w-full bg-brand-surface/40 border border-brand-neonblue/20 rounded-xl p-3 md:p-4 mb-8 flex flex-col sm:flex-row items-center justify-between shadow-[0_0_15px_rgba(14,165,233,0.05)] gap-4">
+            <div className="w-full bg-brand-surface/40 border border-brand-neonblue/20 rounded-xl p-3 md:p-4 mb-8 flex flex-col md:flex-row items-center justify-between shadow-[0_0_15px_rgba(14,165,233,0.05)] gap-4">
               <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-6 w-full sm:w-auto">
                 <div className="flex items-center gap-3 w-full sm:w-auto justify-center sm:justify-start">
                   <div className="h-2 w-2 rounded-full bg-brand-neonblue animate-pulse" />
@@ -491,17 +623,39 @@ export default function Dashboard() {
                   <span onClick={() => scrollToSection(trendsRef)} className="cursor-pointer hover:text-brand-neonblue transition-colors flex items-center gap-1">{summaryInsight.trend === 'up' ? '📈 Revenue growing' : '📉 Revenue cooling'}</span>
                 </div>
               </div>
-              <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
-                <select className="bg-brand-surface border border-border text-main text-xs font-bold px-4 py-2 rounded-lg outline-none cursor-pointer focus:border-brand-neonblue transition-colors flex-1 sm:flex-none" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)}>
-                  <option value="30">Last 30 Days</option>
-                  <option value="90">Last 90 Days</option>
-                  <option value="365">This Year</option>
-                </select>
-                <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => fetchAllData()} disabled={loading}
-                  className={`bg-brand-bgbase border border-border/50 text-muted hover:text-main px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest flex items-center gap-2 transition-colors shrink-0 ${loading ? 'opacity-50 cursor-wait' : ''}`}>
-                  {loading ? <div className="w-3 h-3 border border-t-brand-neonblue rounded-full animate-spin" /> : <Calendar size={12} />}
-                  {loading ? 'SYNCING...' : 'Filter'}
-                </motion.button>
+              <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto justify-end">
+                {dateFilter === "custom" && (
+                  <div className="flex items-center gap-2 w-full md:w-auto">
+                    <input
+                      type="date"
+                      value={customStartDate}
+                      onChange={(e) => setCustomStartDate(e.target.value)}
+                      className="bg-brand-surface border border-border text-main text-[11px] font-bold px-3 py-1.5 rounded-lg outline-none focus:border-brand-neonblue text-white w-full md:w-auto"
+                    />
+                    <span className="text-[10px] uppercase font-black text-muted">to</span>
+                    <input
+                      type="date"
+                      value={customEndDate}
+                      onChange={(e) => setCustomEndDate(e.target.value)}
+                      className="bg-brand-surface border border-border text-main text-[11px] font-bold px-3 py-1.5 rounded-lg outline-none focus:border-brand-neonblue text-white w-full md:w-auto"
+                    />
+                  </div>
+                )}
+                <div className="flex items-center gap-3 w-full md:w-auto">
+                  <select className="bg-brand-surface border border-border text-main text-xs font-bold px-4 py-2 rounded-lg outline-none cursor-pointer focus:border-brand-neonblue transition-colors flex-1 md:flex-none" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)}>
+                    <option value="1">Today (1 Day)</option>
+                    <option value="7">7 Days (This Week)</option>
+                    <option value="30">Last 30 Days</option>
+                    <option value="90">Last 90 Days</option>
+                    <option value="365">This Year</option>
+                    <option value="custom">Custom Date Range</option>
+                  </select>
+                  <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => fetchAllData()} disabled={loading}
+                    className={`bg-brand-bgbase border border-border/50 text-muted hover:text-main px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest flex items-center gap-2 transition-colors shrink-0 ${loading ? 'opacity-50 cursor-wait' : ''}`}>
+                    {loading ? <div className="w-3 h-3 border border-t-brand-neonblue rounded-full animate-spin" /> : <Calendar size={12} />}
+                    {loading ? 'SYNCING...' : 'Filter'}
+                  </motion.button>
+                </div>
               </div>
             </div>
 
@@ -522,10 +676,21 @@ export default function Dashboard() {
 
             {/* KPI Cards */}
             <div className="responsive-grid mb-8">
-              <StatCard title="Total Revenue" value={`₱${(analyticsMetrics?.totalRevenue ?? kpis.revenue).toLocaleString()}`} icon={PesoSign} trend={user?.role === 'super_admin' ? "Live Global Total" : "Branch Total"} />
-              <StatCard title="Total Stock" value={analyticsMetrics?.totalStock ?? (Array.isArray(inventory) ? inventory.reduce((s, i) => s + i.quantity, 0) : 0)} icon={Box} trend="Units On-Hand" />
-              <StatCard title="System Orders" value={analyticsMetrics?.totalOrders ?? kpis.orders} icon={Package} trend={user?.role === 'super_admin' ? "System Wide" : "Branch Orders"} />
-              <StatCard title="Status Matrix" value="Optimal" icon={Activity} trend="System Online" />
+              {loading && !analyticsMetrics ? (
+                <>
+                  <SkeletonCard />
+                  <SkeletonCard />
+                  <SkeletonCard />
+                  <SkeletonCard />
+                </>
+              ) : (
+                <>
+                  <StatCard title="Total Revenue" value={`₱${(analyticsMetrics?.totalRevenue ?? 0).toLocaleString()}`} icon={PesoSign} trend={analyticsMetrics?.growthPercentage !== undefined ? `${analyticsMetrics.growthPercentage >= 0 ? '+' : ''}${analyticsMetrics.growthPercentage}%` : undefined} subtext="VS PREVIOUS PERIOD" />
+                  <StatCard title="Total Stock" value={analyticsMetrics?.totalStock ?? 0} icon={Box} subtext="UNITS ON-HAND" />
+                  <StatCard title="System Orders" value={analyticsMetrics?.totalOrders ?? 0} icon={Package} trend={analyticsMetrics?.ordersGrowthPercentage !== undefined ? `${analyticsMetrics.ordersGrowthPercentage >= 0 ? '+' : ''}${analyticsMetrics.ordersGrowthPercentage}%` : undefined} subtext="VS PREVIOUS PERIOD" />
+                  <StatCard title="Products Sold" value={analyticsMetrics?.productsSold ?? 0} icon={ShoppingCart} trend={analyticsMetrics?.productsSoldGrowthPercentage !== undefined ? `${analyticsMetrics.productsSoldGrowthPercentage >= 0 ? '+' : ''}${analyticsMetrics.productsSoldGrowthPercentage}%` : undefined} subtext="VS PREVIOUS PERIOD" />
+                </>
+              )}
             </div>
 
             {/* Row 2: Charts */}
@@ -539,12 +704,14 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <div className="flex-1 min-h-[250px] md:min-h-[300px]">
-                  {salesHistory.length > 0 && currentRevenue > 0 ? (
+                  {loading && salesHistory.length === 0 ? (
+                    <div className="h-full w-full bg-brand-surface/5 animate-pulse rounded-xl" />
+                  ) : salesHistory.length > 0 && currentRevenue > 0 ? (
                     <Line data={lineChartData} options={lineChartOptions} />
                   ) : (
                     <div className="h-full w-full flex flex-col items-center justify-center text-muted border border-dashed border-border/20 rounded-xl bg-brand-bgbase/20 p-8">
                       <TrendingUp className="mb-4 opacity-50" size={32} />
-                      <span className="text-[10px] uppercase font-black tracking-widest opacity-50 text-center">Waiting for Sales Data...</span>
+                      <span className="text-[10px] uppercase font-black tracking-widest opacity-50 text-center">No Sales Data In This Range</span>
                     </div>
                   )}
                 </div>
@@ -558,72 +725,20 @@ export default function Dashboard() {
                 </div>
                 <div className="space-y-4">
                   {[
-                    { label: "Revenue", value: `₱${(analyticsMetrics?.totalRevenue ?? kpis.revenue).toLocaleString()}`, color: "text-green-500" },
-                    { label: "Orders", value: analyticsMetrics?.totalOrders ?? kpis.orders, color: "text-main" },
+                    { label: "Revenue", value: `₱${(analyticsMetrics?.totalRevenue ?? 0).toLocaleString()}`, color: "text-green-500" },
+                    { label: "Orders", value: analyticsMetrics?.totalOrders ?? 0, color: "text-main" },
+                    { label: "Products Sold", value: analyticsMetrics?.productsSold ?? 0, color: "text-main" },
+                    { label: "Top Product", value: bestSellers[0]?.productName || "N/A", color: "text-brand-neonblue truncate text-xs font-bold" },
                     { label: "Critical Stock", value: criticalItems.length, color: "text-red-500" },
-                    { label: "Dead Stock", value: deadStock.length, color: "text-yellow-500" },
-                    { label: "Status", value: "ONLINE", color: "text-cyan-400" },
                   ].map((row, i) => (
                     <div key={i} className={`flex justify-between items-center ${i < 4 ? 'border-b border-border/20 pb-3' : ''}`}>
                       <span className="text-xs uppercase font-black text-muted">{row.label}</span>
-                      <span className={`text-lg font-black ${row.color}`}>{row.value}</span>
+                      <span className={`text-sm md:text-md font-black ${row.color}`}>{row.value}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Revenue Forecast */}
-              <div className="glass-card p-6 mb-8">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-rajdhani font-black text-xl uppercase tracking-widest">Revenue Forecast</h3>
-                  <span className="px-3 py-1 rounded-full bg-green-500/10 text-green-500 text-[10px] uppercase font-black tracking-widest">Predictive Analytics</span>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-brand-bgbase/30 rounded-xl p-4">
-                    <p className="text-[10px] uppercase font-black text-muted mb-2">Current Revenue</p>
-                    <p className="text-2xl font-black">₱{currentRevenue.toLocaleString()}</p>
-                  </div>
-                  <div className="bg-brand-bgbase/30 rounded-xl p-4">
-                    <p className="text-[10px] uppercase font-black text-muted mb-2">Predicted End of Month</p>
-                    <p className="text-2xl font-black text-green-500">₱{Math.round(predictedRevenue).toLocaleString()}</p>
-                  </div>
-                  <div className="bg-brand-bgbase/30 rounded-xl p-4 md:col-span-2">
-                    <p className="text-[10px] uppercase font-black text-muted mb-2">Recommendation</p>
-                    <p className="text-sm font-bold text-brand-neonblue">Revenue trend indicates positive growth trajectory.</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Target Gauge */}
-              <div className="glass-card p-4 md:p-8 flex flex-col items-center justify-center relative min-h-[300px]">
-                <h3 className="font-rajdhani font-black text-xl uppercase tracking-widest text-main mb-2">Monthly Target</h3>
-                <p className="text-xs text-muted uppercase tracking-wider font-bold mb-6">₱{TARGET_REVENUE.toLocaleString()} Goal</p>
-                <div className="w-56 h-32 relative flex justify-center overflow-hidden">
-                  {salesHistory.length > 0 && currentRevenue > 0 ? (
-                    <Doughnut data={gaugeData} options={{ responsive: true, maintainAspectRatio: false, plugins: { tooltip: { enabled: false } } }} />
-                  ) : (
-                    <div className="h-full w-full flex flex-col items-center justify-end pb-4 border-b-2 border-border/20">
-                      <span className="text-[10px] uppercase font-black tracking-widest text-muted opacity-50 mb-2">No Target Data</span>
-                    </div>
-                  )}
-                  <div className="absolute bottom-0 flex flex-col items-center">
-                    <span className="text-3xl font-rajdhani font-black" style={{ color: salesHistory.length > 0 && currentRevenue > 0 ? gaugeColor : '#555' }}>
-                      {salesHistory.length > 0 && currentRevenue > 0 ? targetAchieved.toFixed(1) : 0}%
-                    </span>
-                    <span className="text-[10px] uppercase font-black tracking-widest text-muted mt-1">
-                      {salesHistory.length === 0 || currentRevenue === 0 ? 'Awaiting Sales'
-                        : targetAchieved >= 100 ? 'Target Achieved'
-                        : targetAchieved >= 81 ? 'On Track'
-                        : targetAchieved >= 61 ? 'Good Progress'
-                        : targetAchieved >= 31 ? 'Needs Attention'
-                        : 'Critical'}
-                    </span>
-                  </div>
-                </div>
-                <div className="mt-6 w-full px-4 text-center">
-                  <p className="text-xs md:text-sm font-bold text-main">₱{currentRevenue.toLocaleString()} <span className="text-muted text-[10px] md:text-xs">achieved</span></p>
-                </div>
-              </div>
 
               {/* Branch Performance (Super Admin) */}
               {user?.role === 'super_admin' && (
@@ -712,7 +827,7 @@ export default function Dashboard() {
               {/* Inventory Health */}
               <div className="lg:col-span-2 glass-card p-4 md:p-8 flex flex-col h-[400px] md:h-[510px]" ref={inventoryRef}>
                 <h3 className="font-rajdhani font-black text-lg md:text-xl uppercase tracking-widest text-main flex items-center gap-2 mb-2">🏥 Inventory Health</h3>
-                <p className="text-xs text-muted uppercase tracking-wider font-bold mb-6">Tracking low stock and unused money</p>
+                <p className="text-xs text-muted uppercase tracking-wider font-bold mb-6">Tracking low stock, dead stock, and top sellers</p>
                 <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-6">
                   <div>
                     <h5 className="text-[10px] font-black tracking-[3px] uppercase text-brand-crimson/70 mb-3 border-b border-brand-crimson/10 pb-1">Items Running Out</h5>
@@ -756,6 +871,27 @@ export default function Dashboard() {
                         </div>
                       )) : (
                         <div className="text-[10px] font-black text-muted/50 uppercase tracking-widest">Looking good! No dead stock.</div>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <h5 className="text-[10px] font-black tracking-[3px] uppercase text-green-500/70 mb-3 border-b border-green-500/10 pb-1">Top Selling Products</h5>
+                    <div className="space-y-3">
+                      {bestSellers.length > 0 ? bestSellers.slice(0, 5).map((item, idx) => (
+                        <div key={idx} className="flex justify-between items-center p-3 rounded-lg border border-border/5 bg-brand-surface/20">
+                          <div>
+                            <h4 className="font-bold text-xs text-main">{item.productName}</h4>
+                            <span className="text-[9px] text-muted uppercase font-black tracking-wider">SKU: {item.productSku || 'N/A'}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-green-500/10 text-green-500 border border-green-500/20">
+                              {item.quantitySold} Sold
+                            </span>
+                            <p className="text-[10px] font-bold text-muted mt-1">₱{parseFloat(item.revenueGenerated).toLocaleString()}</p>
+                          </div>
+                        </div>
+                      )) : (
+                        <div className="text-[10px] font-black text-muted/50 uppercase tracking-widest">No products sold yet.</div>
                       )}
                     </div>
                   </div>

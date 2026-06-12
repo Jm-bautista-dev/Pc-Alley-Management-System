@@ -169,12 +169,20 @@ const createSale = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────
 const getSalesHistory = async (req, res) => {
   try {
-    const { days, page = 1, limit = 20, search = '' } = req.query;
+    const { days, startDate, endDate, page = 1, limit = 20, search = '' } = req.query;
     const pagination = require('../utils/pagination');
     const { offset, where, order } = pagination({ page, limit, search, searchableFields: ['customerName'] });
     const branchId = req.user.role === 'super_admin' ? req.query.branch_id : req.user.branch_id;
     if (branchId) where.branchId = branchId;
-    if (days) {
+    
+    if (startDate && endDate) {
+      where.createdAt = {
+        [Op.between]: [
+          new Date(startDate),
+          new Date(new Date(endDate).setHours(23, 59, 59, 999))
+        ]
+      };
+    } else if (days) {
       const limitDate = new Date();
       limitDate.setDate(limitDate.getDate() - parseInt(days));
       where.createdAt = { [Op.gte]: limitDate };
@@ -208,13 +216,28 @@ const getComparativeSales = async (req, res) => {
     if (req.user.role !== 'super_admin') {
       return res.status(403).json({ message: 'Forbidden' });
     }
+    const { days, startDate, endDate } = req.query;
+    const whereSale = { status: 'completed' };
+
+    if (startDate && endDate) {
+      whereSale.createdAt = {
+        [Op.between]: [
+          new Date(startDate),
+          new Date(new Date(endDate).setHours(23, 59, 59, 999))
+        ]
+      };
+    } else if (days) {
+      const limitDate = new Date();
+      limitDate.setDate(limitDate.getDate() - parseInt(days));
+      whereSale.createdAt = { [Op.gte]: limitDate };
+    }
 
     const branches = await Branch.findAll();
     const results  = [];
 
     for (const branch of branches) {
       const stats = await Sale.findOne({
-        where: { branchId: branch.id, status: 'completed' },
+        where: { ...whereSale, branchId: branch.id },
         attributes: [
           [sequelize.fn('SUM', sequelize.col('totalAmount')), 'total_revenue'],
           [sequelize.fn('COUNT', sequelize.col('Sale.id')),   'order_count']
@@ -230,7 +253,7 @@ const getComparativeSales = async (req, res) => {
         include: [{
           model: Sale,
           attributes: [],
-          where: { branchId: branch.id, status: 'completed' }
+          where: { ...whereSale, branchId: branch.id }
         }],
         group: ['productName'],
         order: [[sequelize.literal('total_sold'), 'DESC']],
@@ -258,10 +281,18 @@ const getComparativeSales = async (req, res) => {
 const getSalesTrends = async (req, res) => {
   try {
     const branchId = req.user.role === 'super_admin' ? req.query.branch_id : req.user.branch_id;
-    const { days }  = req.query;
+    const { days, startDate, endDate }  = req.query;
     const where = { status: 'completed' };
     if (branchId) where.branchId = branchId;
-    if (days) {
+    
+    if (startDate && endDate) {
+      where.createdAt = {
+        [Op.between]: [
+          new Date(startDate),
+          new Date(new Date(endDate).setHours(23, 59, 59, 999))
+        ]
+      };
+    } else if (days) {
       const limit = new Date();
       limit.setDate(limit.getDate() - parseInt(days));
       where.createdAt = { [Op.gte]: limit };
@@ -291,12 +322,26 @@ const getSalesTrends = async (req, res) => {
 const getDailyTrends = async (req, res) => {
   try {
     const branchId = req.user.role === 'super_admin' ? req.query.branch_id : req.user.branch_id;
+    const { days, startDate, endDate } = req.query;
     const where  = { status: 'completed' };
     if (branchId) where.branchId = branchId;
 
-    const limit = new Date();
-    limit.setDate(limit.getDate() - 30);
-    where.createdAt = { [Op.gte]: limit };
+    if (startDate && endDate) {
+      where.createdAt = {
+        [Op.between]: [
+          new Date(startDate),
+          new Date(new Date(endDate).setHours(23, 59, 59, 999))
+        ]
+      };
+    } else if (days) {
+      const limit = new Date();
+      limit.setDate(limit.getDate() - parseInt(days));
+      where.createdAt = { [Op.gte]: limit };
+    } else {
+      const limit = new Date();
+      limit.setDate(limit.getDate() - 30);
+      where.createdAt = { [Op.gte]: limit };
+    }
 
     const stats = await Sale.findAll({
       where,
@@ -321,10 +366,18 @@ const getDailyTrends = async (req, res) => {
 const getProductPerformance = async (req, res) => {
   try {
     const branchId = req.user.role === 'super_admin' ? req.query.branch_id : req.user.branch_id;
-    const { days }  = req.query;
+    const { days, startDate, endDate }  = req.query;
     const saleWhere = { status: 'completed' };
     if (branchId) saleWhere.branchId = branchId;
-    if (days) {
+    
+    if (startDate && endDate) {
+      saleWhere.createdAt = {
+        [Op.between]: [
+          new Date(startDate),
+          new Date(new Date(endDate).setHours(23, 59, 59, 999))
+        ]
+      };
+    } else if (days) {
       const limit = new Date();
       limit.setDate(limit.getDate() - parseInt(days));
       saleWhere.createdAt = { [Op.gte]: limit };

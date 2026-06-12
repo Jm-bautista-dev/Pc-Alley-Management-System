@@ -57,26 +57,9 @@ export default function AddPage() {
     }
   };
 
-  // Helper: build SKU from category name
-  const buildSkuFromCategory = (catId, catList) => {
-    const category = (catList || categories).find(c => String(c.id) === String(catId));
-    const catPart = category
-      ? category.name.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6)
-      : "PCA";
-    const randPart = Math.floor(100000 + Math.random() * 900000);
-    return `${catPart}-${randPart}`;
-  };
-
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => {
-      const updated = { ...prev, [name]: value };
-      // Auto-regenerate SKU whenever category changes
-      if (name === "category_id") {
-        updated.sku = buildSkuFromCategory(value, categories);
-      }
-      return updated;
-    });
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const [isDragging, setIsDragging] = useState(false);
@@ -101,8 +84,8 @@ export default function AddPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.name || !formData.sku || !formData.price) {
-      showError("Please fill in Product Name, SKU, and Price.");
+    if (!formData.name || !formData.price) {
+      showError("Please fill in Product Name and Price.");
       return;
     }
 
@@ -110,7 +93,6 @@ export default function AddPage() {
     const token = localStorage.getItem("token");
     const submitData = new FormData();
     submitData.append("name", formData.name);
-    submitData.append("sku", formData.sku);
     submitData.append("description", formData.description);
     submitData.append("price", formData.price);
     if (formData.category_id) submitData.append("category_id", formData.category_id);
@@ -201,45 +183,19 @@ export default function AddPage() {
                     />
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <div className="flex justify-between items-center mb-2">
-                        <label className="block text-[10px] font-black text-muted uppercase tracking-[2px]">SKU / Barcode *</label>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFormData(prev => ({ ...prev, sku: buildSkuFromCategory(prev.category_id, categories) }));
-                          }}
-                          className="text-[9px] font-black text-brand-neonblue uppercase tracking-wider hover:underline"
-                        >
-                          Regenerate
-                        </button>
-                      </div>
-                      <input 
-                        type="text" 
-                        name="sku"
-                        value={formData.sku}
-                        onChange={handleChange}
-                        placeholder="Auto-generated or enter manually..." 
-                        className="w-full bg-brand-bgbase border border-border/50 rounded-xl px-4 py-3 text-sm text-main font-bold outline-none focus:border-brand-neonblue transition-colors"
-                        required
-                      />
-                      <p className="text-[9px] text-muted/60 mt-1.5 ml-1 uppercase tracking-wider">Auto-generated from category name · updates when category changes</p>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-muted uppercase tracking-[2px] mb-2">Selling Price (₱) *</label>
-                      <input 
-                        type="number" 
-                        name="price"
-                        value={formData.price}
-                        onChange={handleChange}
-                        placeholder="0.00" 
-                        step="0.01"
-                        min="0"
-                        className="w-full bg-brand-bgbase border border-border/50 rounded-xl px-4 py-3 text-sm text-main font-bold outline-none focus:border-brand-neonblue transition-colors"
-                        required
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-muted uppercase tracking-[2px] mb-2">Selling Price (₱) *</label>
+                    <input 
+                      type="number" 
+                      name="price"
+                      value={formData.price}
+                      onChange={handleChange}
+                      placeholder="0.00" 
+                      step="0.01"
+                      min="0"
+                      className="w-full bg-brand-bgbase border border-border/50 rounded-xl px-4 py-3 text-sm text-main font-bold outline-none focus:border-brand-neonblue transition-colors"
+                      required
+                    />
                   </div>
 
                   <div>

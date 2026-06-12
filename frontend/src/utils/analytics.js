@@ -54,8 +54,9 @@ export const getKPIs = (salesHistory, inventory) => {
 
 /**
  * Process monthly trend data (Revenue & Profit by calendar month)
+ * and dynamic trends based on the current filter.
  */
-export const getTrendData = (salesHistory) => {
+export const getTrendData = (salesHistory, filterType = "30", startDate = null, endDate = null) => {
   const revenueByMonth = new Array(12).fill(0);
   const profitByMonth  = new Array(12).fill(0);
   const ordersByMonth  = new Array(12).fill(0);
@@ -68,7 +69,93 @@ export const getTrendData = (salesHistory) => {
     ordersByMonth[month]  += 1;
   });
 
-  return { revenueByMonth, profitByMonth, ordersByMonth };
+  // Dynamic grouping based on filters
+  let labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  let revenue = [...revenueByMonth];
+  let profit = [...profitByMonth];
+
+  if (filterType === "1") {
+    // 1 Day (Today): Group by hour (24-hour cycle)
+    labels = Array.from({ length: 24 }, (_, i) => {
+      const h = i % 12 || 12;
+      const ampm = i < 12 ? 'AM' : 'PM';
+      return `${h} ${ampm}`;
+    });
+    revenue = new Array(24).fill(0);
+    profit = new Array(24).fill(0);
+
+    salesHistory.forEach(raw => {
+      const order = normalise(raw);
+      const hour = new Date(order.createdAt).getHours();
+      revenue[hour] += order.totalAmount;
+      profit[hour] += order.totalAmount * 0.30;
+    });
+  } else if (filterType === "7" || filterType === "30") {
+    // 7 Days / 30 Days: Group by day date
+    const dayCount = filterType === "7" ? 7 : 30;
+    labels = [];
+    revenue = [];
+    profit = [];
+    const dateMap = {};
+
+    const now = new Date();
+    for (let i = dayCount - 1; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(now.getDate() - i);
+      const dateStr = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+      const key = d.toISOString().slice(0, 10);
+      labels.push(dateStr);
+      dateMap[key] = labels.length - 1;
+      revenue.push(0);
+      profit.push(0);
+    }
+
+    salesHistory.forEach(raw => {
+      const order = normalise(raw);
+      const key = new Date(order.createdAt).toISOString().slice(0, 10);
+      if (dateMap[key] !== undefined) {
+        const idx = dateMap[key];
+        revenue[idx] += order.totalAmount;
+        profit[idx] += order.totalAmount * 0.30;
+      }
+    });
+  } else if (filterType === "custom" && startDate && endDate) {
+    // Custom date range: group by day if range <= 45 days, otherwise group by month
+    const dStart = new Date(startDate);
+    const dEnd = new Date(endDate);
+    const diffTime = Math.abs(dEnd - dStart);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays <= 45) {
+      labels = [];
+      revenue = [];
+      profit = [];
+      const dateMap = {};
+
+      for (let i = 0; i <= diffDays; i++) {
+        const d = new Date(dStart);
+        d.setDate(dStart.getDate() + i);
+        const dateStr = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        const key = d.toISOString().slice(0, 10);
+        labels.push(dateStr);
+        dateMap[key] = labels.length - 1;
+        revenue.push(0);
+        profit.push(0);
+      }
+
+      salesHistory.forEach(raw => {
+        const order = normalise(raw);
+        const key = new Date(order.createdAt).toISOString().slice(0, 10);
+        if (dateMap[key] !== undefined) {
+          const idx = dateMap[key];
+          revenue[idx] += order.totalAmount;
+          profit[idx] += order.totalAmount * 0.30;
+        }
+      });
+    }
+  }
+
+  return { revenueByMonth, profitByMonth, ordersByMonth, labels, revenue, profit };
 };
 
 /**

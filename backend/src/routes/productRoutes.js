@@ -14,7 +14,6 @@ router.post('/', [
   authorizeRoles('super_admin'), 
   upload.single('image'),
   body('name').notEmpty().trim().withMessage('Product name is required.'),
-  body('sku').notEmpty().trim().withMessage('SKU is required.'),
   body('price').isNumeric().withMessage('Price must be a number.'),
   body('description').optional({ checkFalsy: true }).isString().trim(),
   body('category_id').optional({ checkFalsy: true }).isInt().withMessage('Category ID must be an integer.'),
@@ -25,7 +24,6 @@ router.post('/', [
 router.post('/bundles', [
   authenticateToken,
   body('name').notEmpty().trim().withMessage('Bundle name is required.'),
-  body('sku').notEmpty().trim().withMessage('SKU is required.'),
   body('price').isNumeric().withMessage('Price must be a number.'),
   body('category_id').optional({ checkFalsy: true }).isInt().withMessage('Category ID must be an integer.'),
   body('items').isArray({ min: 1 }).withMessage('Items array is required and cannot be empty.'),

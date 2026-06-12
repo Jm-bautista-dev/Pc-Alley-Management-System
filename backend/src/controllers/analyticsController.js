@@ -6,12 +6,27 @@ const { Op } = require('sequelize');
 const getDashboardMetrics = async (req, res) => {
   try {
     const branchId = req.user.role !== 'super_admin' ? req.user.branch_id : req.query.branchId;
+    const { days, startDate, endDate } = req.query;
+
     const whereSale = { status: 'completed' };
     const whereInventory = {};
 
     if (branchId) {
       whereSale.branchId = branchId;
       whereInventory.branch_id = branchId;
+    }
+
+    if (startDate && endDate) {
+      whereSale.createdAt = {
+        [Op.between]: [
+          new Date(startDate),
+          new Date(new Date(endDate).setHours(23, 59, 59, 999))
+        ]
+      };
+    } else if (days) {
+      const limitDate = new Date();
+      limitDate.setDate(limitDate.getDate() - parseInt(days));
+      whereSale.createdAt = { [Op.gte]: limitDate };
     }
 
     // Total Revenue
@@ -25,7 +40,7 @@ const getDashboardMetrics = async (req, res) => {
     // Total Orders
     const totalOrders = await Sale.count({ where: whereSale });
 
-    // Total Stock
+    // Total Stock (current snapshot)
     const stockStats = await Inventory.findOne({
       where: whereInventory,
       attributes: [[sequelize.fn('SUM', sequelize.col('quantity')), 'total']],
@@ -33,9 +48,96 @@ const getDashboardMetrics = async (req, res) => {
     });
     const totalStock = parseInt(stockStats?.total || 0);
 
+    // Products Sold
+    const productsSoldStats = await SaleItem.findOne({
+      attributes: [[sequelize.fn('SUM', sequelize.col('SaleItem.quantity')), 'total']],
+      include: [{
+        model: Sale,
+        attributes: [],
+        where: whereSale
+      }],
+      raw: true
+    });
+    const productsSold = parseInt(productsSoldStats?.total || 0);
+
+    // Growth Rates Calculation
+    const prevWhereSale = { status: 'completed' };
+    if (branchId) prevWhereSale.branchId = branchId;
+    let hasGrowth = false;
+
+    if (startDate && endDate) {
+      const d1 = new Date(startDate);
+      const d2 = new Date(new Date(endDate).setHours(23, 59, 59, 999));
+      const diff = Math.abs(d2 - d1);
+      const prevD1 = new Date(d1.getTime() - diff);
+      const prevD2 = new Date(d1.getTime() - 1);
+      prevWhereSale.createdAt = { [Op.between]: [prevD1, prevD2] };
+      hasGrowth = true;
+    } else if (days) {
+      const daysNum = parseInt(days);
+      const d1 = new Date();
+      d1.setDate(d1.getDate() - daysNum);
+      const prevD1 = new Date();
+      prevD1.setDate(d1.getDate() - daysNum * 2);
+      const prevD2 = new Date(d1.getTime() - 1);
+      prevWhereSale.createdAt = { [Op.between]: [prevD1, prevD2] };
+      hasGrowth = true;
+    } else {
+      // Default: Last 30 days vs 30 days before that
+      const daysNum = 30;
+      const d1 = new Date();
+      d1.setDate(d1.getDate() - daysNum);
+      const prevD1 = new Date();
+      prevD1.setDate(d1.getDate() - daysNum * 2);
+      const prevD2 = new Date(d1.getTime() - 1);
+      prevWhereSale.createdAt = { [Op.between]: [prevD1, prevD2] };
+      hasGrowth = true;
+    }
+
+    let growthPercentage = 0;
+    let ordersGrowthPercentage = 0;
+    let productsSoldGrowthPercentage = 0;
+
+    if (hasGrowth) {
+      const prevRevenueStats = await Sale.findOne({
+        where: prevWhereSale,
+        attributes: [[sequelize.fn('SUM', sequelize.col('totalAmount')), 'total']],
+        raw: true
+      });
+      const prevRevenue = parseFloat(prevRevenueStats?.total || 0);
+      if (prevRevenue > 0) {
+        growthPercentage = parseFloat(((totalRevenue - prevRevenue) / prevRevenue * 100).toFixed(2));
+      } else if (totalRevenue > 0) {
+        growthPercentage = 100.0;
+      }
+
+      const prevOrders = await Sale.count({ where: prevWhereSale });
+      if (prevOrders > 0) {
+        ordersGrowthPercentage = parseFloat(((totalOrders - prevOrders) / prevOrders * 100).toFixed(2));
+      } else if (totalOrders > 0) {
+        ordersGrowthPercentage = 100.0;
+      }
+
+      const prevProductsSoldStats = await SaleItem.findOne({
+        attributes: [[sequelize.fn('SUM', sequelize.col('SaleItem.quantity')), 'total']],
+        include: [{
+          model: Sale,
+          attributes: [],
+          where: prevWhereSale
+        }],
+        raw: true
+      });
+      const prevProductsSold = parseInt(prevProductsSoldStats?.total || 0);
+      if (prevProductsSold > 0) {
+        productsSoldGrowthPercentage = parseFloat(((productsSold - prevProductsSold) / prevProductsSold * 100).toFixed(2));
+      } else if (productsSold > 0) {
+        productsSoldGrowthPercentage = 100.0;
+      }
+    }
+
     // Top Branches Revenue
     const branchStats = await Sale.findAll({
-      where: { status: 'completed' },
+      where: whereSale,
       attributes: [
         'branchId',
         [sequelize.fn('SUM', sequelize.col('totalAmount')), 'revenue']
@@ -62,6 +164,10 @@ const getDashboardMetrics = async (req, res) => {
       totalRevenue,
       totalOrders,
       totalStock,
+      productsSold,
+      growthPercentage,
+      ordersGrowthPercentage,
+      productsSoldGrowthPercentage,
       topBranches: branchStats.map(b => ({
         branchId: b.branchId,
         branchName: b.Branch?.name || `Branch #${b.branchId}`,
@@ -80,13 +186,53 @@ const getDashboardMetrics = async (req, res) => {
 // 2. Branch Performance Metrics
 const getBranchPerformance = async (req, res) => {
   try {
+    const { days, startDate, endDate } = req.query;
     const branches = await Branch.findAll();
     const performance = [];
+
+    const whereSale = { status: 'completed' };
+    const prevWhereSale = { status: 'completed' };
+    let hasGrowth = false;
+
+    if (startDate && endDate) {
+      const d1 = new Date(startDate);
+      const d2 = new Date(new Date(endDate).setHours(23, 59, 59, 999));
+      whereSale.createdAt = { [Op.between]: [d1, d2] };
+
+      const diff = Math.abs(d2 - d1);
+      const prevD1 = new Date(d1.getTime() - diff);
+      const prevD2 = new Date(d1.getTime() - 1);
+      prevWhereSale.createdAt = { [Op.between]: [prevD1, prevD2] };
+      hasGrowth = true;
+    } else if (days) {
+      const daysNum = parseInt(days);
+      const d1 = new Date();
+      d1.setDate(d1.getDate() - daysNum);
+      whereSale.createdAt = { [Op.gte]: d1 };
+
+      const prevD1 = new Date();
+      prevD1.setDate(d1.getDate() - daysNum * 2);
+      const prevD2 = new Date(d1.getTime() - 1);
+      prevWhereSale.createdAt = { [Op.between]: [prevD1, prevD2] };
+      hasGrowth = true;
+    } else {
+      // Default: Last 30 days vs 30 days before that
+      const daysNum = 30;
+      const d1 = new Date();
+      d1.setDate(d1.getDate() - daysNum);
+      whereSale.createdAt = { [Op.gte]: d1 };
+
+      const prevD1 = new Date();
+      prevD1.setDate(d1.getDate() - daysNum * 2);
+      const prevD2 = new Date(d1.getTime() - 1);
+      prevWhereSale.createdAt = { [Op.between]: [prevD1, prevD2] };
+      hasGrowth = true;
+    }
 
     for (const b of branches) {
       // Branch Revenue & Orders
       const salesStats = await Sale.findOne({
-        where: { branchId: b.id, status: 'completed' },
+        where: { ...whereSale, branchId: b.id },
         attributes: [
           [sequelize.fn('SUM', sequelize.col('totalAmount')), 'revenue'],
           [sequelize.fn('COUNT', sequelize.col('id')), 'orders']
@@ -105,45 +251,27 @@ const getBranchPerformance = async (req, res) => {
         include: [{
           model: Sale,
           attributes: [],
-          where: { branchId: b.id, status: 'completed' }
+          where: { ...whereSale, branchId: b.id }
         }],
         group: ['productId', 'productName'],
         order: [[sequelize.literal('totalSold'), 'DESC']],
         raw: true
       });
 
-      // Growth % Calculation (Current month vs Previous month)
-      const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
-      const prevDate = new Date();
-      prevDate.setMonth(prevDate.getMonth() - 1);
-      const prevMonth = prevDate.toISOString().slice(0, 7);
-
-      const curRevenueStats = await Sale.findOne({
-        where: {
-          branchId: b.id,
-          status: 'completed',
-          createdAt: { [Op.like]: `${currentMonth}%` }
-        },
-        attributes: [[sequelize.fn('SUM', sequelize.col('totalAmount')), 'total']],
-        raw: true
-      });
-      const prevRevenueStats = await Sale.findOne({
-        where: {
-          branchId: b.id,
-          status: 'completed',
-          createdAt: { [Op.like]: `${prevMonth}%` }
-        },
-        attributes: [[sequelize.fn('SUM', sequelize.col('totalAmount')), 'total']],
-        raw: true
-      });
-
-      const curRev = parseFloat(curRevenueStats?.total || 0);
-      const prevRev = parseFloat(prevRevenueStats?.total || 0);
+      // Growth % Calculation
       let growth = 0;
-      if (prevRev > 0) {
-        growth = parseFloat(((curRev - prevRev) / prevRev * 100).toFixed(2));
-      } else if (curRev > 0) {
-        growth = 100.0;
+      if (hasGrowth) {
+        const prevRevenueStats = await Sale.findOne({
+          where: { ...prevWhereSale, branchId: b.id },
+          attributes: [[sequelize.fn('SUM', sequelize.col('totalAmount')), 'total']],
+          raw: true
+        });
+        const prevRev = parseFloat(prevRevenueStats?.total || 0);
+        if (prevRev > 0) {
+          growth = parseFloat(((revenue - prevRev) / prevRev * 100).toFixed(2));
+        } else if (revenue > 0) {
+          growth = 100.0;
+        }
       }
 
       performance.push({
@@ -166,8 +294,22 @@ const getBranchPerformance = async (req, res) => {
 const getRevenueForecast = async (req, res) => {
   try {
     const branchId = req.user.role !== 'super_admin' ? req.user.branch_id : req.query.branchId;
+    const { days, startDate, endDate } = req.query;
     const where = { status: 'completed' };
     if (branchId) where.branchId = branchId;
+
+    if (startDate && endDate) {
+      where.createdAt = {
+        [Op.between]: [
+          new Date(startDate),
+          new Date(new Date(endDate).setHours(23, 59, 59, 999))
+        ]
+      };
+    } else if (days) {
+      const limit = new Date();
+      limit.setDate(limit.getDate() - parseInt(days));
+      where.createdAt = { [Op.gte]: limit };
+    }
 
     const trends = await Sale.findAll({
       where,
@@ -181,13 +323,13 @@ const getRevenueForecast = async (req, res) => {
     });
 
     let forecast = 0;
-    let confidence = 'Low'; // Confidence level indicator
+    let confidence = 'Low';
 
     if (trends.length > 1) {
       const n = trends.length;
       let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
       trends.forEach((t, i) => {
-        const x = i + 1; // Month index
+        const x = i + 1;
         const y = parseFloat(t.revenue) || 0;
         sumX += x;
         sumY += y;
@@ -197,11 +339,10 @@ const getRevenueForecast = async (req, res) => {
 
       const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
       const intercept = (sumY - slope * sumX) / n;
-      
-      // Predict next index: n + 1
+
       forecast = parseFloat((slope * (n + 1) + intercept).toFixed(2));
       confidence = n >= 6 ? 'High' : 'Medium';
-      if (forecast < 0) forecast = 0; // Prevent negative prediction
+      if (forecast < 0) forecast = 0;
     } else if (trends.length === 1) {
       forecast = parseFloat(trends[0].revenue) || 0;
       confidence = 'Low';
@@ -222,13 +363,27 @@ const getRevenueForecast = async (req, res) => {
 const getBestSellers = async (req, res) => {
   try {
     const branchId = req.user.role !== 'super_admin' ? req.user.branch_id : req.query.branchId;
+    const { days, startDate, endDate } = req.query;
     const where = { status: 'completed' };
     if (branchId) where.branchId = branchId;
+
+    if (startDate && endDate) {
+      where.createdAt = {
+        [Op.between]: [
+          new Date(startDate),
+          new Date(new Date(endDate).setHours(23, 59, 59, 999))
+        ]
+      };
+    } else if (days) {
+      const limit = new Date();
+      limit.setDate(limit.getDate() - parseInt(days));
+      where.createdAt = { [Op.gte]: limit };
+    }
 
     const stats = await SaleItem.findAll({
       attributes: [
         'productId', 'productName', 'productSku',
-        [sequelize.fn('SUM', sequelize.col('quantity')), 'quantitySold'],
+        [sequelize.fn('SUM', sequelize.col('SaleItem.quantity')), 'quantitySold'],
         [sequelize.fn('SUM', sequelize.col('subtotal')), 'revenueGenerated']
       ],
       include: [{

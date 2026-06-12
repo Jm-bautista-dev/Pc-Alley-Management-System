@@ -2,6 +2,7 @@ const { Branch, Inventory, Product, Category, Supplier, StockMovement } = requir
 const { Op } = require('sequelize');
 const sequelize = require('../db');
 const imageService = require('../services/imageService');
+const { generateUniqueSku } = require('../utils/skuGenerator');
 
 // Product Management
 const getAllProducts = async (req, res) => {
@@ -15,7 +16,7 @@ const getAllProducts = async (req, res) => {
 
 const createProduct = async (req, res) => {
   try {
-    const { name, sku, description, category_id, price, branch_id, initial_stock } = req.body;
+    const { name, sku: bodySku, description, category_id, price, branch_id, initial_stock } = req.body;
     let image_url = null;
 
     if (req.file) {
@@ -27,15 +28,41 @@ const createProduct = async (req, res) => {
       }
     }
 
-    const product = await Product.create({ 
-      name, 
-      sku, 
-      description, 
-      category_id: category_id || null, 
-      price, 
-      last_purchase_price: price,
-      image_url
-    });
+    let product;
+    let retries = 10;
+    let sku = bodySku;
+
+    while (retries > 0) {
+      try {
+        if (!sku) {
+          sku = await generateUniqueSku(category_id);
+        }
+        product = await Product.create({ 
+          name, 
+          sku, 
+          description, 
+          category_id: category_id || null, 
+          price, 
+          last_purchase_price: price,
+          image_url
+        });
+        break; // success!
+      } catch (err) {
+        const isSkuConflict = err.name === 'SequelizeUniqueConstraintError' && 
+                             err.errors && 
+                             err.errors.some(e => e.path === 'sku');
+        if (isSkuConflict && !bodySku) {
+          retries--;
+          sku = null; // force regeneration
+          if (retries === 0) {
+            throw new Error('Failed to generate a unique SKU after 10 attempts.');
+          }
+          await new Promise(resolve => setTimeout(resolve, Math.random() * 50));
+        } else {
+          throw err;
+        }
+      }
+    }
 
     // Handle role checks for branch assignment
     const userRole = req.user?.role;

@@ -5,6 +5,7 @@ const sequelize = require('./db');
 require('./models');
 const migrateUsers = require('./db/migrateUsers');
 const migrateSchema = require('./db/migrateSchema');
+const backfillSkus = require('./db/backfillSkus');
 const path = require('path');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -111,6 +112,7 @@ sequelize
   .sync({ force: false })
   .then(() => migrateUsers())
   .then(() => migrateSchema())
+  .then(() => backfillSkus())
   .then(() => {
     console.log('--------------------------------------------------');
     console.log('DATABASE: Synced successfully.');

@@ -162,8 +162,8 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
             <input
               type="text"
               value={formData.sku || ""}
-              onChange={e => setFormData({ ...formData, sku: e.target.value })}
-              className="w-full bg-brand-bgbase border border-border text-main rounded-lg px-3 py-2 text-sm font-bold"
+              readOnly
+              className="w-full bg-brand-bgbase border border-border text-muted rounded-lg px-3 py-2 text-sm font-bold cursor-not-allowed opacity-75 focus:outline-none"
             />
           </div>
           <div>

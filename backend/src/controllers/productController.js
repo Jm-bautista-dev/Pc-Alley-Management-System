@@ -2,6 +2,7 @@ const { Product, Category, ProductBundle, Branch, Inventory } = require('../mode
 const imageService = require('../services/imageService');
 const { getPaginationParams } = require('../utils/pagination');
 const { Op } = require('sequelize');
+const { generateUniqueSku } = require('../utils/skuGenerator');
 
 const getProducts = async (req, res) => {
   try {
@@ -88,7 +89,7 @@ const getProducts = async (req, res) => {
 
 const createProduct = async (req, res) => {
   try {
-    const { name, sku, description, price, category_id, supplier_id, branch_id, initial_stock } = req.body;
+    const { name, sku: bodySku, description, price, category_id, supplier_id, branch_id, initial_stock } = req.body;
     let image_url = null;
 
     if (req.file) {
@@ -108,16 +109,42 @@ const createProduct = async (req, res) => {
       targetBranchId = userBranchId;
     }
 
-    const product = await Product.create({
-      name,
-      sku,
-      description,
-      price,
-      category_id: category_id || null,
-      supplier_id: supplier_id || null,
-      image_url,
-      branch_id: targetBranchId ? parseInt(targetBranchId) : null
-    });
+    let product;
+    let retries = 10;
+    let sku = bodySku;
+
+    while (retries > 0) {
+      try {
+        if (!sku) {
+          sku = await generateUniqueSku(category_id);
+        }
+        product = await Product.create({
+          name,
+          sku,
+          description,
+          price,
+          category_id: category_id || null,
+          supplier_id: supplier_id || null,
+          image_url,
+          branch_id: targetBranchId ? parseInt(targetBranchId) : null
+        });
+        break; // success!
+      } catch (err) {
+        const isSkuConflict = err.name === 'SequelizeUniqueConstraintError' && 
+                             err.errors && 
+                             err.errors.some(e => e.path === 'sku');
+        if (isSkuConflict && !bodySku) {
+          retries--;
+          sku = null; // force regeneration
+          if (retries === 0) {
+            throw new Error('Failed to generate a unique SKU after 10 attempts.');
+          }
+          await new Promise(resolve => setTimeout(resolve, Math.random() * 50));
+        } else {
+          throw err;
+        }
+      }
+    }
 
     // Automatically initialize inventory for all branches
     const branches = await Branch.findAll();
@@ -136,16 +163,41 @@ const createProduct = async (req, res) => {
 
 const createBundle = async (req, res) => {
   try {
-    const { name, sku, price, items, category_id } = req.body;
+    const { name, sku: bodySku, price, items, category_id } = req.body;
     
-    // Create the bundle product
-    const bundleProduct = await Product.create({
-      name,
-      sku,
-      price,
-      is_bundle: true,
-      category_id: category_id || null
-    });
+    let bundleProduct;
+    let retries = 10;
+    let sku = bodySku;
+
+    while (retries > 0) {
+      try {
+        if (!sku) {
+          sku = await generateUniqueSku(category_id, true);
+        }
+        bundleProduct = await Product.create({
+          name,
+          sku,
+          price,
+          is_bundle: true,
+          category_id: category_id || null
+        });
+        break; // success!
+      } catch (err) {
+        const isSkuConflict = err.name === 'SequelizeUniqueConstraintError' && 
+                             err.errors && 
+                             err.errors.some(e => e.path === 'sku');
+        if (isSkuConflict && !bodySku) {
+          retries--;
+          sku = null; // force regeneration
+          if (retries === 0) {
+            throw new Error('Failed to generate a unique SKU after 10 attempts.');
+          }
+          await new Promise(resolve => setTimeout(resolve, Math.random() * 50));
+        } else {
+          throw err;
+        }
+      }
+    }
 
     // Create associations in ProductBundle table
     if (items && items.length > 0) {
