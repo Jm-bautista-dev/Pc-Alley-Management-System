@@ -33,7 +33,27 @@ export default function ProductsPage() {
   const [branches, setBranches] = useState([]);
   const [inventoryRows, setInventoryRows] = useState([]);
   const [selectedBranch, setSelectedBranch] = useState("");
-  
+
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const LIMIT = 50;
+
+  // Advanced Filter States
+  const [showFilters, setShowFilters] = useState(false);
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [sortBy, setSortBy] = useState("name-asc");
+
+  // Debounce search to avoid firing on every keystroke
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 350);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Init user and branches on mount
   useEffect(() => {
     const userData = localStorage.getItem("user");
     if (userData) {
@@ -42,16 +62,20 @@ export default function ProductsPage() {
       if (parsedUser?.role !== "super_admin" && parsedUser?.branch_id) {
         setSelectedBranch(String(parsedUser.branch_id));
       }
-      // Removed fetchPendingRequests for branch admins as request UI is no longer present
     }
     fetchBranches();
   }, []);
-  
-  // Advanced Filter States
-  const [showFilters, setShowFilters] = useState(false);
-  const [minPrice, setMinPrice] = useState("");
-  const [maxPrice, setMaxPrice] = useState("");
-  const [sortBy, setSortBy] = useState("name-asc");
+
+  // Fetch products when filters / page change (this was the missing trigger!)
+  useEffect(() => {
+    fetchProducts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, selectedBranch, debouncedSearch, sortBy]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [selectedBranch, debouncedSearch, sortBy]);
 
   async function fetchBranches() {
     const token = localStorage.getItem("token");
@@ -62,24 +86,45 @@ export default function ProductsPage() {
     } catch (err) {
       console.error("Branch directory connection failure:", err);
     }
-  };
+  }
 
   const fetchProducts = async () => {
     const token = localStorage.getItem("token");
+    setLoading(true);
     try {
-      setLoading(true);
       const headers = { Authorization: `Bearer ${token}` };
-      const params = new URLSearchParams({ page: "1", limit: "10000" });
-      if (selectedBranch) params.set("branch_id", selectedBranch);
 
+      // Build product query params
+      const productParams = new URLSearchParams({
+        page: String(page),
+        limit: String(LIMIT),
+        sort: sortBy,
+      });
+      if (debouncedSearch) productParams.set("search", debouncedSearch);
+
+      // Build inventory query params (only current page of products)
+      const inventoryParams = new URLSearchParams({
+        page: String(page),
+        limit: String(LIMIT),
+      });
+      if (selectedBranch) inventoryParams.set("branch_id", selectedBranch);
+
+      // Fetch both in parallel
       const [productRes, inventoryRes] = await Promise.all([
-        fetch(apiUrl("/api/products"), { headers }),
-        fetch(apiUrl(`/api/inventory${params.toString() ? `?${params.toString()}` : ""}`), { headers })
+        fetch(apiUrl(`/api/products?${productParams.toString()}`), { headers }),
+        fetch(apiUrl(`/api/inventory?${inventoryParams.toString()}`), { headers })
       ]);
       const productData = await productRes.json();
       const inventoryData = await inventoryRes.json();
 
-      if (productRes.ok) setProducts(Array.isArray(productData?.data) ? productData.data : productData);
+      if (productRes.ok) {
+        const rows = Array.isArray(productData?.data) ? productData.data : (Array.isArray(productData) ? productData : []);
+        setProducts(rows);
+        if (productData?.pagination) {
+          setTotalPages(productData.pagination.totalPages || 1);
+          setTotalItems(productData.pagination.total || rows.length);
+        }
+      }
       if (inventoryRes.ok) setInventoryRows(inventoryData.data ?? []);
     } catch (err) {
       console.error("Catalog connection failure:", err);
@@ -138,8 +183,7 @@ export default function ProductsPage() {
         lowStockThreshold: 5,
         hasInventoryRecord: false
       }
-    }))
-    .filter(product => !selectedBranch || product.stockSummary.hasInventoryRecord);
+    }));
 
   const selectedBranchName = selectedBranch
     ? branches.find(branch => String(branch.id) === String(selectedBranch))?.name || user?.branch_name || `Branch #${selectedBranch}`
@@ -147,24 +191,13 @@ export default function ProductsPage() {
 
   const categories = ["All", ...new Set(scopedProducts.map(p => p.Category?.name).filter(Boolean))];
 
+  // Client-side category + price filter (search/sort/branch are server-side)
   let filteredProducts = scopedProducts.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          p.sku.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = activeCategory === "All" || p.Category?.name === activeCategory;
-    
-    // Price Range Filter
     const price = Number(p.price);
     const matchesMinPrice = minPrice === "" || price >= Number(minPrice);
     const matchesMaxPrice = maxPrice === "" || price <= Number(maxPrice);
-    
-    return matchesSearch && matchesCategory && matchesMinPrice && matchesMaxPrice;
-  });
-
-  // Sorting
-  filteredProducts.sort((a, b) => {
-    if (sortBy === "price-asc") return Number(a.price) - Number(b.price);
-    if (sortBy === "price-desc") return Number(b.price) - Number(a.price);
-    return a.name.localeCompare(b.name);
+    return matchesCategory && matchesMinPrice && matchesMaxPrice;
   });
 
   // Group products by category
@@ -360,11 +393,28 @@ export default function ProductsPage() {
               ))}
             </div>
 
-            {/* Loading */}
+            {/* Skeleton Loading */}
             {loading && (
-              <div className="flex flex-col items-center justify-center py-20">
-                <div className="w-12 h-12 border-2 border-border border-t-brand-neonblue rounded-full animate-spin mb-4" />
-                <p className="text-[10px] font-black uppercase tracking-[4px] text-muted">Loading products...</p>
+              <div className="space-y-6">
+                {[1, 2, 3].map(g => (
+                  <div key={g} className="mb-8">
+                    <div className="flex items-center gap-3 mb-3 px-1">
+                      <div className="h-7 w-24 rounded-xl bg-brand-surface border border-border animate-pulse" />
+                      <div className="flex-1 h-px bg-border/40" />
+                    </div>
+                    <div className="bg-brand-surface border border-border rounded-2xl overflow-hidden shadow-sm">
+                      {[1, 2, 3, 4, 5].map(r => (
+                        <div key={r} className={`flex items-center gap-4 px-6 py-4 ${r !== 5 ? 'border-b border-border' : ''}`}>
+                          <div className="w-10 h-10 rounded-xl bg-brand-bgbase animate-pulse flex-shrink-0" />
+                          <div className="w-28 h-3 rounded bg-brand-bgbase animate-pulse hidden md:block" />
+                          <div className="flex-1 h-4 rounded bg-brand-bgbase animate-pulse" />
+                          <div className="w-16 h-4 rounded bg-brand-bgbase animate-pulse" />
+                          <div className="w-16 h-4 rounded bg-brand-bgbase animate-pulse" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 
@@ -378,12 +428,12 @@ export default function ProductsPage() {
             )}
 
             {/* Categorized List */}
-            {!loading && Object.entries(grouped).map(([catName, items], groupIdx) => (
+            {!loading && Object.entries(grouped).map(([catName, items]) => (
               <motion.div
                 key={catName}
-                initial={{ opacity: 0, y: 16 }}
+                initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: groupIdx * 0.07 }}
+                transition={{ duration: 0.25 }}
                 className="mb-8"
               >
                 {/* Category Header */}
@@ -399,11 +449,8 @@ export default function ProductsPage() {
                 {/* Product Rows */}
                 <div className="bg-brand-surface border border-border rounded-2xl overflow-hidden shadow-sm">
                   {items.map((product, idx) => (
-                    <motion.div
+                    <div
                       key={product.id}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: groupIdx * 0.07 + idx * 0.04 }}
                       className={`grid grid-cols-[auto,1fr,auto] md:flex items-center gap-4 px-4 md:px-6 py-4 hover:bg-brand-muted/5 transition-colors group cursor-pointer ${
                         idx !== items.length - 1 ? 'border-b border-border' : ''
                       }`}
@@ -469,11 +516,50 @@ export default function ProductsPage() {
                           </button>
                         )}
                       </div>
-                    </motion.div>
+                    </div>
                   ))}
                 </div>
               </motion.div>
             ))}
+
+            {/* Pagination */}
+            {!loading && totalPages > 1 && (
+              <div className="flex items-center justify-between mt-8 pb-8">
+                <p className="text-[10px] text-main/40 font-black uppercase tracking-widest">
+                  Page {page} of {totalPages} &bull; {totalItems} total items
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page <= 1}
+                    className="h-9 px-4 rounded-lg border border-border text-[11px] font-black uppercase tracking-widest text-main/60 hover:text-main hover:border-brand-neonblue/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  >
+                    ← Prev
+                  </button>
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    const start = Math.max(1, page - 2);
+                    const p = start + i;
+                    if (p > totalPages) return null;
+                    return (
+                      <button
+                        key={p}
+                        onClick={() => setPage(p)}
+                        className={`h-9 w-9 rounded-lg border text-[11px] font-black transition-all ${p === page ? 'border-brand-neonblue/50 text-brand-neonblue bg-brand-neonblue/10' : 'border-border text-main/40 hover:text-main hover:border-brand-neonblue/30'}`}
+                      >
+                        {p}
+                      </button>
+                    );
+                  })}
+                  <button
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    disabled={page >= totalPages}
+                    className="h-9 px-4 rounded-lg border border-border text-[11px] font-black uppercase tracking-widest text-main/60 hover:text-main hover:border-brand-neonblue/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  >
+                    Next →
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </main>
