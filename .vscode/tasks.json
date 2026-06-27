@@ -1,0 +1,32 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "npm-install-backend",
+      "type": "shell",
+      "command": "npm",
+      "args": ["install"],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "problemMatcher": [],
+      "group": "build"
+    },
+    {
+      "label": "npm-install-frontend",
+      "type": "shell",
+      "command": "npm",
+      "args": ["install"],
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "problemMatcher": [],
+      "group": "build"
+    },
+    {
+      "label": "Install Dependencies",
+      "dependsOn": ["npm-install-backend", "npm-install-frontend"],
+      "problemMatcher": []
+    }
+  ]
+}

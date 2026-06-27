@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+
+# Build output
+.next/
+dist/
+build/
+
+# Environment files – NEVER commit secrets
+.env
+.env.local
+.env.production
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/settings.json
+.kilocode/
+
+# Temp / scratch
+.builder-temp/
+*.ps1
+patch.js
+check_lines.ps1
+debug_logo.ps1
+find_alt.ps1
+find_return.ps1
+fix_logo.ps1
+rewrite_logo.ps1
+conflicts.txt
+conflicts_utf8.txt
+frontend_dev_section.txt
+docx_content/

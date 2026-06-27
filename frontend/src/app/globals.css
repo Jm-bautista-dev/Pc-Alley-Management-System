@@ -1,0 +1,317 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Logo Background Removal Fix */
+[data-logo-debug] {
+  background-color: transparent !important;
+}
+
+/* ============================================================
+   60 - 30 - 10 PASTEL COLOR SYSTEM
+   60% → Pastel Lavender  #F4F0FB  (backgrounds — soft, airy)
+   30% → Pastel White     #FFFFFF  (cards, surfaces — clean)
+   10% → Soft Periwinkle  #7B8CDE  (accents, buttons — gentle)
+   ============================================================ */
+
+:root {
+  /* ── 60% Dominant — pastel lavender background ── */
+  --brand-bgbase-rgb: 244, 240, 251;       /* #F4F0FB soft lavender */
+  --brand-navy-rgb:   235, 230, 248;       /* slightly deeper lavender */
+
+  /* ── 30% Secondary — white/cream surfaces ── */
+  --brand-surface-rgb: 255, 255, 255;      /* #FFFFFF pure white cards */
+  --brand-panel-rgb:   248, 245, 255;      /* #F8F5FF faint lavender panel */
+
+  /* ── 10% Accent — soft periwinkle blue ── */
+  --brand-neonblue-rgb:   123, 140, 222;   /* #7B8CDE periwinkle */
+  --brand-neonpurple-rgb: 167, 139, 210;   /* #A78BD2 soft purple */
+  --accent:               123, 140, 222;   /* same as neonblue */
+
+  /* ── Text — soft dark, not harsh black ── */
+  --text-main-rgb:   60, 55, 80;           /* #3C3750 soft dark purple-gray */
+  --text-title-rgb:  45, 40, 65;           /* #2D2841 */
+  --text-muted-rgb:  140, 130, 170;        /* #8C82AA muted lavender */
+
+  /* ── Border — very soft ── */
+  --brand-border-rgb: 220, 215, 240;       /* #DCD7F0 */
+  --brand-hover-rgb:  235, 230, 250;       /* #EBE6FA */
+
+  /* ── Shorthands ── */
+  --brand-bgbase:  rgb(var(--brand-bgbase-rgb));
+  --text-main:     rgb(var(--text-main-rgb));
+  --text-title:    rgb(var(--text-title-rgb));
+  --text-muted:    rgb(var(--text-muted-rgb));
+  --brand-crimson: rgb(var(--accent));
+
+  --glass-bg:     rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(123, 140, 222, 0.1);
+  --card-shadow:  0 8px 32px -8px rgba(100, 80, 180, 0.08);
+
+  /* ── Fluid Typography ── */
+  --fluid-space:    clamp(1rem, 5vw, 2.5rem);
+  --fluid-text-h1:  clamp(1.75rem, 6vw, 3rem);
+  --fluid-text-h2:  clamp(1.25rem, 4vw, 2rem);
+  --fluid-text-h3:  clamp(1rem, 3vw, 1.25rem);
+}
+
+/* ── DARK MODE — pastel dark, still soft on eyes ── */
+.dark {
+  /* 60% — deep muted purple-navy base */
+  --brand-bgbase-rgb: 28, 25, 45;          /* #1C192D */
+  --brand-navy-rgb:   35, 32, 58;          /* #23203A */
+
+  /* 30% — soft dark surfaces */
+  --brand-surface-rgb: 42, 38, 68;         /* #2A2644 */
+  --brand-panel-rgb:   52, 48, 82;         /* #343052 */
+
+  /* 10% — pastel periwinkle accent */
+  --brand-neonblue-rgb:   167, 182, 255;   /* #A7B6FF soft pastel blue */
+  --brand-neonpurple-rgb: 196, 167, 231;   /* #C4A7E7 pastel purple */
+  --accent:               220, 130, 143;   /* #DC828F soft pastel rose for alerts */
+
+  /* ── Text ── */
+  --text-main-rgb:   220, 215, 240;        /* #DCD7F0 soft lavender white */
+  --text-title-rgb:  240, 237, 255;        /* #F0EDFF */
+  --text-muted-rgb:  150, 140, 180;        /* #968CB4 */
+
+  /* ── Border ── */
+  --brand-border-rgb: 60, 55, 90;          /* #3C375A */
+  --brand-hover-rgb:  70, 65, 105;         /* #464169 */
+
+  --glass-bg:     rgba(28, 25, 45, 0.75);
+  --glass-border: rgba(167, 182, 255, 0.08);
+  --card-shadow:  0 10px 40px -10px rgba(0, 0, 0, 0.4);
+}
+
+body {
+  background: var(--brand-bgbase);
+  color: var(--text-main);
+  font-size: 14px;          /* base = 14px, all text scales from here */
+  line-height: 1.5;
+  @apply font-dmsans overflow-x-hidden antialiased;
+}
+
+/* ── Universal Theme Sync ── */
+/* ── Only color transitions globally, keep it fast ── */
+*,
+::before,
+::after {
+  transition-property: color, background-color, border-color, opacity;
+  transition-timing-function: ease;
+  transition-duration: 150ms;
+}
+
+::selection {
+  background: rgba(10,65,116,0.2);
+}
+
+h1,
+.text-h1 {
+  font-family: var(--font-rajdhani);
+  font-size: var(--fluid-text-h1);
+  @apply tracking-tight font-black uppercase leading-[0.9] mb-4;
+}
+
+h2,
+.text-h2 {
+  font-family: var(--font-rajdhani);
+  font-size: var(--fluid-text-h2);
+  @apply tracking-tight font-bold uppercase leading-[1];
+}
+
+h3,
+.text-h3 {
+  font-family: var(--font-rajdhani);
+  font-size: var(--fluid-text-h3);
+  @apply tracking-tight font-bold uppercase leading-none;
+}
+
+.font-bebas {
+  font-family: var(--font-bebas);
+}
+
+/* ── Buttons — 10% pastel accent ── */
+.btn-primary {
+  @apply relative overflow-hidden px-8 py-3.5 rounded-full font-rajdhani font-black uppercase tracking-[2px] text-[11px] transition-all duration-300 active:scale-95 flex items-center justify-center gap-3 text-white border-none bg-brand-neonblue hover:bg-brand-neonblue/90 shadow-[0_8px_20px_rgba(123,140,222,0.3)] hover:shadow-[0_12px_30px_rgba(123,140,222,0.45)] hover:-translate-y-0.5;
+}
+
+.btn-premium {
+  @apply btn-primary shadow-[0_10px_30px_rgba(123,140,222,0.35)] hover:shadow-[0_20px_45px_rgba(123,140,222,0.5)];
+}
+
+.btn-neon {
+  @apply btn-primary bg-brand-neonpurple hover:bg-brand-neonpurple/90 shadow-[0_8px_20px_rgba(167,139,210,0.25)] hover:shadow-[0_12px_30px_rgba(167,139,210,0.4)];
+}
+
+.btn-ghost {
+  @apply relative px-6 py-3 rounded-full font-rajdhani font-black uppercase tracking-[2px] text-[11px] transition-all duration-300 flex items-center justify-center gap-3 border border-border bg-brand-surface text-main hover:border-brand-neonblue/50 hover:text-brand-neonblue hover:bg-brand-neonblue/5;
+}
+
+.btn-danger {
+  @apply btn-primary bg-rose-400 hover:bg-rose-500 shadow-[0_10px_25px_rgba(251,113,133,0.25)];
+}
+
+
+.hover-magnet:hover {
+  transform: translateY(-2px);
+}
+
+.tap-sink:active {
+  transform: scale(0.96);
+}
+
+/* Refined Glassmorphism */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px);
+  border: 1px solid var(--glass-border);
+  @apply shadow-[0_8px_32px_rgba(0,0,0,0.03)] transition-all duration-500;
+}
+
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  @apply rounded-[24px] md:rounded-[32px] transition-all duration-500 overflow-hidden;
+}
+
+.dark .glass-card {
+  @apply shadow-[0_8px_32px_rgba(0,0,0,0.4)];
+}
+
+.glass-card:hover {
+  border-color: rgba(var(--brand-neonblue-rgb), 0.4);
+  background: rgba(var(--brand-neonblue-rgb), 0.02);
+}
+
+/* ── Responsive Container ── */
+.responsive-container {
+  @apply px-4 sm:px-6 md:px-8 lg:px-10 py-6 md:py-8 lg:py-10 mx-auto w-full max-w-[1800px];
+}
+
+.responsive-grid {
+  @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6 lg:gap-8;
+}
+
+/* Animated Grid Background */
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(123, 140, 222, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(123, 140, 222, 0.05) 1px, transparent 1px);
+  background-size: 60px 60px;
+  animation: gridMove 30s linear infinite;
+}
+
+@keyframes gridMove {
+  0% {
+    background-position: 0 0;
+  }
+
+  100% {
+    background-position: 0 60px;
+  }
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+}
+
+/* ── Custom Utilities from Design ── */
+.logo-hex {
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}
+
+.glow-text {
+  text-shadow: 0 4px 12px rgba(123, 140, 222, 0.15);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(var(--brand-neonblue-rgb), 0.25);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--brand-neonblue-rgb), 0.5);
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--brand-neonblue-rgb), 0.25) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(var(--brand-neonblue-rgb), 0.2);
+  border-radius: 10px;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ── Neon Utilities ── */
+.text-neon-blue {
+  color: var(--brand-neonblue);
+}
+
+.text-neon-purple {
+  color: var(--brand-neonpurple);
+}
+
+.text-neon-crimson {
+  color: var(--brand-crimson);
+}
+
+.border-neon-blue {
+  border-color: var(--brand-neonblue);
+}
+
+.border-neon-purple {
+  border-color: var(--brand-neonpurple);
+}
+
+.border-neon-crimson {
+  border-color: var(--brand-crimson);
+}
+
+.glow-blue {
+  box-shadow: 0 0 20px rgba(123, 140, 222, 0.15);
+}
+
+.glow-purple {
+  box-shadow: 0 0 20px rgba(167, 139, 210, 0.15);
+}
+
+/* ── Browser Autofill Fix ── */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  transition: background-color 5000s ease-in-out 0s !important;
+  -webkit-text-fill-color: var(--text-main) !important;
+}

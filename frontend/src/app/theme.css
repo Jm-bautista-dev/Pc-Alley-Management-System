@@ -1,0 +1,37 @@
+/* theme.css - Optional theming layer */
+:root {
+  /* Light mode defaults */
+  --color-primary: hsl(180, 30%, 45%); /* muted teal */
+  --color-primary-hover: hsl(180, 30%, 55%);
+  --color-bg: #fafafa;
+  --color-text: #222222;
+  --color-accent: hsl(340, 80%, 55%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-primary: hsl(180, 30%, 55%);
+    --color-primary-hover: hsl(180, 30%, 65%);
+    --color-bg: #1a1a1a;
+    --color-text: #eeeeee;
+    --color-accent: hsl(340, 80%, 65%);
+  }
+}
+
+/* Custom theme activation – higher specificity */
+.custom-theme button,
+.custom-theme .btn {
+  background: var(--color-primary) !important;
+  color: var(--color-bg) !important;
+  transition: background 0.2s;
+}
+.custom-theme button:hover,
+.custom-theme .btn:hover {
+  background: var(--color-primary-hover) !important;
+}
+
+/* Ensure text color adapts */
+.custom-theme body {
+  background: var(--color-bg) !important;
+  color: var(--color-text) !important;
+}
