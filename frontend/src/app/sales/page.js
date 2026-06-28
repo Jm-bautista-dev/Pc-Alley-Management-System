@@ -38,7 +38,8 @@ import {
   Check,
   ShoppingBag,
   ArrowLeft,
-  Info
+  Info,
+  Tag
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiUrl } from "@/lib/api";
@@ -56,6 +57,11 @@ const t = {
     itemCount: "Items",
     subtotal: "Subtotal",
     tax: "VAT (12%)",
+    discount: "Discount",
+    discountType: "Type",
+    discountPercent: "Percent (%)",
+    discountFixed: "Fixed (₱)",
+    discountValue: "Discount Value",
     totalAmount: "Total Amount",
     addToOrder: "Add to Order",
     reviewOrder: "Review Order",
@@ -113,6 +119,11 @@ const t = {
     itemCount: "Mga Item",
     subtotal: "Subtotal",
     tax: "VAT (12%)",
+    discount: "Diskwento",
+    discountType: "Uri",
+    discountPercent: "Porsyento (%)",
+    discountFixed: "Halaga (₱)",
+    discountValue: "Halaga ng Diskwento",
     totalAmount: "Kabuuang Halaga",
     addToOrder: "Idagdag sa Order",
     reviewOrder: "Suriin ang Order",
@@ -354,13 +365,8 @@ export default function SalesPage() {
   const { user } = useAuthGuard();
   const { theme } = useTheme(); // Inherit active application theme
   
-  // Theme state
-  const [accentColor, setAccentColor] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("pc_alley_kiosk_accent") || "yellow";
-    }
-    return "yellow";
-  });
+  // Theme state — always start with "yellow" to match SSR, then sync from localStorage after mount
+  const [accentColor, setAccentColor] = useState("yellow");
   
   // Language state
   const [language, setLanguage] = useState("en"); // "en" or "tg"
@@ -409,6 +415,18 @@ export default function SalesPage() {
   const [checkoutStep, setCheckoutStep] = useState("review"); // review -> payment
   const [searchOpen, setSearchOpen] = useState(false); // search overlay switcher
   const [settingsOpen, setSettingsOpen] = useState(false); // gear options modal
+
+  // Discount state — reads from localStorage shared with Discounts page
+  const [availableDiscounts, setAvailableDiscounts] = useState([]);
+  const [selectedDiscount, setSelectedDiscount] = useState(null); // full discount object | null
+
+  // Load discounts from localStorage (same store as Discounts page)
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem("pc_alley_discounts") || "[]");
+      setAvailableDiscounts(stored);
+    } catch { /* silent */ }
+  }, []);
 
   // Quick Add visual feedback states
   const [toastMessage, setToastMessage] = useState("");
@@ -511,6 +529,15 @@ export default function SalesPage() {
     return () => {
       clearTimeout(toastTimeoutRef.current);
     };
+  }, []);
+
+  // Sync accent color from localStorage after mount (avoids SSR hydration mismatch)
+  useEffect(() => {
+    const saved = localStorage.getItem("pc_alley_kiosk_accent");
+    if (saved && saved !== accentColor) {
+      setAccentColor(saved);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleAccentChange = (color) => {
@@ -840,9 +867,19 @@ export default function SalesPage() {
 
   const removeFromCart = (id) => setCart(cart.filter(item => item.id !== id));
 
-  const subtotal   = cart.reduce((s, i) => s + i.price * i.quantity, 0);
-  const tax        = subtotal * 0.12;
-  const grandTotal = subtotal + tax;
+  const subtotal       = cart.reduce((s, i) => s + i.price * i.quantity, 0);
+  const discountAmount = (() => {
+    if (!selectedDiscount) return 0;
+    const isPercent = selectedDiscount.type === "Percentage (%)";
+    if (isPercent) {
+      const pct = Math.min(Math.max(Number(selectedDiscount.value) || 0, 0), 100);
+      return subtotal * (pct / 100);
+    }
+    return Math.min(Math.max(Number(selectedDiscount.value) || 0, 0), subtotal);
+  })();
+  const discountedSubtotal = subtotal - discountAmount;
+  const tax        = discountedSubtotal * 0.12;
+  const grandTotal = discountedSubtotal + tax;
 
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
@@ -901,6 +938,19 @@ export default function SalesPage() {
 
       if (res.ok) {
         const data = await res.json();
+
+        // Increment uses count for the applied discount in localStorage
+        if (selectedDiscount) {
+          try {
+            const stored = JSON.parse(localStorage.getItem("pc_alley_discounts") || "[]");
+            const updated = stored.map(d =>
+              d.id === selectedDiscount.id ? { ...d, uses: (d.uses || 0) + 1 } : d
+            );
+            localStorage.setItem("pc_alley_discounts", JSON.stringify(updated));
+            setAvailableDiscounts(updated);
+          } catch { /* silent */ }
+        }
+
         setReceiptData(data);
         setShowReceiptModal(true);
         setProofFile(null);
@@ -935,6 +985,7 @@ export default function SalesPage() {
       setCart([]);
       clearCustomer();
       setCashPaid("");
+      setSelectedDiscount(null);
       setIsReviewOpen(false);
     } catch (err) {
       showError(language === "en" ? "Failed to save draft." : "Sawi sa pag-save ng draft.");
@@ -978,6 +1029,7 @@ export default function SalesPage() {
     setReceiptData(null);
     setCart([]);
     clearCustomer();
+    setSelectedDiscount(null);
   };
 
   return (
@@ -1867,18 +1919,91 @@ export default function SalesPage() {
                   <div className="space-y-2 text-xs text-brand-muted font-semibold">
                     <div className="flex justify-between">
                       <span>{t[language].subtotal}</span>
-                      <span className="text-main font-bold">₱{subtotal.toLocaleString()}</span>
+                      <span className="text-main font-bold">₱{subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
+
+                    {/* ── DISCOUNT DROPDOWN (from Discounts page) ── */}
+                    {(() => {
+                      const now = new Date();
+                      const eligibleDiscounts = availableDiscounts.filter(d =>
+                        d.active &&
+                        new Date(d.expiry_date) > now &&
+                        (d.max_uses === null || d.uses < d.max_uses)
+                      );
+                      return (
+                        <div className="rounded-xl border border-dashed border-brand-border bg-brand-panel p-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-brand-muted">
+                              <Tag size={11} className="text-brand-neonblue" />
+                              <span>{t[language].discount}</span>
+                            </div>
+                            {selectedDiscount && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedDiscount(null)}
+                                className="text-[8px] font-black uppercase tracking-wider text-red-500 hover:text-red-400 transition-colors"
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </div>
+
+                          {eligibleDiscounts.length === 0 ? (
+                            <p className="text-[9px] text-brand-muted font-bold text-center py-1">
+                              No active discounts available
+                            </p>
+                          ) : (
+                            <select
+                              value={selectedDiscount?.id ?? ""}
+                              onChange={e => {
+                                const chosen = eligibleDiscounts.find(d => String(d.id) === e.target.value);
+                                if (!chosen) { setSelectedDiscount(null); return; }
+                                // Validate min purchase
+                                if (chosen.min_purchase > 0 && subtotal < chosen.min_purchase) {
+                                  showError(`Minimum purchase of ₱${chosen.min_purchase.toLocaleString()} required for "${chosen.name}"`);
+                                  return;
+                                }
+                                setSelectedDiscount(chosen);
+                              }}
+                              className="w-full bg-brand-surface border border-brand-border rounded-lg py-1.5 px-3 text-xs font-bold text-main outline-none focus:border-brand-neonblue/40 appearance-none"
+                            >
+                              <option value="">— No Discount —</option>
+                              {eligibleDiscounts.map(d => (
+                                <option key={d.id} value={d.id}>
+                                  [{d.code}] {d.name} —{" "}
+                                  {d.type === "Percentage (%)" ? `${d.value}% OFF` : `₱${Number(d.value).toLocaleString()} OFF`}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+
+                          {/* Selected discount details badge */}
+                          {selectedDiscount && (
+                            <div className="flex items-center justify-between px-2 py-1.5 bg-brand-neonblue/10 border border-brand-neonblue/20 rounded-lg">
+                              <div>
+                                <p className="text-[9px] font-black text-brand-neonblue uppercase tracking-wider">{selectedDiscount.code}</p>
+                                <p className="text-[8px] text-brand-muted font-bold mt-0.5">{selectedDiscount.name}</p>
+                              </div>
+                              <span className="text-[10px] font-black text-red-500">
+                                −₱{discountAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+
                     <div className="flex justify-between">
                       <span>{t[language].tax}</span>
-                      <span className="text-main font-bold">₱{tax.toLocaleString()}</span>
+                      <span className="text-main font-bold">₱{tax.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                   </div>
 
                   <div className="flex justify-between items-baseline pt-2">
                     <span className="text-[10px] font-black uppercase tracking-widest text-brand-muted">Total</span>
                     <span className="text-2xl font-rajdhani font-black text-main tracking-wide">
-                      ₱{grandTotal.toLocaleString()}
+                      ₱{grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
 
