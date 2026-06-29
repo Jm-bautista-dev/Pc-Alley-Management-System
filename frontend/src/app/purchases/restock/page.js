@@ -54,7 +54,7 @@ export default function ProcurementPage() {
     const token = localStorage.getItem("token");
     try {
       const [invRes, branchRes] = await Promise.all([
-        fetch(apiUrl("/api/inventory"), { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(apiUrl("/api/inventory?limit=10000"), { headers: { Authorization: `Bearer ${token}` } }),
         fetch(apiUrl("/api/branches"), { headers: { Authorization: `Bearer ${token}` } })
       ]);
       

@@ -312,6 +312,10 @@ function ReceiptModal({ isOpen, onClose, receipt }) {
                   <span className="text-brand-muted font-bold uppercase tracking-widest text-[9px]">Branch</span>
                   <span className="font-bold text-main">{receipt.Branch?.name || "PC Alley Main"}</span>
                 </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-brand-muted font-bold uppercase tracking-widest text-[9px]">Customer Name</span>
+                  <span className="font-bold text-main">{receipt.customerName || receipt.customer_name || "Walk-in Customer"}</span>
+                </div>
                 {receipt.paymentMethod === "cash" && (
                   <>
                     <div className="flex justify-between items-center text-xs">
@@ -375,6 +379,7 @@ export default function SalesPage() {
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState("All");
+  const [activeBrand, setActiveBrand] = useState("All");
   const [productSearch, setProductSearch] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("Cash");
   const [cashPaid, setCashPaid] = useState("");
@@ -578,9 +583,9 @@ export default function SalesPage() {
   const fetchInventory = async (branchId) => {
     const token = localStorage.getItem("token");
     const targetBranch = branchId || selectedBranchId;
-    let url = "/api/inventory";
+    let url = "/api/inventory?limit=10000";
     if (targetBranch) {
-      url += `?branch_id=${targetBranch}`;
+      url += `&branch_id=${targetBranch}`;
     }
     try {
       const res = await fetch(apiUrl(url), {
@@ -713,11 +718,20 @@ export default function SalesPage() {
   
   const filteredInventory = inventory.filter(item => {
     const matchCat = activeCategory === "All" || item.Product?.Category?.name === activeCategory;
+    const matchBrand = activeBrand === "All" || item.Product?.Brand?.name === activeBrand;
     const matchSearch = !productSearch ||
       item.Product?.name?.toLowerCase().includes(productSearch.toLowerCase()) ||
       item.Product?.sku?.toLowerCase().includes(productSearch.toLowerCase());
-    return matchCat && matchSearch;
+    return matchCat && matchBrand && matchSearch;
   });
+
+  // Derive brand list from current category-filtered inventory
+  const brandsInCategory = ["All", ...new Set(
+    inventory
+      .filter(i => activeCategory === "All" || i.Product?.Category?.name === activeCategory)
+      .map(i => i.Product?.Brand?.name)
+      .filter(Boolean)
+  )];
 
   // QUICK ADD Selection (adds 1 to cart instantly)
   const handleQuickAdd = (item) => {
@@ -1176,7 +1190,7 @@ export default function SalesPage() {
             <motion.button
               key={cat}
               whileTap={{ scale: 0.95 }}
-              onClick={() => setActiveCategory(cat)}
+              onClick={() => { setActiveCategory(cat); setActiveBrand("All"); }}
               className={`h-11 px-6 rounded-full border text-[11px] font-black uppercase tracking-wider transition-all shrink-0 flex items-center gap-2 ${
                 isSelected
                   ? `${activeTheme.primaryBg} ${activeTheme.primaryText} ${activeTheme.border} shadow-md dark:shadow-none`
@@ -1189,6 +1203,30 @@ export default function SalesPage() {
           );
         })}
       </nav>
+
+      {/* ─────────────────────────────────────────────────────────────────
+          BRAND FILTER CHIPS (SHOWN ONLY IF BRANDS EXIST)
+          ───────────────────────────────────────────────────────────────── */}
+      {brandsInCategory.length > 1 && (
+        <div className="shrink-0 bg-brand-bgbase border-b border-brand-border/50 flex gap-2 overflow-x-auto py-2.5 px-6 no-scrollbar">
+          {brandsInCategory.map(brand => {
+            const isSelected = activeBrand === brand;
+            return (
+              <button
+                key={brand}
+                onClick={() => setActiveBrand(brand)}
+                className={`h-8 px-4 rounded-full text-[10px] font-black uppercase tracking-wider transition-all shrink-0 border ${
+                  isSelected
+                    ? `bg-brand-neonblue/15 text-brand-neonblue border-brand-neonblue/30`
+                    : "bg-brand-surface border-brand-border/50 text-brand-muted hover:text-main hover:border-brand-neonblue/20"
+                }`}
+              >
+                {brand === "All" ? "All Brands" : brand}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* ─────────────────────────────────────────────────────────────────
           PRODUCT GRID AREA (SCROLLABLE)
@@ -1278,12 +1316,19 @@ export default function SalesPage() {
                     </div>
 
                     {/* Meta Detail Info */}
-                    <h3 className="text-sm font-rajdhani font-black text-main uppercase tracking-wide leading-tight line-clamp-1 capitalize">
+                    <h3 className="text-sm font-rajdhani font-black text-main uppercase tracking-wide leading-tight line-clamp-1">
                       {item.Product.name}
                     </h3>
-                    <p className="text-[9px] font-mono text-brand-muted tracking-wider mb-2">
-                      {item.Product.sku}
-                    </p>
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="text-[9px] font-mono text-brand-muted tracking-wider">
+                        {item.Product.sku}
+                      </p>
+                      {item.Product?.Brand?.name && (
+                        <span className="text-[8px] font-black uppercase tracking-wider text-brand-neonblue bg-brand-neonblue/10 px-1.5 py-0.5 rounded-full border border-brand-neonblue/15">
+                          {item.Product.Brand.name}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[11px] text-brand-muted leading-normal line-clamp-2 mb-3">
                       {descText}
                     </p>
@@ -1736,7 +1781,7 @@ export default function SalesPage() {
                           </div>
 
                           <div>
-                            <label className="block text-[10px] font-black uppercase tracking-widest text-brand-muted mb-2 font-bold">
+                            <label className="block text-[10px] font-black uppercase tracking-widest text-brand-muted mb-2">
                               {t[language].receiptSlip}
                             </label>
                             {proofFile ? (
@@ -1782,7 +1827,7 @@ export default function SalesPage() {
 
                           {/* Cash Drawer cashier inputs */}
                           <div>
-                            <label className="block text-[10px] font-black uppercase tracking-widest text-brand-muted mb-2 font-bold">
+                            <label className="block text-[10px] font-black uppercase tracking-widest text-brand-muted mb-2">
                               {t[language].cashReceived}
                             </label>
                             <input
@@ -2116,7 +2161,7 @@ export default function SalesPage() {
 
                 {/* Theme Accent Color */}
                 <div>
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-brand-muted mb-2 font-bold font-sans">
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-brand-muted mb-2 font-sans">
                     {t[language].accentColor}
                   </label>
                   <div className="grid grid-cols-2 gap-2.5">
@@ -2197,7 +2242,7 @@ export default function SalesPage() {
             >
               <div className="flex items-center justify-between mb-8">
                 <div>
-                  <p className="text-[9px] font-black uppercase tracking-[3px] text-brand-muted mb-1 font-bold">New Record</p>
+                  <p className="text-[9px] font-black uppercase tracking-[3px] text-brand-muted mb-1">New Record</p>
                   <h2 className="text-lg font-rajdhani font-black uppercase text-main">Add Customer</h2>
                 </div>
                 <button
@@ -2216,7 +2261,7 @@ export default function SalesPage() {
                   { label: "Address", key: "address", type: "text", placeholder: "e.g. 123 Main St, Manila" },
                 ].map(({ label, key, type, placeholder }) => (
                   <div key={key}>
-                    <label className="block text-[10px] font-black uppercase tracking-[2px] text-brand-muted mb-2 font-bold font-sans">
+                    <label className="block text-[10px] font-black uppercase tracking-[2px] text-brand-muted mb-2 font-sans">
                       {label}
                     </label>
                     <input
@@ -2239,7 +2284,7 @@ export default function SalesPage() {
                 {/* Branch selector — super admin only */}
                 {user?.role === "super_admin" && branches.length > 0 && (
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-[2px] text-brand-muted mb-2 font-bold font-sans">Branch</label>
+                    <label className="block text-[10px] font-black uppercase tracking-[2px] text-brand-muted mb-2 font-sans">Branch</label>
                     <select
                       value={customerFormData.branchId || ""}
                       onChange={e => setCustomerFormData(prev => ({ ...prev, branchId: e.target.value }))}

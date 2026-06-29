@@ -1,6 +1,19 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('./index');
 
+const slugify = (text) => {
+  if (!text) return '';
+  return text
+    .toString()
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^\w\-]+/g, '')
+    .replace(/\-\-+/g, '-')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '');
+};
+
 const addColumnIfMissing = async (queryInterface, tableName, columnName, definition) => {
   const table = await queryInterface.describeTable(tableName);
 
@@ -123,6 +136,101 @@ const migrateSchema = async () => {
       type: DataTypes.DATE,
       allowNull: true
     });
+    await addColumnIfMissing(queryInterface, 'Products', 'brand_id', {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: { model: 'Brands', key: 'id' }
+    });
+    await addColumnIfMissing(queryInterface, 'Products', 'barcode', {
+      type: DataTypes.STRING,
+      allowNull: true
+    });
+    await addColumnIfMissing(queryInterface, 'Products', 'specifications', {
+      type: DataTypes.TEXT,
+      allowNull: true
+    });
+    await addColumnIfMissing(queryInterface, 'Products', 'status', {
+      type: DataTypes.STRING,
+      allowNull: false,
+      defaultValue: 'active'
+    });
+    await addColumnIfMissing(queryInterface, 'Categories', 'slug', {
+      type: DataTypes.STRING,
+      allowNull: true
+    });
+
+    // Backfill Category Slugs
+    const categories = await sequelize.query("SELECT id, name, slug FROM Categories", { type: sequelize.QueryTypes.SELECT });
+    for (const cat of categories) {
+      if (!cat.slug) {
+        const slug = slugify(cat.name);
+        await sequelize.query("UPDATE Categories SET slug = ? WHERE id = ?", {
+          replacements: [slug, cat.id]
+        });
+      }
+    }
+
+    // Ensure "Uncategorized" category exists
+    const uncatRows = await sequelize.query("SELECT id FROM Categories WHERE name = 'Uncategorized'", { type: sequelize.QueryTypes.SELECT });
+    if (uncatRows.length === 0) {
+      await sequelize.query("INSERT INTO Categories (name, slug, createdAt, updatedAt) VALUES ('Uncategorized', 'uncategorized', NOW(), NOW())");
+      console.log("DATABASE: Created default 'Uncategorized' category.");
+    }
+
+    // Ensure "Unassigned" brand exists
+    const brandRows = await sequelize.query("SELECT id FROM Brands WHERE name = 'Unassigned'", { type: sequelize.QueryTypes.SELECT });
+    if (brandRows.length === 0) {
+      await sequelize.query("INSERT INTO Brands (name, slug, status, created_at, updated_at) VALUES ('Unassigned', 'unassigned', 'active', NOW(), NOW())");
+      console.log("DATABASE: Created default 'Unassigned' brand.");
+    }
+
+    // ── Migrate Inventories → branch_products ──
+    const allTables = await queryInterface.showAllTables();
+    const hasInventories = allTables.map(t => t.toLowerCase()).includes('inventories');
+    const hasBranchProducts = allTables.map(t => t.toLowerCase()).includes('branch_products');
+
+    if (hasInventories && !hasBranchProducts) {
+      // Rename the table
+      await sequelize.query("RENAME TABLE `Inventories` TO `branch_products`");
+      console.log('DATABASE: Renamed Inventories → branch_products.');
+
+      // Rename quantity → stock
+      const bpTable = await queryInterface.describeTable('branch_products');
+      if (bpTable.quantity && !bpTable.stock) {
+        await queryInterface.renameColumn('branch_products', 'quantity', 'stock');
+        console.log('DATABASE: Renamed branch_products.quantity → stock.');
+      }
+
+      // Add new columns
+      await addColumnIfMissing(queryInterface, 'branch_products', 'price', {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+        defaultValue: null
+      });
+      await addColumnIfMissing(queryInterface, 'branch_products', 'enabled', {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: true
+      });
+    } else if (hasBranchProducts) {
+      // Table already migrated — just ensure columns exist
+      await addColumnIfMissing(queryInterface, 'branch_products', 'price', {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+        defaultValue: null
+      });
+      await addColumnIfMissing(queryInterface, 'branch_products', 'enabled', {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: true
+      });
+      // Ensure stock column exists (in case old quantity column persists)
+      const bpCols = await queryInterface.describeTable('branch_products');
+      if (bpCols.quantity && !bpCols.stock) {
+        await queryInterface.renameColumn('branch_products', 'quantity', 'stock');
+        console.log('DATABASE: Renamed branch_products.quantity → stock.');
+      }
+    }
   } catch (error) {
     console.warn(`DATABASE: Schema migration skipped or failed: ${error.message}`);
   }

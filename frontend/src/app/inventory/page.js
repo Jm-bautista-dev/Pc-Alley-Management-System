@@ -94,8 +94,8 @@ export default function InventoryPage() {
     const token = localStorage.getItem("token");
     setLoading(true);
     try {
-      let url = apiUrl("/api/inventory");
-      if (selectedBranch) url += `?branch_id=${selectedBranch}`;
+      let url = apiUrl("/api/inventory?limit=10000");
+      if (selectedBranch) url += `&branch_id=${selectedBranch}`;
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` }
       });

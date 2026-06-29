@@ -189,7 +189,7 @@ export default function Dashboard() {
       const [restockRes, notifRes, invRes] = await Promise.all([
         fetch(apiUrl("/api/restock-requests"), { headers }),
         fetch(apiUrl("/api/notifications"), { headers }),
-        fetch(apiUrl("/api/inventory"), { headers }),
+        fetch(apiUrl("/api/inventory?limit=10000"), { headers }),
       ]);
       if (restockRes.ok) {
         const data = await restockRes.json();
@@ -268,7 +268,7 @@ export default function Dashboard() {
         analyticsRes, branchPerfRes, bestSellersRes
       ] = await Promise.all([
         fetch(apiUrl(`/api/sales/history?${qs}`), { headers }),
-        fetch(apiUrl("/api/inventory"), { headers }),
+        fetch(apiUrl("/api/inventory?limit=10000"), { headers }),
         fetch(apiUrl(`/api/sales/daily-trends?${qs}`), { headers }),
         fetch(apiUrl(`/api/sales/performance?${qs}`), { headers }),
         fetch(apiUrl("/api/inventory/global-status"), { headers }),

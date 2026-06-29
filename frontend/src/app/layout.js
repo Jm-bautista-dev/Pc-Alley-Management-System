@@ -24,13 +24,18 @@ const bebasNeue = Bebas_Neue({
 export const metadata = {
   title: 'PC Alley — Integrated Multi-Branch System',
   description: 'Enterprise ERP for IT resource management',
-  viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
   other: {
     // Prevent browsers from caching authenticated pages
     'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
     'Pragma': 'no-cache',
     'Expires': '0',
   },
+};
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 import { ThemeProvider } from '../context/ThemeContext';

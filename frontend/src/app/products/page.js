@@ -81,8 +81,10 @@ export default function ProductsPage() {
     const token = localStorage.getItem("token");
     try {
       const res = await fetch(apiUrl("/api/branches"), { headers: { Authorization: `Bearer ${token}` } });
-      const data = await res.json();
-      if (res.ok) setBranches(data);
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data) setBranches(data);
+      }
     } catch (err) {
       console.error("Branch directory connection failure:", err);
     }
@@ -114,18 +116,39 @@ export default function ProductsPage() {
         fetch(apiUrl(`/api/products?${productParams.toString()}`), { headers }),
         fetch(apiUrl(`/api/inventory?${inventoryParams.toString()}`), { headers })
       ]);
-      const productData = await productRes.json();
-      const inventoryData = await inventoryRes.json();
 
       if (productRes.ok) {
-        const rows = Array.isArray(productData?.data) ? productData.data : (Array.isArray(productData) ? productData : []);
-        setProducts(rows);
-        if (productData?.pagination) {
-          setTotalPages(productData.pagination.totalPages || 1);
-          setTotalItems(productData.pagination.total || rows.length);
+        const productData = await productRes.json().catch(() => null);
+        if (productData) {
+          const rows = Array.isArray(productData?.data) ? productData.data : (Array.isArray(productData) ? productData : []);
+          setProducts(rows);
+          if (productData?.pagination) {
+            setTotalPages(productData.pagination.totalPages || 1);
+            setTotalItems(productData.pagination.total || rows.length);
+          }
+        }
+      } else {
+        console.warn("Failed to fetch products:", productRes.status);
+        if (productRes.status === 403) {
+          showError("Session Expired", "Token invalid or expired. Please try logging out and logging back in.");
+        } else {
+          const errData = await productRes.json().catch(() => ({}));
+          showError("Fetch Error", errData.message || `Failed to fetch products: ${productRes.status}`);
         }
       }
-      if (inventoryRes.ok) setInventoryRows(inventoryData.data ?? []);
+
+      if (inventoryRes.ok) {
+        const inventoryData = await inventoryRes.json().catch(() => null);
+        if (inventoryData) {
+          setInventoryRows(inventoryData.data ?? []);
+        }
+      } else {
+        console.warn("Failed to fetch inventory:", inventoryRes.status);
+        if (inventoryRes.status !== 403) { // Avoid duplicate 403 dialog
+          const errData = await inventoryRes.json().catch(() => ({}));
+          showError("Fetch Error", errData.message || `Failed to fetch inventory: ${inventoryRes.status}`);
+        }
+      }
     } catch (err) {
       console.error("Catalog connection failure:", err);
     } finally {
@@ -146,12 +169,13 @@ export default function ProductsPage() {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = await res.json();
 
       if (res.ok) {
+        const data = await res.json().catch(() => ({}));
         showSuccess("Success", data.message || "Product successfully processed.");
         fetchProducts();
       } else {
+        const data = await res.json().catch(() => ({}));
         showError("Failed to delete", data.error || data.message || "Failed to delete product.");
       }
     } catch (e) {

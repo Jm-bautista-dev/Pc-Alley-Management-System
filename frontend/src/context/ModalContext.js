@@ -133,20 +133,44 @@ const enqueueOrShow = (config) =>
 
 export const showModal = (...args) => enqueueOrShow(normalizeModalArgs(...args));
 
-export const showSuccess = (title, message = "", options = {}) =>
-  showModal({ type: "success", title, message, ...options });
+export const showSuccess = (title, message = "", options = {}) => {
+  if (typeof message === "object" && message !== null) {
+    options = message;
+    message = "";
+  }
+  return showModal({ type: "success", title, message, ...options });
+};
 
-export const showError = (title, message = "", options = {}) =>
-  showModal({ type: "error", title, message, ...options });
+export const showError = (title, message = "", options = {}) => {
+  if (typeof message === "object" && message !== null) {
+    options = message;
+    message = "";
+  }
+  return showModal({ type: "error", title, message, ...options });
+};
 
-export const showWarning = (title, message = "", options = {}) =>
-  showModal({ type: "warning", title, message, ...options });
+export const showWarning = (title, message = "", options = {}) => {
+  if (typeof message === "object" && message !== null) {
+    options = message;
+    message = "";
+  }
+  return showModal({ type: "warning", title, message, ...options });
+};
 
-export const showInfo = (title, message = "", options = {}) =>
-  showModal({ type: "info", title, message, ...options });
+export const showInfo = (title, message = "", options = {}) => {
+  if (typeof message === "object" && message !== null) {
+    options = message;
+    message = "";
+  }
+  return showModal({ type: "info", title, message, ...options });
+};
 
-export const showConfirm = (title, message = "", options = {}) =>
-  showModal({
+export const showConfirm = (title, message = "", options = {}) => {
+  if (typeof message === "object" && message !== null) {
+    options = message;
+    message = "";
+  }
+  return showModal({
     type: "confirm",
     title,
     message,
@@ -154,6 +178,7 @@ export const showConfirm = (title, message = "", options = {}) =>
     closeOnEscape: true,
     ...options,
   }).then(Boolean);
+};
 
 function ModalHost({ modal, onClose }) {
   const [busyAction, setBusyAction] = useState(null);

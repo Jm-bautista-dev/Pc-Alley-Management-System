@@ -1,5 +1,5 @@
 const sequelize = require('../db');
-const { Sale, SaleItem, Customer, Inventory, Product, Branch, Category } = require('../models');
+const { Sale, SaleItem, Customer, Inventory, Product, Branch, Category, Brand } = require('../models');
 const { Op } = require('sequelize');
 
 // 1. Dashboard Overview Metrics
@@ -43,7 +43,7 @@ const getDashboardMetrics = async (req, res) => {
     // Total Stock (current snapshot)
     const stockStats = await Inventory.findOne({
       where: whereInventory,
-      attributes: [[sequelize.fn('SUM', sequelize.col('quantity')), 'total']],
+      attributes: [[sequelize.fn('SUM', sequelize.col('stock')), 'total']],
       raw: true
     });
     const totalStock = parseInt(stockStats?.total || 0);
@@ -944,7 +944,7 @@ const getForecastingAnalytics = async (req, res) => {
     }
 
     const { Inventory } = require('../models');
-    const totalInventoryCount = await Inventory.sum('quantity') || 0;
+    const totalInventoryCount = await Inventory.sum('stock') || 0;
     if (nextMonthProj.predictedInventory > totalInventoryCount) {
       insights.push(`Inventory may become insufficient. Projected demand (${nextMonthProj.predictedInventory} units) exceeds total stock count (${totalInventoryCount} units).`);
     }
@@ -1051,6 +1051,147 @@ const getPrescriptiveAnalytics = async (req, res) => {
   }
 };
 
+const getBrandAnalytics = async (req, res) => {
+  try {
+    const branchId = req.user.role !== 'super_admin' ? req.user.branch_id : req.query.branchId;
+    const { days, startDate, endDate } = req.query;
+
+    const whereSale = { status: 'completed' };
+    const whereInventory = {};
+
+    if (branchId) {
+      whereSale.branchId = branchId;
+      whereInventory.branch_id = branchId;
+    }
+
+    if (startDate && endDate) {
+      whereSale.createdAt = {
+        [Op.between]: [
+          new Date(startDate),
+          new Date(new Date(endDate).setHours(23, 59, 59, 999))
+        ]
+      };
+    } else if (days) {
+      const limitDate = new Date();
+      limitDate.setDate(limitDate.getDate() - parseInt(days));
+      whereSale.createdAt = { [Op.gte]: limitDate };
+    }
+
+    const brands = await Brand.findAll({ raw: true });
+    const brandMap = {};
+    brands.forEach(b => {
+      brandMap[b.id] = b.name;
+    });
+
+    const salesByBrand = await SaleItem.findAll({
+      attributes: [
+        [sequelize.col('Product.brand_id'), 'brandId'],
+        [sequelize.fn('SUM', sequelize.col('SaleItem.quantity')), 'unitsSold'],
+        [sequelize.fn('SUM', sequelize.literal('SaleItem.quantity * SaleItem.unitPrice')), 'revenue']
+      ],
+      include: [{
+        model: Sale,
+        where: whereSale,
+        attributes: []
+      }, {
+        model: Product,
+        attributes: [],
+        paranoid: false
+      }],
+      group: [sequelize.col('Product.brand_id')],
+      raw: true
+    });
+
+    const inventoryByBrand = await Inventory.findAll({
+      where: whereInventory,
+      attributes: [
+        [sequelize.col('Product.brand_id'), 'brandId'],
+        [sequelize.fn('SUM', sequelize.col('Inventory.stock')), 'totalStock'],
+        [sequelize.fn('SUM', sequelize.literal('Inventory.stock * Product.price')), 'stockValue'],
+        [sequelize.fn('COUNT', sequelize.fn('DISTINCT', sequelize.col('Product.id'))), 'productCount']
+      ],
+      include: [{
+        model: Product,
+        attributes: [],
+        where: { deleted_at: null }
+      }],
+      group: [sequelize.col('Product.brand_id')],
+      raw: true
+    });
+
+    const reportData = {};
+
+    brands.forEach(b => {
+      reportData[b.id] = {
+        brandId: b.id,
+        brandName: b.name,
+        logo: b.logo,
+        unitsSold: 0,
+        revenue: 0.0,
+        totalStock: 0,
+        stockValue: 0.0,
+        productCount: 0
+      };
+    });
+
+    reportData['null'] = {
+      brandId: null,
+      brandName: 'No Brand / Generic',
+      logo: null,
+      unitsSold: 0,
+      revenue: 0.0,
+      totalStock: 0,
+      stockValue: 0.0,
+      productCount: 0
+    };
+
+    salesByBrand.forEach(s => {
+      const bId = s.brandId || 'null';
+      if (!reportData[bId]) {
+        reportData[bId] = {
+          brandId: s.brandId,
+          brandName: brandMap[s.brandId] || 'Unknown Brand',
+          logo: null,
+          unitsSold: 0,
+          revenue: 0.0,
+          totalStock: 0,
+          stockValue: 0.0,
+          productCount: 0
+        };
+      }
+      reportData[bId].unitsSold = parseInt(s.unitsSold || 0);
+      reportData[bId].revenue = parseFloat(s.revenue || 0);
+    });
+
+    inventoryByBrand.forEach(i => {
+      const bId = i.brandId || 'null';
+      if (!reportData[bId]) {
+        reportData[bId] = {
+          brandId: i.brandId,
+          brandName: brandMap[i.brandId] || 'Unknown Brand',
+          logo: null,
+          unitsSold: 0,
+          revenue: 0.0,
+          totalStock: 0,
+          stockValue: 0.0,
+          productCount: 0
+        };
+      }
+      reportData[bId].totalStock = parseInt(i.totalStock || 0);
+      reportData[bId].stockValue = parseFloat(i.stockValue || 0);
+      reportData[bId].productCount = parseInt(i.productCount || 0);
+    });
+
+    const results = Object.values(reportData).filter(item => {
+      return item.brandId !== null || item.unitsSold > 0 || item.totalStock > 0;
+    });
+
+    res.json(results);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   getDashboardMetrics,
   getBranchPerformance,
@@ -1060,5 +1201,6 @@ module.exports = {
   getCrossSellInsights,
   getCustomerAnalytics,
   getForecastingAnalytics,
-  getPrescriptiveAnalytics
+  getPrescriptiveAnalytics,
+  getBrandAnalytics
 };

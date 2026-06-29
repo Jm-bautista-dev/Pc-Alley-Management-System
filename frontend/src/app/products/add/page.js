@@ -16,6 +16,7 @@ export default function AddPage() {
   const { theme } = useTheme();
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState([]);
+  const [brands, setBrands] = useState([]);
   const [branches, setBranches] = useState([]);
   const [user, setUser] = useState(null);
   const fileInputRef = useRef(null);
@@ -26,6 +27,9 @@ export default function AddPage() {
     description: "",
     price: "",
     category_id: "",
+    brand_id: "",
+    barcode: "",
+    specifications: "",
     supplier_id: "",
     branch_id: "",
     initial_stock: "0"
@@ -46,12 +50,14 @@ export default function AddPage() {
   const fetchCategoriesSuppliersAndBranches = async () => {
     const token = localStorage.getItem("token");
     try {
-      const [catRes, branchRes] = await Promise.all([
+      const [catRes, branchRes, brandRes] = await Promise.all([
         fetch(apiUrl("/api/categories"), { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(apiUrl("/api/branches"), { headers: { Authorization: `Bearer ${token}` } })
+        fetch(apiUrl("/api/branches"), { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(apiUrl("/api/brands/active"), { headers: { Authorization: `Bearer ${token}` } })
       ]);
       if (catRes.ok) setCategories(await catRes.json());
       if (branchRes.ok) setBranches(await branchRes.json());
+      if (brandRes.ok) setBrands(await brandRes.json());
     } catch (err) {
       showError("Failed to fetch classification options.");
     }
@@ -96,6 +102,9 @@ export default function AddPage() {
     submitData.append("description", formData.description);
     submitData.append("price", formData.price);
     if (formData.category_id) submitData.append("category_id", formData.category_id);
+    if (formData.brand_id) submitData.append("brand_id", formData.brand_id);
+    if (formData.barcode) submitData.append("barcode", formData.barcode);
+    if (formData.specifications) submitData.append("specifications", formData.specifications);
     if (formData.supplier_id) submitData.append("supplier_id", formData.supplier_id);
     if (formData.branch_id) submitData.append("branch_id", formData.branch_id);
     if (formData.initial_stock) submitData.append("initial_stock", formData.initial_stock);
@@ -273,6 +282,33 @@ export default function AddPage() {
                         <option key={cat.id} value={cat.id}>{cat.name}</option>
                       ))}
                     </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-muted uppercase tracking-[2px] mb-2">Brand</label>
+                    <select 
+                      name="brand_id"
+                      value={formData.brand_id}
+                      onChange={handleChange}
+                      className="w-full bg-brand-bgbase border border-border/50 rounded-xl px-4 py-3 text-sm text-main font-bold outline-none focus:border-brand-neonblue transition-colors appearance-none cursor-pointer"
+                    >
+                      <option value="">Select Brand</option>
+                      {brands.map(br => (
+                        <option key={br.id} value={br.id}>{br.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-muted uppercase tracking-[2px] mb-2">Barcode / UPC</label>
+                    <input 
+                      type="text"
+                      name="barcode"
+                      value={formData.barcode}
+                      onChange={handleChange}
+                      placeholder="e.g. 4902778123456"
+                      className="w-full bg-brand-bgbase border border-border/50 rounded-xl px-4 py-3 text-sm text-main font-bold outline-none focus:border-brand-neonblue transition-colors"
+                    />
                   </div>
 
                   <div>

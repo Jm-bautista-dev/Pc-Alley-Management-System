@@ -20,7 +20,11 @@ router.post('/', [
 
 router.get('/', [
   authorizeRoles('super_admin', 'branch_admin', 'employee'),
-  query('status').optional({ checkFalsy: true }).isIn(['Pending', 'Approved', 'Rejected']).withMessage('Invalid status.'),
+  query('status')
+    .optional({ checkFalsy: true })
+    .customSanitizer(val => val ? val.charAt(0).toUpperCase() + val.slice(1).toLowerCase() : val)
+    .isIn(['Pending', 'Approved', 'Rejected'])
+    .withMessage('Invalid status.'),
   query('branch_id').optional({ checkFalsy: true }).isInt().withMessage('Branch ID must be an integer.'),
   query('from').optional({ checkFalsy: true }).isISO8601().withMessage('Invalid from date.'),
   query('to').optional({ checkFalsy: true }).isISO8601().withMessage('Invalid to date.'),

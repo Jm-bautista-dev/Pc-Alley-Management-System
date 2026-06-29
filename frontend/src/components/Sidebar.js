@@ -24,8 +24,8 @@ const Sidebar = () => {
   const [openMenus, setOpenMenus] = useState(() => {
     const initial = {};
     const paths = {
-      "Contacts":        ["/customers", "/customer-groups", "/import-contacts"],
-      "Products":        ["/products", "/reports/stock", "/products/my-requests", "/admin/product-requests"],
+      "Contacts":        ["/customers", "/customer-groups", "/import-contacts", "/suppliers"],
+      "Products":        ["/products", "/reports/stock", "/products/my-requests", "/admin/product-requests", "/products/brands", "/products/import"],
       "Purchases":       ["/purchases"],
       "Sell":            ["/sell"],
       "Reports":         ["/reports"],
@@ -55,8 +55,8 @@ const Sidebar = () => {
     ];
     if (role === "super_admin") return [
       { title: "Dashboard",    icon: LayoutDashboard, path: "/dashboard", group: "MAIN" },
-      { title: "Customers",    icon: Users,           path: "#contacts",  group: "SALES", subItems: [{ title: "Customer List", path: "/customers" }] },
-      { title: "Products",     icon: Package,         path: "#products",  group: "SALES", subItems: [{ title: "Product List", path: "/products" }, { title: "Manage Stock", path: "/reports/stock" }, { title: "Categories", path: "/products/categories" }, { title: "Product Requests", path: "/admin/product-requests" }] },
+      { title: "Contacts",     icon: Users,           path: "#contacts",  group: "SALES", subItems: [{ title: "Customer", path: "/customers" }, { title: "Supplier", path: "/suppliers" }] },
+      { title: "Products",     icon: Package,         path: "#products",  group: "SALES", subItems: [{ title: "Product List", path: "/products" }, { title: "Manage Stock", path: "/reports/stock" }, { title: "Categories", path: "/products/categories" }, { title: "Brands", path: "/products/brands" }, { title: "Import Products", path: "/products/import" }, { title: "Product Requests", path: "/admin/product-requests" }] },
       { title: "Sales",        icon: Upload,          path: "#sell",      group: "SALES", subItems: [
         { title: "All Sales", path: "/sell/all" },
         { title: "Warranties", path: "/sell/quotations" },
@@ -66,7 +66,7 @@ const Sidebar = () => {
         { title: "Import Sales", path: "/sell/import" }
       ] },
       { title: "Buy Stock",    icon: Download,        path: "#purchases", group: "SALES", subItems: [{ title: "Stock Purchases", path: "/purchases" }, { title: "Order Stock", path: "/purchases/restock" }] },
-      { title: "Reports",      icon: ClipboardList,   path: "#reports",   group: "SYSTEM", subItems: [{ title: "Profit / Loss", path: "/reports/profit-loss" }, { title: "Stock Activity", path: "/reports/purchase-sale" }] },
+      { title: "Reports",      icon: ClipboardList,   path: "#reports",   group: "SYSTEM", subItems: [{ title: "Profit / Loss", path: "/reports/profit-loss" }, { title: "Stock Activity", path: "/reports/purchase-sale" }, { title: "Brand Reports", path: "/reports/brands" }] },
       { title: "Analytics",    icon: Activity,        path: "#analytics", group: "SYSTEM", subItems: [
         { title: "Forecasting", path: "/forecasting" },
         { title: "Prescriptive Analytics", path: "/prescriptive-analytics" }
@@ -76,7 +76,7 @@ const Sidebar = () => {
     return [
       { title: "Dashboard",    icon: LayoutDashboard, path: "/dashboard",        group: "MAIN" },
       { title: "Customers",    icon: Users,           path: "#contacts",         group: "SALES", subItems: [{ title: "Customer List", path: "/customers" }] },
-      { title: "Products",     icon: Package,         path: "#products",         group: "SALES", subItems: [{ title: "Product List", path: "/products" }, { title: "Manage Stock", path: "/reports/stock" }, { title: "Categories", path: "/products/categories" }, { title: "My Requests", path: "/products/my-requests" }] },
+      { title: "Products",     icon: Package,         path: "#products",         group: "SALES", subItems: [{ title: "Product List", path: "/products" }, { title: "Manage Stock", path: "/reports/stock" }, { title: "Categories", path: "/products/categories" }, { title: "Brands", path: "/products/brands" }, { title: "My Requests", path: "/products/my-requests" }] },
       { title: "Buy Stock",    icon: Download,        path: "#purchases",        group: "SALES", subItems: [{ title: "Stock Purchases", path: "/purchases" }, { title: "Order Stock", path: "/purchases/restock" }] },
       { title: "Sales",        icon: Upload,          path: "#sell",             group: "SALES", subItems: [
         { title: "All Sales", path: "/sell/all" },

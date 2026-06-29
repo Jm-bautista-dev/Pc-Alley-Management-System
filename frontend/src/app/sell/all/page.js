@@ -16,13 +16,15 @@ import {
   Printer,
   ChevronLeft,
   Calendar,
-  FileDown
+  FileDown,
+  ChevronDown
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { showSuccess, showError } from "@/context/ModalContext";
 import { exportToExcel } from "@/lib/excelExport";
 import { useTheme } from "@/context/ThemeContext";
 import { apiUrl } from "@/lib/api";
+import { useAuthGuard } from "@/lib/useAuthGuard";
 
 // ─────────────────────────────────────────────────────────────────
 // Order Details Modal – uses shared ThermalReceiptModal for printing
@@ -204,17 +206,67 @@ const OrderDetailsModal = ({ isOpen, onClose, order }) => {
 
 export default function SalesLedgerPage() {
   const { theme } = useTheme();
+  const { user } = useAuthGuard();
+  const isSuperAdmin = user?.role === "super_admin";
+
   const [sales, setSales]             = useState([]);
   const [search, setSearch]           = useState("");
   const [activeOrder, setActiveOrder] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  useEffect(() => { fetchSales(); }, []);
+  const [branches, setBranches] = useState([]);
+  const [selectedBranchId, setSelectedBranchId] = useState("");
+  const [dateFilter, setDateFilter] = useState("");
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (isSuperAdmin) {
+      fetchBranches();
+    }
+  }, [isSuperAdmin]);
+
+  const fetchBranches = async () => {
+    try {
+      const res = await fetch(apiUrl("/api/branches"), {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setBranches(data);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  useEffect(() => {
+    if (dateFilter !== 'custom') {
+      fetchSales();
+    } else if (customStartDate && customEndDate) {
+      fetchSales();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBranchId, dateFilter, customStartDate, customEndDate]);
 
   const fetchSales = async () => {
+    setLoading(true);
     try {
-      const res = await fetch(apiUrl("/api/sales/history"), {
+      let params = [];
+      if (selectedBranchId) params.push(`branch_id=${selectedBranchId}`);
+      if (dateFilter === "custom") {
+        if (customStartDate) params.push(`startDate=${customStartDate}`);
+        if (customEndDate) params.push(`endDate=${customEndDate}`);
+      } else if (dateFilter) {
+        params.push(`days=${dateFilter}`);
+      }
+      params.push(`limit=1000`);
+
+      const queryString = params.length ? `?${params.join("&")}` : "";
+      
+      const res = await fetch(apiUrl(`/api/sales/history${queryString}`), {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
       });
       if (res.ok) {
@@ -223,6 +275,8 @@ export default function SalesLedgerPage() {
       }
     } catch (error) {
       console.error(error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -309,8 +363,8 @@ export default function SalesLedgerPage() {
           </div>
 
           {/* Filter Bar */}
-          <div className="bg-brand-surface border border-border/50 rounded-xl p-4 mb-6 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div className="relative w-full sm:max-w-md">
+          <div className="bg-brand-surface border border-border/50 rounded-xl p-4 mb-6 flex flex-wrap items-center justify-between gap-4">
+            <div className="relative w-full md:flex-1 md:max-w-xs">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={16} />
               <input
                 type="text"
@@ -320,15 +374,74 @@ export default function SalesLedgerPage() {
                 className="w-full bg-brand-bgbase border border-border/50 text-main text-xs font-bold rounded-lg pl-9 pr-4 py-3 outline-none focus:border-brand-neonblue transition-colors"
               />
             </div>
-            <button className="bg-brand-bgbase border border-border/50 px-4 py-2.5 rounded-lg flex items-center justify-center text-muted hover:text-main hover:border-brand-neonblue/50 transition-colors w-full sm:w-auto text-[11px] uppercase tracking-widest font-black gap-2">
-              <Filter size={14} /> Filter Date
-            </button>
-            <button
-              onClick={handleExport}
-              className="bg-brand-bgbase border border-border/50 px-5 py-2.5 rounded-lg flex items-center justify-center text-muted hover:text-main hover:border-brand-neonblue/50 transition-colors w-full sm:w-auto text-[11px] uppercase tracking-widest font-black gap-2"
-            >
-              <FileDown size={14} className="text-brand-neonblue" /> Export Excel
-            </button>
+
+            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto md:justify-end">
+              {/* Branch Filter dropdown (Super Admin Only) */}
+              {isSuperAdmin && (
+                <div className="relative w-full sm:w-48">
+                  <select
+                    value={selectedBranchId}
+                    onChange={e => setSelectedBranchId(e.target.value)}
+                    className="w-full bg-brand-bgbase border border-border/50 text-muted hover:text-main text-xs font-bold rounded-lg px-4 py-3 outline-none focus:border-brand-neonblue transition-colors appearance-none cursor-pointer pr-10"
+                  >
+                    <option value="" className="bg-brand-surface">All Branches</option>
+                    {branches.map(b => (
+                      <option key={b.id} value={b.id} className="bg-brand-surface">{b.name}</option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-muted">
+                    <ChevronDown size={14} />
+                  </div>
+                </div>
+              )}
+
+              {/* Custom Date Range Inputs */}
+              {dateFilter === "custom" && (
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <input
+                    type="date"
+                    value={customStartDate}
+                    onChange={(e) => setCustomStartDate(e.target.value)}
+                    className="bg-brand-bgbase border border-border/50 text-main text-[11px] font-bold px-3 py-2.5 rounded-lg outline-none focus:border-brand-neonblue w-full sm:w-auto"
+                  />
+                  <span className="text-[10px] uppercase font-black text-muted">to</span>
+                  <input
+                    type="date"
+                    value={customEndDate}
+                    onChange={(e) => setCustomEndDate(e.target.value)}
+                    className="bg-brand-bgbase border border-border/50 text-main text-[11px] font-bold px-3 py-2.5 rounded-lg outline-none focus:border-brand-neonblue w-full sm:w-auto"
+                  />
+                </div>
+              )}
+
+              {/* Date Filter dropdown */}
+              <div className="relative w-full sm:w-48">
+                <select
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value)}
+                  className="w-full bg-brand-bgbase border border-border/50 text-muted hover:text-main text-xs font-bold rounded-lg px-4 py-3 outline-none focus:border-brand-neonblue transition-colors appearance-none cursor-pointer pr-10"
+                >
+                  <option value="" className="bg-brand-surface">All Time</option>
+                  <option value="1" className="bg-brand-surface">Today (1 Day)</option>
+                  <option value="7" className="bg-brand-surface">7 Days (This Week)</option>
+                  <option value="30" className="bg-brand-surface">Last 30 Days</option>
+                  <option value="90" className="bg-brand-surface">Last 90 Days</option>
+                  <option value="365" className="bg-brand-surface">This Year</option>
+                  <option value="custom" className="bg-brand-surface">Custom Date Range</option>
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-muted">
+                  <ChevronDown size={14} />
+                </div>
+              </div>
+
+              {/* Export Button */}
+              <button
+                onClick={handleExport}
+                className="bg-brand-bgbase border border-border/50 px-5 py-2.5 rounded-lg flex items-center justify-center text-muted hover:text-main hover:border-brand-neonblue/50 transition-colors w-full sm:w-auto text-[11px] uppercase tracking-widest font-black gap-2 shrink-0"
+              >
+                <FileDown size={14} className="text-brand-neonblue" /> Export Excel
+              </button>
+            </div>
           </div>
 
           {/* Ledger Table */}
@@ -340,6 +453,7 @@ export default function SalesLedgerPage() {
                     <th className="py-4 px-6">Order ID</th>
                     <th className="py-4 px-6">Date &amp; Time</th>
                     <th className="py-4 px-6">Customer</th>
+                    {isSuperAdmin && <th className="py-4 px-6">Branch</th>}
                     <th className="py-4 px-6">Total Items</th>
                     <th className="py-4 px-6">Payment</th>
                     <th className="py-4 px-6 text-right">Revenue</th>
@@ -367,6 +481,11 @@ export default function SalesLedgerPage() {
                           {new Date(order.createdAt).toLocaleString()}
                         </td>
                         <td className="py-4 px-6 font-bold text-main">{customerName}</td>
+                        {isSuperAdmin && (
+                          <td className="py-4 px-6 font-bold text-muted/80 text-xs">
+                            {order.Branch?.name || "Global / Online"}
+                          </td>
+                        )}
                         <td className="py-4 px-6">
                           <span className="px-2.5 py-1 bg-brand-bgbase border border-border/50 rounded text-[9px] font-black text-muted">
                             {items.length} Products
@@ -399,7 +518,7 @@ export default function SalesLedgerPage() {
                   })}
                   {filteredSales.length === 0 && (
                     <tr>
-                      <td colSpan="7" className="py-20 text-center text-muted font-bold tracking-widest uppercase text-xs">
+                      <td colSpan={isSuperAdmin ? 8 : 7} className="py-20 text-center text-muted font-bold tracking-widest uppercase text-xs">
                         No sales found.
                       </td>
                     </tr>

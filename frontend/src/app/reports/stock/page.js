@@ -144,10 +144,18 @@ export default function StockReportPage() {
         name: item.Product?.name || 'Unknown',
         category: item.Product?.Category?.name || 'Uncategorized',
         category_id: item.Product?.category_id || '',
+        brand_id: item.Product?.brand_id || '',
         sku: item.Product?.sku || '',
         description: item.Product?.description || '',
+        specifications: item.Product?.specifications || '',
         last_purchase_price: item.Product?.last_purchase_price,
-        price: item.Product?.price,
+        image_url: item.Product?.image_url || null,
+        product_image: item.Product?.product_image || null,
+        price: item.price !== null && item.price !== undefined ? item.price : item.Product?.price,
+        branch_price: item.price,
+        global_price: item.Product?.price,
+        enabled: item.enabled !== false,
+        low_stock_threshold: item.low_stock_threshold,
         stock: item.quantity,
         dailySales: daily.toFixed(1),
         daysRemaining: daysRem > 500 ? '∞' : daysRem,
@@ -242,6 +250,59 @@ export default function StockReportPage() {
     setRefreshKey(k => k + 1);
   };
 
+  const handleResync = async () => {
+    const confirmed = await showConfirm(
+      "Resync Products to Branches?",
+      "This will scan the database and create missing branch product records for any branches that don't have them yet."
+    );
+    if (!confirmed) return;
+
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(apiUrl("/api/inventory/resync"), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showSuccess(data.message || "Resync complete.");
+        setRefreshKey(k => k + 1);
+      } else {
+        showError(data.error || "Resync failed.");
+      }
+    } catch (e) {
+      showError("Error during resync.");
+    }
+  };
+
+  // State to toggle debug panel visibility
+  const [showDebug, setShowDebug] = useState(false);
+  const [repairing, setRepairing] = useState(false);
+  const [repairResult, setRepairResult] = useState(null);
+
+  const handleRepairAll = async () => {
+    setRepairing(true);
+    setRepairResult(null);
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(apiUrl("/api/inventory/repair"), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setRepairResult(data);
+        showSuccess(data.message || "Repair completed.");
+        setRefreshKey(k => k + 1);
+      } else {
+        showError(data.error || "Repair failed.");
+      }
+    } catch (e) {
+      showError("Error during repair.");
+    }
+    setRepairing(false);
+  };
+
   return (
     <div className="flex bg-brand-bgbase min-h-screen text-main font-dmsans transition-all duration-300">
       <Sidebar />
@@ -297,10 +358,17 @@ export default function StockReportPage() {
 
               </div>
               <div className="flex w-full lg:w-auto gap-3">
+                {user?.role === 'super_admin' && (
+                  <button onClick={handleResync} className="bg-brand-neonblue/10 border border-brand-neonblue/25 text-brand-neonblue hover:bg-brand-neonblue/20 px-5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all">
+                    <RefreshCw size={14} /> Resync Branches
+                  </button>
+                )}
                 <button onClick={handleExport} className="bg-brand-bgbase border border-border text-muted hover:text-main px-5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all hover:bg-brand-surface">
                   <FileDown size={16} className="text-brand-neonblue" /> Export Excel
                 </button>
-
+                <button onClick={() => setShowDebug(!showDebug)} className="bg-brand-surface border border-border text-muted hover:text-main px-5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all">
+                  {showDebug ? "Hide Debug" : "Show Debug"}
+                </button>
               </div>
             </div>
             {/* Rows‑per‑page selector */}
@@ -374,6 +442,135 @@ export default function StockReportPage() {
                 <button onClick={() => setPage(p => Math.min(p + 1, totalPages))} disabled={page === totalPages} className={`px-2 py-1 rounded ${page === totalPages ? 'text-muted cursor-not-allowed' : 'hover:bg-brand-bgbase'}`}>Next →</button>
               </div>
             </div>
+            <AnimatePresence>
+              {showDebug && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="bg-brand-surface border border-border/50 rounded-xl p-6 mt-8 overflow-hidden"
+                >
+                  <div className="flex items-center justify-between border-b border-border/30 pb-3 mb-4">
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-sm font-rajdhani font-black uppercase text-brand-neonblue">Imported Products Diagnostics</h3>
+                      <span className="px-2 py-0.5 rounded bg-brand-neonblue/10 text-brand-neonblue text-[8px] font-black uppercase">Live</span>
+                    </div>
+                    {user?.role === 'super_admin' && (
+                      <button
+                        onClick={handleRepairAll}
+                        disabled={repairing}
+                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all disabled:opacity-50"
+                      >
+                        {repairing ? <RefreshCw size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+                        {repairing ? "Repairing..." : "Repair All"}
+                      </button>
+                    )}
+                  </div>
+
+                  {repairResult && (
+                    <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 mb-4 text-xs">
+                      <p className="font-black text-green-500 uppercase text-[10px] tracking-widest mb-2">{repairResult.message}</p>
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                        {Object.entries(repairResult.details || {}).map(([key, val]) => (
+                          <div key={key} className="bg-brand-bgbase rounded p-2">
+                            <p className="text-[8px] text-muted uppercase font-bold">{key.replace(/([A-Z])/g, ' $1')}</p>
+                            <p className="text-sm font-black text-main">{val}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      <div className="bg-brand-bgbase p-3 rounded-lg border border-border/20 text-xs">
+                        <span className="text-muted font-bold block uppercase tracking-wider text-[9px] mb-1">User Scope</span>
+                        <p className="font-bold text-main">Role: {user?.role || "N/A"}</p>
+                        <p className="text-[10px] text-muted">Branch Association: {user?.branch_name || "Global / All"}</p>
+                      </div>
+                      <div className="bg-brand-bgbase p-3 rounded-lg border border-border/20 text-xs">
+                        <span className="text-muted font-bold block uppercase tracking-wider text-[9px] mb-1">Active Filters</span>
+                        <p className="font-bold text-main">Branch Filter ID: {filterBranch || "All"}</p>
+                        <p className="text-[10px] text-muted">Status Filter: {filterStatus}</p>
+                      </div>
+                      <div className="bg-brand-bgbase p-3 rounded-lg border border-border/20 text-xs">
+                        <span className="text-muted font-bold block uppercase tracking-wider text-[9px] mb-1">Query Diagnostic</span>
+                        <p className="font-bold text-main">Filtered Dataset Count: {filteredData.length}</p>
+                        <p className="text-[10px] text-muted">Total Database Items: {totalItems}</p>
+                      </div>
+                    </div>
+
+                    <div className="overflow-x-auto max-h-[400px] custom-scrollbar border border-border/25 rounded-lg">
+                      <table className="w-full text-xs text-left border-collapse">
+                        <thead>
+                          <tr className="bg-brand-bgbase text-[9px] font-black uppercase tracking-wider text-muted border-b border-border/30 sticky top-0">
+                            <th className="py-2.5 px-4">Product</th>
+                            <th className="py-2.5 px-4">Branch</th>
+                            <th className="py-2.5 px-4">Brand</th>
+                            <th className="py-2.5 px-4 text-center">Enabled</th>
+                            <th className="py-2.5 px-4 text-center">POS Visible</th>
+                            <th className="py-2.5 px-4 text-right">Stock</th>
+                            <th className="py-2.5 px-4">Reason Hidden</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {inventory.map((item, idx) => {
+                            const isEnabled = item.enabled !== false;
+                            const hasActiveStatus = item.Product?.status === 'active';
+                            const hasBrand = !!item.Product?.brand_id;
+                            const hasCategory = !!item.Product?.category_id;
+                            const isVisible = isEnabled && hasActiveStatus;
+
+                            const reasons = [];
+                            if (!isEnabled) reasons.push("Disabled in branch");
+                            if (!hasActiveStatus) reasons.push(`Status: ${item.Product?.status || 'null'}`);
+                            if (!hasBrand) reasons.push("Missing brand");
+                            if (!hasCategory) reasons.push("Missing category");
+
+                            return (
+                              <tr key={idx} className="border-b border-border/10 hover:bg-brand-bgbase/20 font-mono text-[11px]">
+                                <td className="py-2 px-4">
+                                  <span className="text-muted mr-1">#{item.product_id}</span>
+                                  <span className="font-bold text-main">{item.Product?.name}</span>
+                                </td>
+                                <td className="py-2 px-4 text-muted">{item.Branch?.name || `#${item.branch_id}`}</td>
+                                <td className="py-2 px-4">
+                                  <span className={`text-[10px] font-bold ${item.Product?.Brand?.name ? 'text-main' : 'text-amber-500'}`}>
+                                    {item.Product?.Brand?.name || "⚠ None"}
+                                  </span>
+                                </td>
+                                <td className="py-2 px-4 text-center">
+                                  <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wide ${
+                                    isEnabled ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-brand-crimson"
+                                  }`}>
+                                    {isEnabled ? "✓" : "✕"}
+                                  </span>
+                                </td>
+                                <td className="py-2 px-4 text-center">
+                                  <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wide ${
+                                    isVisible ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-brand-crimson"
+                                  }`}>
+                                    {isVisible ? "✓" : "✕"}
+                                  </span>
+                                </td>
+                                <td className="py-2 px-4 text-right font-bold text-main">{item.stock ?? item.quantity ?? 0}</td>
+                                <td className="py-2 px-4">
+                                  {reasons.length > 0 ? (
+                                    <span className="text-[9px] text-brand-crimson font-bold">{reasons.join(", ")}</span>
+                                  ) : (
+                                    <span className="text-[9px] text-green-500 font-bold">OK</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
         {/* Modals */}

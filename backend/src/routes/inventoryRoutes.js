@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
-const { getAllProducts, createProduct, updateStock, getInventory, getLowStock, getGlobalInventoryStatus, getProductRestockAnalytics, getStockHistory, deleteProduct, adjustStock } = require('../controllers/inventoryController');
+const { getAllProducts, createProduct, updateStock, getInventory, getLowStock, getGlobalInventoryStatus, getProductRestockAnalytics, getStockHistory, deleteProduct, adjustStock, resyncProductsToBranches, repairImportedProducts } = require('../controllers/inventoryController');
 const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
 
 const upload = require('../middleware/uploadMiddleware');
@@ -34,6 +34,8 @@ router.patch('/stock', [
   body('branch_id').notEmpty().withMessage('Sector target required'),
   body('quantity').optional().isInt({ min: 0 }).withMessage('Quantity cannot be negative'),
   body('low_stock_threshold').optional().isInt({ min: 0 }).withMessage('Threshold must be positive'),
+  body('price').optional().custom(val => val === null || val === "" || !isNaN(parseFloat(val))).withMessage('Price must be a valid number'),
+  body('enabled').optional().isBoolean().withMessage('Enabled must be a boolean value'),
   validate,
   updateStock
 ]);
@@ -49,6 +51,12 @@ router.post('/adjust-stock', [
 ]);
 
 // Legacy direct restock route removed in favor of approval workflow
+
+// Resync products across all branches (Super Admin only)
+router.post('/resync', authenticateToken, authorizeRoles('super_admin'), resyncProductsToBranches);
+
+// Repair imported products: fix missing categories, brands, branch mappings, enabled states
+router.post('/repair', authenticateToken, authorizeRoles('super_admin'), repairImportedProducts);
 
 router.get('/:id/history', authenticateToken, authorizeRoles('super_admin', 'branch_admin', 'employee'), getStockHistory);
 
