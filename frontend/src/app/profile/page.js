@@ -18,8 +18,16 @@ export default function ProfilePage() {
 
   const getInitials = (name) => {
     if (!name) return "AD";
-    return name.split(" ").map(n => n[0]).join("").toUpperCase();
+    const clean = name.includes("@") ? name.split("@")[0] : name;
+    const parts = clean.split(/[._\s]+/);
+    if (parts.length > 1) {
+      return (parts[0][0] + (parts[1][0] || "")).toUpperCase().slice(0, 2);
+    }
+    return clean.slice(0, 2).toUpperCase();
   };
+
+  const displayName = user?.first_name ? `${user.first_name} ${user.last_name}` : (user?.full_name || user?.username || "Administrator");
+  const userEmail = user?.email || (user?.username && !user.username.includes('@') ? `${user.username}@pcalley.com` : user?.username || "admin@pcalley.com");
 
   return (
     <div className="flex bg-brand-bgbase min-h-screen text-main font-dmsans transition-colors duration-300">
@@ -47,19 +55,19 @@ export default function ProfilePage() {
 
                <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12 relative z-10">
                  <div className="w-32 h-32 rounded-[40px] bg-gradient-to-tr from-brand-crimson to-brand-neonpurple flex items-center justify-center text-4xl font-black text-main shadow-2xl">
-                   {getInitials(user?.name)}
+                   {getInitials(displayName)}
                  </div>
                  
                  <div className="text-center md:text-left">
                    <div className="flex items-center justify-center md:justify-start gap-3 mb-2">
-                     <h2 className="text-4xl font-rajdhani font-bold text-main tracking-tight">{user?.name || "Administrator"}</h2>
+                     <h2 className="text-4xl font-rajdhani font-bold text-main tracking-tight">{displayName}</h2>
                      <ShieldCheck size={24} className="text-brand-neonblue" />
                    </div>
                    <p className="text-xs font-black text-muted uppercase tracking-[4px] mb-6">{user?.role || "Global Administrator"}</p>
                    
                    <div className="flex flex-wrap justify-center md:justify-start gap-4">
                      <div className="flex items-center gap-2 px-4 py-2 bg-brand-bgbase border border-border rounded-xl text-[11px] font-bold text-muted">
-                       <Mail size={14} className="text-brand-neonpurple" /> {user?.email || "admin@pcalley.com"}
+                       <Mail size={14} className="text-brand-neonpurple" /> {userEmail}
                      </div>
                      <div className="flex items-center gap-2 px-4 py-2 bg-brand-bgbase border border-border rounded-xl text-[11px] font-bold text-muted">
                        <Shield size={14} className="text-brand-neonblue" /> ID: AUTH-8829-X
@@ -84,12 +92,8 @@ export default function ProfilePage() {
                     <span className="text-[13px] font-bold text-main">{user?.username || "root_admin"}</span>
                   </div>
                   <div className="flex justify-between items-center py-4 border-b border-border/50">
-                    <span className="text-[11px] font-bold text-muted uppercase tracking-widest">Two-Factor Auth</span>
-                    <span className="text-[11px] font-black text-green-400 bg-green-400/10 px-3 py-1 rounded-lg border border-green-500/20">ACTIVE</span>
-                  </div>
-                  <div className="flex justify-between items-center py-4 border-b border-border/50">
                     <span className="text-[11px] font-bold text-muted uppercase tracking-widest">Last Access</span>
-                    <span className="text-[11px] font-bold text-muted uppercase tracking-widest">2h 15m Ago</span>
+                    <span className="text-[11px] font-black text-brand-neonblue uppercase tracking-widest">Just Now</span>
                   </div>
                 </div>
               </motion.div>

@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+// Force nodemon reload to pick up new .env variables (Reloaded: 2026-06-29)
 require('dotenv').config();
 const sequelize = require('./db');
 require('./models');
@@ -59,6 +60,7 @@ app.use('/api/branches', require('./routes/branchRoutes'));
 app.use('/api/products', require('./routes/productRoutes'));
 app.use('/api/suppliers', require('./routes/supplierRoutes'));
 app.use('/api/categories', require('./routes/categoryRoutes'));
+app.use('/api/brands', require('./routes/brandRoutes'));
 app.use('/api/restock-requests', require('./routes/restockRoutes'));
 app.use('/api/product-requests', require('./routes/productRequestRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));

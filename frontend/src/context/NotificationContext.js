@@ -33,11 +33,16 @@ export function NotificationProvider({ children }) {
       if (res.ok) {
         const data = await res.json();
         setNotifications(
-          data.map((n) => ({
-            ...n,
-            read: n.is_read,
-            // keep createdAt as ISO string — formatRelativeTime handles both
-          }))
+          data.map((n) => {
+            const titleVal = n.title && typeof n.title === 'object' ? (n.title.title || n.title.message || JSON.stringify(n.title)) : n.title;
+            const msgVal = n.message && typeof n.message === 'object' ? (n.message.message || JSON.stringify(n.message)) : n.message;
+            return {
+              ...n,
+              title: titleVal ? String(titleVal).trim() : "Notification",
+              message: msgVal ? String(msgVal).trim() : "No message content",
+              read: n.is_read || n.isRead || false,
+            };
+          })
         );
       }
     } catch (_) {
@@ -55,8 +60,20 @@ export function NotificationProvider({ children }) {
   // Local-only activity item for non-blocking system updates.
   const addNotification = ({ type = "info", title, message }) => {
     const now = new Date().toISOString();
+    const titleVal = title && typeof title === 'object' ? (title.title || title.message || JSON.stringify(title)) : title;
+    const msgVal = message && typeof message === 'object' ? (message.message || JSON.stringify(message)) : message;
     setNotifications((prev) =>
-      [{ id: `local-${Date.now()}`, type, title, message, createdAt: now, read: false }, ...prev].slice(0, 50)
+      [
+        { 
+          id: `local-${Date.now()}`, 
+          type, 
+          title: titleVal ? String(titleVal).trim() : "Notification", 
+          message: msgVal ? String(msgVal).trim() : "No message content", 
+          createdAt: now, 
+          read: false 
+        }, 
+        ...prev
+      ].slice(0, 50)
     );
   };
 

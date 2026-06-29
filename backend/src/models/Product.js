@@ -6,6 +6,10 @@ const Product = sequelize.define('Product', {
   sku: { type: DataTypes.STRING, allowNull: false, unique: true },
   description: { type: DataTypes.TEXT },
   category_id: { type: DataTypes.INTEGER, references: { model: 'Categories', key: 'id' } },
+  brand_id: { type: DataTypes.INTEGER, references: { model: 'Brands', key: 'id' } },
+  barcode: { type: DataTypes.STRING, allowNull: true },
+  specifications: { type: DataTypes.TEXT, allowNull: true },
+  status: { type: DataTypes.STRING, defaultValue: 'active', allowNull: false },
   supplier_id: { type: DataTypes.INTEGER, references: { model: 'Suppliers', key: 'id' } },
   price: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
   last_purchase_price: { type: DataTypes.DECIMAL(10, 2) },
@@ -17,6 +21,10 @@ const Product = sequelize.define('Product', {
   available_quantity: { type: DataTypes.INTEGER, defaultValue: 100 },
   reserved_quantity: { type: DataTypes.INTEGER, defaultValue: 0 },
   branch_id: { type: DataTypes.INTEGER, references: { model: 'Branches', key: 'id' } }
+}, {
+  paranoid: true,
+  deletedAt: 'deleted_at',
+  timestamps: true
 });
 
 module.exports = Product;

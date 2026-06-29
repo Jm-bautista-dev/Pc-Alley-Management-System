@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Mail, ArrowLeft, Shield, KeyRound, Lock, CheckCircle2 } from "lucide-react";
+import { Mail, ArrowLeft, Shield, KeyRound, Lock, CheckCircle2, Eye, EyeOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function ForgotPasswordPage() {
   const [step, setStep] = useState(1);
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleOtpChange = (index, value) => {
     if (value.length > 1) return;
@@ -150,10 +151,10 @@ export default function ForgotPasswordPage() {
                 <form onSubmit={handleNextStep} className="space-y-6">
                   <div className="relative group">
                     <input
-                      type="password"
+                      type={showPassword ? "text" : "password"}
                       id="newPass"
                       required
-                      className="peer w-full bg-transparent border-2 border-border rounded-xl py-4.5 pl-12 pr-4 text-sm text-main placeholder-transparent focus:outline-none focus:border-brand-neonpurple focus:shadow-[0_0_15px_rgba(188,19,254,0.2)] transition-all backdrop-blur-md"
+                      className="peer w-full bg-transparent border-2 border-border rounded-xl py-4.5 pl-12 pr-12 text-sm text-main placeholder-transparent focus:outline-none focus:border-brand-neonpurple focus:shadow-[0_0_15px_rgba(188,19,254,0.2)] transition-all backdrop-blur-md"
                       placeholder="New Password"
                     />
                     <label 
@@ -165,6 +166,13 @@ export default function ForgotPasswordPage() {
                     <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted peer-focus:text-brand-neonpurple transition-colors">
                       <Lock size={18} />
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-muted hover:text-main transition-colors z-10"
+                    >
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
                   </div>
 
                   <button type="submit" className="w-full py-4 bg-brand-neonpurple/20 border border-brand-neonpurple text-brand-neonpurple hover:bg-brand-neonpurple hover:text-white dark:hover:text-brand-navy hover:shadow-[0_0_20px_rgba(188,19,254,0.5)] rounded-xl font-black uppercase tracking-[4px] text-xs transition-all active:scale-[0.98]">

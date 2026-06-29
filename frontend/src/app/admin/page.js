@@ -17,7 +17,9 @@ import {
   AlertCircle,
   Hash,
   Fingerprint,
-  LogOut
+  LogOut,
+  Eye,
+  EyeOff
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiUrl } from "@/lib/api";
@@ -34,6 +36,7 @@ function AdminPageContent() {
   const [activeTab, setActiveTab] = useState("personnel");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBranchModalOpen, setIsBranchModalOpen] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [provisionData, setProvisionData] = useState({
     username: "",
     password: "",
@@ -100,6 +103,7 @@ function AdminPageContent() {
         ? String(currentUser.branch_id)
         : (branches[0] ? String(branches[0].id) : "")
     });
+    setShowPassword(false);
   };
 
   const openProvisionModal = () => {
@@ -698,14 +702,23 @@ function AdminPageContent() {
 
                 <div className="space-y-2">
                    <label className="text-[9px] font-black uppercase tracking-[3px] text-muted ml-2">Password</label>
-                   <input 
-                     type="password" 
-                     required
-                     value={provisionData.password}
-                     onChange={(e) => setProvisionData({...provisionData, password: e.target.value})}
-                     className="w-full bg-brand-bgbase border border-border rounded-2xl py-4 px-6 text-sm text-main placeholder:text-muted focus:outline-none focus:border-brand-crimson transition-all"
-                     placeholder="••••••••"
-                   />
+                   <div className="relative">
+                     <input 
+                       type={showPassword ? "text" : "password"} 
+                       required
+                       value={provisionData.password}
+                       onChange={(e) => setProvisionData({...provisionData, password: e.target.value})}
+                       className="w-full bg-brand-bgbase border border-border rounded-2xl py-4 pl-6 pr-12 text-sm text-main placeholder:text-muted focus:outline-none focus:border-brand-crimson transition-all"
+                       placeholder="••••••••"
+                     />
+                     <button
+                       type="button"
+                       onClick={() => setShowPassword(!showPassword)}
+                       className="absolute right-4 top-1/2 -translate-y-1/2 text-muted hover:text-main transition-colors z-10"
+                     >
+                       {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                     </button>
+                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-6">

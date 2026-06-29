@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
-const { register, login, getUsers } = require('../controllers/authController');
+const { register, login, getUsers, updateProfile, changePassword } = require('../controllers/authController');
 const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
 
 router.post('/register', [
@@ -12,10 +12,14 @@ router.post('/register', [
     .trim()
     .notEmpty()
     .withMessage('Username or internal ID is required'),
-  body('full_name')
+  body('first_name')
     .trim()
     .notEmpty()
-    .withMessage('Full name is required'),
+    .withMessage('First name is required'),
+  body('last_name')
+    .trim()
+    .notEmpty()
+    .withMessage('Last name is required'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
   body('role').isIn(['branch_admin', 'employee']).withMessage('Invalid role designation'),
   body('branch_id')
@@ -60,5 +64,17 @@ router.delete('/users/:id', authenticateToken, authorizeRoles('super_admin', 'br
     res.status(500).json({ error: error.message });
   }
 });
+
+router.put('/profile', authenticateToken, [
+  body('first_name').optional().trim().notEmpty().withMessage('First name cannot be empty'),
+  body('last_name').optional().trim().notEmpty().withMessage('Last name cannot be empty'),
+  validate
+], updateProfile);
+
+router.put('/change-password', authenticateToken, [
+  body('currentPassword').notEmpty().withMessage('Current password is required'),
+  body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters'),
+  validate
+], changePassword);
 
 module.exports = router;

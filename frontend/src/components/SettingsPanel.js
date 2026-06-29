@@ -6,13 +6,14 @@ import {
   User,
   Shield,
   Bell,
-  Monitor,
   Database,
   Globe,
   HelpCircle,
   Save,
   LogOut,
   ChevronRight,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useTheme } from "@/context/ThemeContext";
@@ -24,6 +25,14 @@ const SettingsPanel = ({ isOpen, onClose }) => {
 
   const [user, setUser] = useState(null);
   const [formData, setFormData] = useState({ name: "", email: "" });
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: ""
+  });
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   useEffect(() => {
     const userData = localStorage.getItem("user");
@@ -31,8 +40,9 @@ const SettingsPanel = ({ isOpen, onClose }) => {
       const parsed = JSON.parse(userData);
       setUser(parsed);
       const email = parsed.email || (parsed.username && !parsed.username.includes('@') ? `${parsed.username}@pcalley.com` : parsed.username || "");
+      const userFullName = parsed.first_name ? `${parsed.first_name} ${parsed.last_name}` : (parsed.full_name || parsed.username || "");
       setFormData({ 
-        name: parsed.name || parsed.username || "", 
+        name: userFullName, 
         email: email 
       });
     }
@@ -41,18 +51,96 @@ const SettingsPanel = ({ isOpen, onClose }) => {
   const userName = formData.name || "User";
   const initials = userName.substring(0, 2).toUpperCase();
 
-  const options = [
-    { id: "darkMode", label: "Dark Mode", desc: "Use dark colors", active: theme === "dark" },
-    { id: "glassmorphism", label: "Modern Effects", desc: "Enable blur effects", active: true },
-    { id: "motion", label: "Smooth Animations", desc: "Fluid transitions", active: true },
-    { id: "legacy", label: "Legacy Support", desc: "Support older monitors", active: false },
-  ];
+  const handleSave = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      showError("Authentication session expired. Please log in again.");
+      return;
+    }
 
-  const handleSave = () => {
-    showInfo("Encrypting profile updates...", { id: 'settings-save' });
-    setTimeout(() => {
-      showSuccess("Profile successfully synced with core registry", { id: 'settings-save' });
-    }, 1500);
+    const { apiUrl } = require("@/lib/api");
+
+    if (activeTab === "profile") {
+      if (!formData.name.trim()) {
+        showError("Display name cannot be empty");
+        return;
+      }
+      showInfo("Updating profile...", { id: 'settings-save' });
+      try {
+        const parts = formData.name.trim().split(/\s+/);
+        const firstName = parts[0] || "";
+        const lastName = parts.slice(1).join(" ") || "";
+        const res = await fetch(apiUrl("/api/auth/profile"), {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            first_name: firstName,
+            last_name: lastName
+          })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showSuccess("Profile updated successfully", { id: 'settings-save' });
+          const userData = JSON.parse(localStorage.getItem("user") || "{}");
+          userData.first_name = firstName;
+          userData.last_name = lastName;
+          if (userData.full_name) delete userData.full_name;
+          localStorage.setItem("user", JSON.stringify(userData));
+          setUser(userData);
+        } else {
+          showError(data.message || "Failed to update profile", { id: 'settings-save' });
+        }
+      } catch (err) {
+        showError("Network connection error", { id: 'settings-save' });
+      }
+    } else if (activeTab === "security") {
+      if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
+        showError("All password fields are required");
+        return;
+      }
+      if (passwordData.newPassword !== passwordData.confirmPassword) {
+        showError("New passwords do not match");
+        return;
+      }
+      if (passwordData.newPassword.length < 6) {
+        showError("New password must be at least 6 characters");
+        return;
+      }
+
+      showInfo("Updating password...", { id: 'settings-save' });
+      try {
+        const res = await fetch(apiUrl("/api/auth/change-password"), {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            currentPassword: passwordData.currentPassword,
+            newPassword: passwordData.newPassword
+          })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showSuccess("Password updated successfully", { id: 'settings-save' });
+          setPasswordData({
+            currentPassword: "",
+            newPassword: "",
+            confirmPassword: ""
+          });
+          setShowCurrentPassword(false);
+          setShowNewPassword(false);
+          setShowConfirmPassword(false);
+        } else {
+          showError(data.message || "Failed to update password", { id: 'settings-save' });
+        }
+      } catch (err) {
+        showError("Network connection error", { id: 'settings-save' });
+      }
+    }
   };
 
   const handleGlobeClick = () => {
@@ -62,9 +150,6 @@ const SettingsPanel = ({ isOpen, onClose }) => {
   const tabs = [
     { id: "profile", icon: User, label: "Account Profile" },
     { id: "security", icon: Shield, label: "Security" },
-    { id: "notifications", icon: Bell, label: "Notifications" },
-    { id: "system", icon: Monitor, label: "Interface" },
-    { id: "database", icon: Database, label: "Connection" },
   ];
 
   return (
@@ -179,7 +264,8 @@ const SettingsPanel = ({ isOpen, onClose }) => {
                                  type="text" 
                                  value={formData.name} 
                                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                                 className="w-full bg-main/5 border border-border rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-brand-crimson/30 transition-all font-medium" 
+                                 className="w-full bg-main/5 border border-border rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-brand-crimson/30 transition-all font-medium opacity-60 cursor-not-allowed" 
+                                 disabled
                                />
                             </div>
                             <div className="group">
@@ -188,42 +274,77 @@ const SettingsPanel = ({ isOpen, onClose }) => {
                                  type="text" 
                                  value={formData.email} 
                                  onChange={(e) => setFormData({...formData, email: e.target.value})}
-                                 className="w-full bg-main/5 border border-border rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-brand-crimson/30 transition-all font-medium" 
+                                 className="w-full bg-main/5 border border-border rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-brand-crimson/30 transition-all font-medium opacity-60 cursor-not-allowed" 
+                                 disabled
                                />
                             </div>
                          </div>
                        </div>
                     )}
 
-                    {activeTab === "system" && (
-                       <div className="space-y-6">
-                          <h3 className="text-sm font-bold uppercase tracking-[2px] text-main">Visual Settings</h3>
-                          
-                          <div className="space-y-3">
-                             {options.filter(o => o.id !== 'darkMode').map((opt, i) => (
-                               <div key={i} className="flex items-center justify-between p-4 bg-white/[0.02] border border-border rounded-2xl">
-                                  <div>
-                                     <p className="text-sm font-bold">{opt.label}</p>
-                                     <p className="text-[10px] text-brand-muted uppercase tracking-tighter">{opt.desc}</p>
-                                  </div>
-                                  <div 
-                                    className={`w-10 h-5 rounded-full relative cursor-pointer transition-all ${opt.active ? "bg-brand-crimson" : "bg-main/10"}`}
-                                  >
-                                     <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${opt.active ? "right-1" : "left-1"}`} />
-                                  </div>
-                               </div>
-                             ))}
+                    {activeTab === "security" && (
+                      <div className="space-y-6">
+                        <h3 className="text-sm font-bold uppercase tracking-[2px] text-main">Change Password</h3>
+                        
+                        <div className="space-y-4">
+                          <div className="group">
+                            <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest block mb-2 px-1">Current Password</label>
+                            <div className="relative">
+                              <input 
+                                type={showCurrentPassword ? "text" : "password"} 
+                                value={passwordData.currentPassword} 
+                                onChange={(e) => setPasswordData({...passwordData, currentPassword: e.target.value})}
+                                className="w-full bg-main/5 border border-border rounded-xl py-3 pl-4 pr-12 text-sm focus:outline-none focus:border-brand-crimson/30 transition-all font-medium text-main" 
+                                required
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                                className="absolute right-4 top-1/2 -translate-y-1/2 text-muted hover:text-main transition-colors"
+                              >
+                                {showCurrentPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                              </button>
+                            </div>
                           </div>
-                       </div>
-                    )}
-
-                    {/* Placeholder for other tabs */}
-                    {["security", "notifications", "database"].includes(activeTab) && (
-                       <div className="h-64 flex flex-col items-center justify-center text-center">
-                        <Shield className="mb-4 stroke-[1px] text-brand-neonblue animate-pulse" size={48} />
-                        <h4 className="text-xs uppercase tracking-[3px] font-bold">Autonomous Module</h4>
-                        <p className="text-[10px] mt-2 font-medium text-muted max-w-xs">Security and sync protocols are currently managed by the logic core.</p>
-                        <button onClick={() => showError("Bypass attempt logged. Authorization required.")} className="mt-6 px-6 py-2 border border-border rounded-full text-[9px] font-bold uppercase tracking-widest hover:border-brand-crimson transition-all">Request Access</button>
+                          <div className="group">
+                            <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest block mb-2 px-1">New Password</label>
+                            <div className="relative">
+                              <input 
+                                type={showNewPassword ? "text" : "password"} 
+                                value={passwordData.newPassword} 
+                                onChange={(e) => setPasswordData({...passwordData, newPassword: e.target.value})}
+                                className="w-full bg-main/5 border border-border rounded-xl py-3 pl-4 pr-12 text-sm focus:outline-none focus:border-brand-crimson/30 transition-all font-medium text-main" 
+                                required
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowNewPassword(!showNewPassword)}
+                                className="absolute right-4 top-1/2 -translate-y-1/2 text-muted hover:text-main transition-colors"
+                              >
+                                {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                              </button>
+                            </div>
+                          </div>
+                          <div className="group">
+                            <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest block mb-2 px-1">Confirm New Password</label>
+                            <div className="relative">
+                              <input 
+                                type={showConfirmPassword ? "text" : "password"} 
+                                value={passwordData.confirmPassword} 
+                                onChange={(e) => setPasswordData({...passwordData, confirmPassword: e.target.value})}
+                                className="w-full bg-main/5 border border-border rounded-xl py-3 pl-4 pr-12 text-sm focus:outline-none focus:border-brand-crimson/30 transition-all font-medium text-main" 
+                                required
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                className="absolute right-4 top-1/2 -translate-y-1/2 text-muted hover:text-main transition-colors"
+                              >
+                                {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </motion.div>

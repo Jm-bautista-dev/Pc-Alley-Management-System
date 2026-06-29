@@ -18,7 +18,7 @@ router.post('/', [
   authenticateToken,
   upload.single('proof_of_payment'),
   body('customer_name').optional().trim(),
-  body('customer_id').optional().isUUID().withMessage('Invalid customer ID'),
+  body('customer_id').optional({ checkFalsy: true }).isUUID().withMessage('Invalid customer ID'),
   body('items')
     .customSanitizer(value => {
       if (typeof value === 'string') {

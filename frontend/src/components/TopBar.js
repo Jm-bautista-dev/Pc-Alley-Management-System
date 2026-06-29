@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Bell, Settings as SettingsIcon, User, ChevronDown, LogOut, Sun, Moon, Menu } from "lucide-react";
+import { Bell, User, ChevronDown, LogOut, Sun, Moon, Menu } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import NotificationsPanel from "./NotificationsPanel";
@@ -17,6 +17,7 @@ const TopBar = ({ title }) => {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const displayName = user?.first_name ? `${user.first_name} ${user.last_name}` : (user?.username || "Admin");
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   const handleLogout = () => {
@@ -118,10 +119,10 @@ const TopBar = ({ title }) => {
           >
             {/* Avatar */}
             <span className="w-6 h-6 rounded-md bg-brand-neonblue/20 border border-brand-neonblue/30 flex items-center justify-center text-[10px] font-bold text-brand-neonblue shrink-0">
-              {getInitials(user?.username || user?.name)}
+              {getInitials(displayName)}
             </span>
             <span className="text-sm font-medium hidden md:block max-w-[96px] truncate">
-              {user?.username || "Admin"}
+              {displayName}
             </span>
             <ChevronDown
               size={12}
@@ -141,7 +142,7 @@ const TopBar = ({ title }) => {
               >
                 {/* User info */}
                 <div className="px-4 py-3 border-b border-border">
-                  <p className="text-sm font-semibold text-main truncate">{user?.username || "Administrator"}</p>
+                  <p className="text-sm font-semibold text-main truncate">{displayName}</p>
                   <p className="text-xs text-muted mt-0.5 truncate capitalize">{(user?.role || "admin").replace("_", " ")}</p>
                 </div>
 
@@ -153,13 +154,6 @@ const TopBar = ({ title }) => {
                   >
                     <User size={14} className="shrink-0" />
                     Profile
-                  </button>
-                  <button
-                    onClick={() => { setIsProfileOpen(false); router.push("/settings"); }}
-                    className="w-full flex items-center gap-2.5 px-3 h-9 rounded-lg text-sm font-medium text-muted hover:text-main hover:bg-brand-bgbase"
-                  >
-                    <SettingsIcon size={14} className="shrink-0" />
-                    Settings
                   </button>
                   <div className="h-px bg-border my-1" />
                   <button

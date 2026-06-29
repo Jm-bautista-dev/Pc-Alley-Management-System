@@ -3,7 +3,7 @@ const nextConfig = { allowedDevOrigins: ['192.168.1.5', 'localhost'],
   async rewrites() {
     const backendBaseUrl =
       process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
-      "http://localhost:5001";
+      "http://localhost:5000";
 
     return [
       {

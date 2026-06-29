@@ -81,8 +81,10 @@ export default function ProductsPage() {
     const token = localStorage.getItem("token");
     try {
       const res = await fetch(apiUrl("/api/branches"), { headers: { Authorization: `Bearer ${token}` } });
-      const data = await res.json();
-      if (res.ok) setBranches(data);
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data) setBranches(data);
+      }
     } catch (err) {
       console.error("Branch directory connection failure:", err);
     }
@@ -114,18 +116,39 @@ export default function ProductsPage() {
         fetch(apiUrl(`/api/products?${productParams.toString()}`), { headers }),
         fetch(apiUrl(`/api/inventory?${inventoryParams.toString()}`), { headers })
       ]);
-      const productData = await productRes.json();
-      const inventoryData = await inventoryRes.json();
 
       if (productRes.ok) {
-        const rows = Array.isArray(productData?.data) ? productData.data : (Array.isArray(productData) ? productData : []);
-        setProducts(rows);
-        if (productData?.pagination) {
-          setTotalPages(productData.pagination.totalPages || 1);
-          setTotalItems(productData.pagination.total || rows.length);
+        const productData = await productRes.json().catch(() => null);
+        if (productData) {
+          const rows = Array.isArray(productData?.data) ? productData.data : (Array.isArray(productData) ? productData : []);
+          setProducts(rows);
+          if (productData?.pagination) {
+            setTotalPages(productData.pagination.totalPages || 1);
+            setTotalItems(productData.pagination.total || rows.length);
+          }
+        }
+      } else {
+        console.warn("Failed to fetch products:", productRes.status);
+        if (productRes.status === 403) {
+          showError("Session Expired", "Token invalid or expired. Please try logging out and logging back in.");
+        } else {
+          const errData = await productRes.json().catch(() => ({}));
+          showError("Fetch Error", errData.message || `Failed to fetch products: ${productRes.status}`);
         }
       }
-      if (inventoryRes.ok) setInventoryRows(inventoryData.data ?? []);
+
+      if (inventoryRes.ok) {
+        const inventoryData = await inventoryRes.json().catch(() => null);
+        if (inventoryData) {
+          setInventoryRows(inventoryData.data ?? []);
+        }
+      } else {
+        console.warn("Failed to fetch inventory:", inventoryRes.status);
+        if (inventoryRes.status !== 403) { // Avoid duplicate 403 dialog
+          const errData = await inventoryRes.json().catch(() => ({}));
+          showError("Fetch Error", errData.message || `Failed to fetch inventory: ${inventoryRes.status}`);
+        }
+      }
     } catch (err) {
       console.error("Catalog connection failure:", err);
     } finally {
@@ -134,7 +157,11 @@ export default function ProductsPage() {
   };
 
   const handleDeleteProduct = async (product) => {
-    if (!window.confirm(`Are you sure you want to permanently delete "${product.name}"? This will also remove all associated inventory assets.`)) return;
+    const confirmed = await showConfirm(
+      "Confirm Deletion",
+      `Are you sure you want to delete "${product.name}"? This action will archive or remove associated inventory assets.`
+    );
+    if (!confirmed) return;
     
     const token = localStorage.getItem("token");
     try {
@@ -144,14 +171,15 @@ export default function ProductsPage() {
       });
 
       if (res.ok) {
-        showSuccess("Product successfully purged from registry.");
+        const data = await res.json().catch(() => ({}));
+        showSuccess("Success", data.message || "Product successfully processed.");
         fetchProducts();
       } else {
-        const err = await res.json();
-        showError(err.error || err.message || "Failed to purge product.");
+        const data = await res.json().catch(() => ({}));
+        showError("Failed to delete", data.error || data.message || "Failed to delete product.");
       }
     } catch (e) {
-      showError("Telemetry Error: Deletion sequence failed.");
+      showError("Telemetry Error", "Deletion sequence failed.");
     }
   };
 
@@ -506,7 +534,7 @@ export default function ProductsPage() {
                           <p className="text-[9px] text-main/30 font-black uppercase tracking-[2px] mb-0.5">Price</p>
                           <p className="text-sm font-rajdhani font-black text-brand-crimson">₱{Number(product.price).toLocaleString()}</p>
                         </div>
-                        {(user?.role !== 'employee' && user?.role !== 'staff') && (
+                        {user?.role === 'super_admin' && (
                           <button 
                             onClick={(e) => { e.stopPropagation(); handleDeleteProduct(product); }}
                             className="w-8 h-8 rounded-lg border border-brand-crimson/10 flex items-center justify-center text-brand-crimson/30 hover:text-brand-crimson hover:bg-brand-crimson/10 transition-all opacity-0 group-hover:opacity-100"

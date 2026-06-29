@@ -72,15 +72,35 @@ const getCustomerHistory = async (req, res) => {
 const createCustomer = async (req, res) => {
   try {
     const { name, email, phone, address, branchId } = req.body;
-    if (!name) return res.status(400).json({ message: 'Name is required.' });
+    if (!name || !name.trim()) return res.status(400).json({ message: 'Name is required.' });
+
+    if (email && email.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ message: 'Please enter a valid email address.' });
+      }
+    }
+
+    if (phone && phone.trim()) {
+      const digits = phone.replace(/[^0-9]/g, '');
+      if (digits.length !== 11) {
+        return res.status(400).json({ message: 'Phone number must contain exactly 11 digits.' });
+      }
+      if (!digits.startsWith('09')) {
+        return res.status(400).json({ message: 'Phone number must start with 09.' });
+      }
+      if (/^(.)\1+$/.test(digits)) {
+        return res.status(400).json({ message: 'Phone number cannot consist of only repeating identical digits.' });
+      }
+    }
 
     const targetBranchId = req.user.role !== 'super_admin' ? req.user.branch_id : (branchId || null);
 
     const customer = await Customer.create({
-      name,
-      email:    email    || null,
-      phone:    phone    || null,
-      address:  address  || null,
+      name: name.trim(),
+      email: (email && email.trim()) || null,
+      phone: (phone && phone.trim()) || null,
+      address: address || null,
       branchId: targetBranchId
     });
     res.status(201).json(customer);
@@ -100,10 +120,41 @@ const updateCustomer = async (req, res) => {
     }
 
     const { name, email, phone, address, branchId } = req.body;
-    if (name      !== undefined) customer.name      = name;
-    if (email     !== undefined) customer.email     = email;
-    if (phone     !== undefined) customer.phone     = phone;
-    if (address   !== undefined) customer.address   = address;
+    if (name !== undefined) {
+      if (!name || !name.trim()) return res.status(400).json({ message: 'Name is required.' });
+      customer.name = name.trim();
+    }
+    if (email !== undefined) {
+      if (email && email.trim()) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+          return res.status(400).json({ message: 'Please enter a valid email address.' });
+        }
+        customer.email = email.trim();
+      } else {
+        customer.email = null;
+      }
+    }
+    if (phone !== undefined) {
+      if (phone && phone.trim()) {
+        const digits = phone.replace(/[^0-9]/g, '');
+        if (digits.length !== 11) {
+          return res.status(400).json({ message: 'Phone number must contain exactly 11 digits.' });
+        }
+        if (!digits.startsWith('09')) {
+          return res.status(400).json({ message: 'Phone number must start with 09.' });
+        }
+        if (/^(.)\1+$/.test(digits)) {
+          return res.status(400).json({ message: 'Phone number cannot consist of only repeating identical digits.' });
+        }
+        customer.phone = digits;
+      } else {
+        customer.phone = null;
+      }
+    }
+    if (address !== undefined) {
+      customer.address = address;
+    }
     
     if (branchId !== undefined) {
       customer.branchId = req.user.role !== 'super_admin' ? req.user.branch_id : (branchId || null);

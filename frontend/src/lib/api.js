@@ -2,7 +2,7 @@ const rawBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
 const API_BASE_URL = rawBaseUrl
   ? rawBaseUrl.replace(/\/$/, "")
   : "";
-const SOCKET_BASE_URL = (process.env.NEXT_PUBLIC_SOCKET_BASE_URL?.trim() || rawBaseUrl || "http://localhost:5001")
+const SOCKET_BASE_URL = (process.env.NEXT_PUBLIC_SOCKET_BASE_URL?.trim() || rawBaseUrl || "http://localhost:5000")
   .replace(/\/$/, "");
 
 const apiUrl = (path) => {

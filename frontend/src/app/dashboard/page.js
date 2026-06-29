@@ -98,6 +98,7 @@ export default function Dashboard() {
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
   const [loading, setLoading] = useState(false);
+  const [matrixFilter, setMatrixFilter] = useState("30");
   const [myRestockRequests, setMyRestockRequests] = useState([]);
   const [pendingRestockRequests, setPendingRestockRequests] = useState([]);
   const [notifications, setNotifications] = useState([]);
@@ -160,6 +161,26 @@ export default function Dashboard() {
     }
   }, [user, dateFilter, customStartDate, customEndDate]);
 
+  useEffect(() => {
+    if (user && user.role === 'super_admin') {
+      fetchComparativeData(matrixFilter);
+    }
+  }, [user, matrixFilter]);
+
+  const fetchComparativeData = async (filterVal) => {
+    try {
+      const token = localStorage.getItem("token");
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await fetch(apiUrl(`/api/sales/comparative?days=${filterVal}`), { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setComparative(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch branch comparison:", err);
+    }
+  };
+
   const fetchStaffData = async (parsedUser) => {
     setLoading(true);
     try {
@@ -168,7 +189,7 @@ export default function Dashboard() {
       const [restockRes, notifRes, invRes] = await Promise.all([
         fetch(apiUrl("/api/restock-requests"), { headers }),
         fetch(apiUrl("/api/notifications"), { headers }),
-        fetch(apiUrl("/api/inventory"), { headers }),
+        fetch(apiUrl("/api/inventory?limit=10000"), { headers }),
       ]);
       if (restockRes.ok) {
         const data = await restockRes.json();
@@ -243,12 +264,11 @@ export default function Dashboard() {
       const qs = getQueryString(days);
 
       const [
-        salesRes, invRes, compRes, dailyRes, perfRes, stockRes,
+        salesRes, invRes, dailyRes, perfRes, stockRes,
         analyticsRes, branchPerfRes, bestSellersRes
       ] = await Promise.all([
         fetch(apiUrl(`/api/sales/history?${qs}`), { headers }),
-        fetch(apiUrl("/api/inventory"), { headers }),
-        fetch(apiUrl(`/api/sales/comparative?${qs}`), { headers }),
+        fetch(apiUrl("/api/inventory?limit=10000"), { headers }),
         fetch(apiUrl(`/api/sales/daily-trends?${qs}`), { headers }),
         fetch(apiUrl(`/api/sales/performance?${qs}`), { headers }),
         fetch(apiUrl("/api/inventory/global-status"), { headers }),
@@ -259,7 +279,7 @@ export default function Dashboard() {
 
       let salesArr = [];
       let invArr = [];
-      let compArr = [];
+      let compArr = comparative;
       let dailyArr = [];
       let perfArr = [];
       let stockVal = { branches: [], data: [] };
@@ -277,10 +297,7 @@ export default function Dashboard() {
         invArr = Array.isArray(d) ? d : d?.data ?? [];
         setInventory(invArr);
       }
-      if (compRes.ok) {
-        compArr = await compRes.json();
-        setComparative(compArr);
-      }
+      // comparative is fetched separately based on matrixFilter
       if (dailyRes.ok) {
         dailyArr = await dailyRes.json();
         setDailyTrends(dailyArr);
@@ -630,14 +647,14 @@ export default function Dashboard() {
                       type="date"
                       value={customStartDate}
                       onChange={(e) => setCustomStartDate(e.target.value)}
-                      className="bg-brand-surface border border-border text-main text-[11px] font-bold px-3 py-1.5 rounded-lg outline-none focus:border-brand-neonblue text-white w-full md:w-auto"
+                      className="bg-brand-surface border border-border text-main text-[11px] font-bold px-3 py-1.5 rounded-lg outline-none focus:border-brand-neonblue w-full md:w-auto"
                     />
                     <span className="text-[10px] uppercase font-black text-muted">to</span>
                     <input
                       type="date"
                       value={customEndDate}
                       onChange={(e) => setCustomEndDate(e.target.value)}
-                      className="bg-brand-surface border border-border text-main text-[11px] font-bold px-3 py-1.5 rounded-lg outline-none focus:border-brand-neonblue text-white w-full md:w-auto"
+                      className="bg-brand-surface border border-border text-main text-[11px] font-bold px-3 py-1.5 rounded-lg outline-none focus:border-brand-neonblue w-full md:w-auto"
                     />
                   </div>
                 )}
@@ -749,6 +766,15 @@ export default function Dashboard() {
                         <div className="w-1.5 h-6 bg-brand-crimson rounded-full" />
                         <h3 className="font-rajdhani font-black text-lg md:text-xl uppercase tracking-widest text-main">Branch Performance Matrix</h3>
                       </div>
+                      <select 
+                        value={matrixFilter} 
+                        onChange={(e) => setMatrixFilter(e.target.value)}
+                        className="bg-brand-surface border border-border text-main text-xs font-bold px-3 py-1.5 rounded-lg outline-none cursor-pointer focus:border-brand-neonblue transition-colors"
+                      >
+                        <option value="1">Day (Today)</option>
+                        <option value="30">Month (30 Days)</option>
+                        <option value="365">Year (365 Days)</option>
+                      </select>
                     </div>
                     <div className="p-4 md:p-8 flex-1 min-h-0 overflow-hidden">
                       {comparative.length > 0 ? (

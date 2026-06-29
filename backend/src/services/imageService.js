@@ -94,7 +94,50 @@ function deleteProductImageFiles(baseRelativePath) {
   });
 }
 
+const BRANDS_DIR = path.join(__dirname, '../../uploads/brands');
+if (!fs.existsSync(BRANDS_DIR)) {
+  fs.mkdirSync(BRANDS_DIR, { recursive: true });
+}
+
+async function processBrandLogo(fileBuffer) {
+  const timestamp = Date.now();
+  const random = Math.round(Math.random() * 1E9).toString(36).substring(0, 4);
+  const prefix = `brand_${timestamp}_${random}`;
+  
+  const filename = `${prefix}.webp`;
+  const fullPath = path.join(BRANDS_DIR, filename);
+
+  await sharp(fileBuffer)
+    .resize(300, 300, { fit: 'inside', withoutEnlargement: true })
+    .toFormat('webp', { quality: 85 })
+    .toFile(fullPath);
+
+  return `/uploads/brands/${filename}`;
+}
+
+function deleteBrandLogo(relativeUrl) {
+  if (!relativeUrl) return;
+  const filename = path.basename(relativeUrl);
+  const fullPath = path.join(BRANDS_DIR, filename);
+  
+  const relativePathFromUploads = path.relative(BRANDS_DIR, fullPath);
+  if (relativePathFromUploads.startsWith('..') || path.isAbsolute(relativePathFromUploads)) {
+    console.warn(`[SECURITY WARN] Prevented directory traversal attempt for deletion: ${fullPath}`);
+    return;
+  }
+  try {
+    if (fs.existsSync(fullPath)) {
+      fs.unlinkSync(fullPath);
+      console.log(`[FILE CLEANUP] Successfully deleted brand logo: ${filename}`);
+    }
+  } catch (err) {
+    console.error(`Failed to delete logo: ${err.message}`);
+  }
+}
+
 module.exports = {
   processProductImage,
-  deleteProductImageFiles
+  deleteProductImageFiles,
+  processBrandLogo,
+  deleteBrandLogo
 };

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { User, Mail, Lock, Shield, ArrowRight, Github, Chrome, Loader2 } from "lucide-react";
+import { User, Mail, Lock, Shield, ArrowRight, Github, Chrome, Loader2, Eye, EyeOff } from "lucide-react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { apiUrl } from "@/lib/api";
@@ -11,10 +11,14 @@ import { showSuccess, showError, showInfo, showWarning, showConfirm, showModal }
 export default function RegisterPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState({ 
-    full_name: "",
+    first_name: "",
+    last_name: "",
     username: "", 
     password: "", 
+    confirmPassword: "",
     role: "employee", 
     branch_id: "" 
   });
@@ -23,6 +27,7 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (formData.password !== formData.confirmPassword) return showError("Passwords do not match.");
     if (!formData.branch_id) return showError("Please select a logical sector (branch)");
     
     setLoading(true);
@@ -77,24 +82,47 @@ export default function RegisterPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="relative group">
-              <input
-                type="text"
-                id="full_name"
-                required
-                value={formData.full_name}
-                onChange={handleChange}
-                className="peer w-full bg-transparent border-2 border-border rounded-xl py-4 pl-12 pr-4 text-sm text-main placeholder-transparent focus:outline-none focus:border-brand-neonblue focus:shadow-[0_0_15px_rgba(0,209,255,0.2)] transition-all flex backdrop-blur-md"
-                placeholder="Full Name"
-              />
-              <label
-                htmlFor="full_name"
-                className="absolute left-12 -top-2.5 bg-brand-bgbase px-1 text-[10px] font-black uppercase tracking-widest text-brand-neonblue transition-all peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-[45%] peer-placeholder-shown:text-muted peer-placeholder-shown:text-xs peer-focus:-top-2.5 peer-focus:translate-y-0 peer-focus:text-brand-neonblue peer-focus:text-[10px] cursor-text"
-              >
-                Full Name
-              </label>
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted peer-focus:text-brand-neonblue transition-colors">
-                <User size={18} />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="relative group">
+                <input
+                  type="text"
+                  id="first_name"
+                  required
+                  value={formData.first_name}
+                  onChange={handleChange}
+                  className="peer w-full bg-transparent border-2 border-border rounded-xl py-4 pl-12 pr-4 text-sm text-main placeholder-transparent focus:outline-none focus:border-brand-neonblue focus:shadow-[0_0_15px_rgba(0,209,255,0.2)] transition-all flex backdrop-blur-md"
+                  placeholder="First Name"
+                />
+                <label
+                  htmlFor="first_name"
+                  className="absolute left-12 -top-2.5 bg-brand-bgbase px-1 text-[10px] font-black uppercase tracking-widest text-brand-neonblue transition-all peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-[45%] peer-placeholder-shown:text-muted peer-placeholder-shown:text-xs peer-focus:-top-2.5 peer-focus:translate-y-0 peer-focus:text-brand-neonblue peer-focus:text-[10px] cursor-text"
+                >
+                  First Name
+                </label>
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted peer-focus:text-brand-neonblue transition-colors">
+                  <User size={18} />
+                </div>
+              </div>
+
+              <div className="relative group">
+                <input
+                  type="text"
+                  id="last_name"
+                  required
+                  value={formData.last_name}
+                  onChange={handleChange}
+                  className="peer w-full bg-transparent border-2 border-border rounded-xl py-4 pl-12 pr-4 text-sm text-main placeholder-transparent focus:outline-none focus:border-brand-neonblue focus:shadow-[0_0_15px_rgba(0,209,255,0.2)] transition-all flex backdrop-blur-md"
+                  placeholder="Last Name"
+                />
+                <label
+                  htmlFor="last_name"
+                  className="absolute left-12 -top-2.5 bg-brand-bgbase px-1 text-[10px] font-black uppercase tracking-widest text-brand-neonblue transition-all peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-[45%] peer-placeholder-shown:text-muted peer-placeholder-shown:text-xs peer-focus:-top-2.5 peer-focus:translate-y-0 peer-focus:text-brand-neonblue peer-focus:text-[10px] cursor-text"
+                >
+                  Last Name
+                </label>
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted peer-focus:text-brand-neonblue transition-colors">
+                  <User size={18} />
+                </div>
               </div>
             </div>
 
@@ -121,12 +149,12 @@ export default function RegisterPage() {
 
             <div className="relative group">
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 id="password"
                 required
                 value={formData.password}
                 onChange={handleChange}
-                className="peer w-full bg-transparent border-2 border-border rounded-xl py-4 pl-12 pr-4 text-sm text-main placeholder-transparent focus:outline-none focus:border-brand-crimson focus:shadow-[0_0_15px_rgba(215,38,56,0.2)] transition-all flex backdrop-blur-md"
+                className="peer w-full bg-transparent border-2 border-border rounded-xl py-4 pl-12 pr-12 text-sm text-main placeholder-transparent focus:outline-none focus:border-brand-crimson focus:shadow-[0_0_15px_rgba(215,38,56,0.2)] transition-all flex backdrop-blur-md"
                 placeholder="Access Password"
               />
               <label 
@@ -138,6 +166,41 @@ export default function RegisterPage() {
               <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted peer-focus:text-brand-crimson transition-colors">
                 <Lock size={18} />
               </div>
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-muted hover:text-main transition-colors z-10"
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+
+            <div className="relative group">
+              <input
+                type={showConfirmPassword ? "text" : "password"}
+                id="confirmPassword"
+                required
+                value={formData.confirmPassword || ""}
+                onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                className="peer w-full bg-transparent border-2 border-border rounded-xl py-4 pl-12 pr-12 text-sm text-main placeholder-transparent focus:outline-none focus:border-brand-crimson focus:shadow-[0_0_15px_rgba(215,38,56,0.2)] transition-all flex backdrop-blur-md"
+                placeholder="Confirm Password"
+              />
+              <label 
+                htmlFor="confirmPassword" 
+                className="absolute left-12 -top-2.5 bg-brand-bgbase px-1 text-[10px] font-black uppercase tracking-widest text-brand-crimson transition-all peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-[45%] peer-placeholder-shown:text-muted peer-placeholder-shown:text-xs peer-focus:-top-2.5 peer-focus:translate-y-0 peer-focus:text-brand-crimson peer-focus:text-[10px] cursor-text"
+              >
+                Confirm Password
+              </label>
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted peer-focus:text-brand-crimson transition-colors">
+                <Lock size={18} />
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-muted hover:text-main transition-colors z-10"
+              >
+                {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
             </div>
 
             {/* Role Selection */}

@@ -208,10 +208,11 @@ export default function ProfitLossPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-10">
             {/* Revenue Flow Chart (Matching User Screenshot) */}
+            {/* Revenue Flow Chart (Full Width) */}
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="lg:col-span-2 bg-brand-surface border border-border rounded-[24px] p-6 shadow-sm h-fit"
+              className="lg:col-span-3 bg-brand-surface border border-border rounded-[24px] p-6 shadow-sm h-fit"
             >
               <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-3">
@@ -233,47 +234,6 @@ export default function ProfitLossPage() {
                 ) : (
                   <Line data={trendData} options={chartOptions} />
                 )}
-              </div>
-            </motion.div>
-
-            {/* Expense Breakdown / Summary */}
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="bg-brand-surface border border-border rounded-[24px] p-6 shadow-sm flex flex-col h-fit"
-            >
-              <div className="flex items-center gap-3 mb-8">
-                <div className="w-1.5 h-6 bg-brand-neonpurple rounded-full" />
-                <h3 className="text-sm font-rajdhani font-black uppercase text-main tracking-widest">Financial Breakdown</h3>
-              </div>
-              <div className="space-y-6 flex-1 overflow-y-auto no-scrollbar">
-                <div className="p-5 bg-brand-bgbase/40 border border-border rounded-2xl">
-                  <p className="text-[10px] font-black text-muted uppercase tracking-[2px] mb-1">Operating Expenses</p>
-                  <p className="text-2xl font-rajdhani font-black text-main">₱125,000.00</p>
-                  <div className="mt-4 h-1.5 bg-border rounded-full overflow-hidden">
-                    <div className="h-full bg-brand-neonpurple w-[30%]" />
-                  </div>
-                  <p className="text-[9px] font-black text-muted mt-2 uppercase tracking-widest">30% of Gross Profit</p>
-                </div>
-
-                <div className="p-5 bg-brand-bgbase/40 border border-border rounded-2xl">
-                  <p className="text-[10px] font-black text-muted uppercase tracking-[2px] mb-1">Tax Liability (Est.)</p>
-                  <p className="text-2xl font-rajdhani font-black text-main">₱42,180.00</p>
-                  <div className="mt-4 h-1.5 bg-border rounded-full overflow-hidden">
-                    <div className="h-full bg-brand-crimson w-[15%]" />
-                  </div>
-                  <p className="text-[9px] font-black text-muted mt-2 uppercase tracking-widest">15% Effective Rate</p>
-                </div>
-
-                <div className="p-5 bg-brand-bgbase/40 border border-border rounded-2xl">
-                  <p className="text-[10px] font-black text-muted uppercase tracking-[2px] mb-1">Retention Yield</p>
-                  <p className="text-2xl font-rajdhani font-black text-brand-neonblue">₱239,020.00</p>
-                  <div className="mt-4 h-1.5 bg-border rounded-full overflow-hidden">
-                    <div className="h-full bg-brand-neonblue w-[58%]" />
-                  </div>
-                  <p className="text-[9px] font-black text-muted mt-2 uppercase tracking-widest">Profit Kept</p>
-                </div>
               </div>
             </motion.div>
           </div>

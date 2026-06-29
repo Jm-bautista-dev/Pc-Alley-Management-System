@@ -3,7 +3,7 @@ const ProductRequest = require('./ProductRequest');
 const User = require('./User');
 const Category = require('./Category');
 const Product = require('./Product');
-const Inventory = require('./Inventory');
+const BranchProduct = require('./BranchProduct');
 const Order = require('./Order');
 const OrderItem = require('./OrderItem');
 const Supplier = require('./Supplier');
@@ -12,6 +12,7 @@ const ProductBundle = require('./ProductBundle');
 const RestockRequest = require('./RestockRequest');
 const Notification = require('./Notification');
 const AuditLog = require('./AuditLog');
+const Brand = require('./Brand');
 
 // New models
 const Customer = require('./Customer');
@@ -36,11 +37,14 @@ Product.belongsTo(Branch, { foreignKey: 'branch_id' });
 Category.hasMany(Product, { foreignKey: 'category_id' });
 Product.belongsTo(Category, { foreignKey: 'category_id' });
 
-Product.hasMany(Inventory, { foreignKey: 'product_id' });
-Inventory.belongsTo(Product, { foreignKey: 'product_id' });
+Brand.hasMany(Product, { foreignKey: 'brand_id' });
+Product.belongsTo(Brand, { foreignKey: 'brand_id' });
 
-Branch.hasMany(Inventory, { foreignKey: 'branch_id' });
-Inventory.belongsTo(Branch, { foreignKey: 'branch_id' });
+Product.hasMany(BranchProduct, { foreignKey: 'product_id' });
+BranchProduct.belongsTo(Product, { foreignKey: 'product_id' });
+
+Branch.hasMany(BranchProduct, { foreignKey: 'branch_id' });
+BranchProduct.belongsTo(Branch, { foreignKey: 'branch_id' });
 
 Branch.hasMany(Order, { foreignKey: 'branch_id' });
 Order.belongsTo(Branch, { foreignKey: 'branch_id' });
@@ -156,9 +160,11 @@ module.exports = {
   Branch,
   User,
   Category,
+  Brand,
   Product,
   ProductBundle,
-  Inventory,
+  BranchProduct,
+  Inventory: BranchProduct,
   Order,
   OrderItem,
   Supplier,

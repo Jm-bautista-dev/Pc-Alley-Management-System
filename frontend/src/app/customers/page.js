@@ -51,12 +51,7 @@ export default function CustomersPage() {
   const [filterSegment, setFilterSegment] = useState("ALL");
   const [filterBranch, setFilterBranch]   = useState("");
   const [branches, setBranches]           = useState([]);
-  const [isModalOpen, setIsModalOpen]   = useState(false);
-  const [submitting, setSubmitting]     = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
-  const [formData, setFormData]         = useState({
-    name: "", email: "", phone: "", address: ""
-  });
 
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem("user") || "null");
@@ -126,38 +121,7 @@ export default function CustomersPage() {
     return matchSeg && matchSearch;
   });
 
-  const handleAddCustomer = async (e) => {
-    e.preventDefault();
-    if (!formData.name.trim()) {
-      showError("Name is required");
-      return;
-    }
-    setSubmitting(true);
-    const token = localStorage.getItem("token");
-    try {
-      const res = await fetch(apiUrl("/api/customers"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(formData)
-      });
-      if (res.ok) {
-        showSuccess("Customer added successfully");
-        setIsModalOpen(false);
-        setFormData({ name: "", email: "", phone: "", address: "" });
-        fetchCustomers(true);
-      } else {
-        const err = await res.json();
-        showError(err.message || "Failed to add customer");
-      }
-    } catch {
-      showError("Network error");
-    } finally {
-      setSubmitting(false);
-    }
-  };
+
 
   return (
     <div className="flex bg-brand-bgbase min-h-screen text-main font-dmsans transition-all duration-500">
@@ -186,14 +150,6 @@ export default function CustomersPage() {
                 >
                   <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
                   Sync
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-                  onClick={() => setIsModalOpen(true)}
-                  className="h-12 px-5 flex items-center gap-2 btn-premium rounded-full text-[10px] font-black uppercase tracking-widest"
-                >
-                  <Plus size={14} />
-                  Add Customer
                 </motion.button>
               </div>
             </div>
@@ -334,14 +290,7 @@ export default function CustomersPage() {
                             <p className="text-[10px] font-black uppercase tracking-[4px] text-muted/30">
                               {customers.length === 0 ? "No customers yet — add your first customer" : "No customers match your filters"}
                             </p>
-                            {customers.length === 0 && (
-                              <button
-                                onClick={() => setIsModalOpen(true)}
-                                className="mt-2 h-9 px-5 rounded-full border border-brand-neonblue/30 bg-brand-neonblue/10 text-[10px] font-black uppercase tracking-widest text-brand-neonblue hover:bg-brand-neonblue/20 transition-all flex items-center gap-2"
-                              >
-                                <Plus size={12} /> Add First Customer
-                              </button>
-                            )}
+
                           </div>
                         </td>
                       </tr>
@@ -484,94 +433,7 @@ export default function CustomersPage() {
         )}
       </AnimatePresence>
 
-      {/* Add Customer Modal */}
-      <AnimatePresence>
-        {isModalOpen && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setIsModalOpen(false)}
-              className="absolute inset-0 bg-brand-bgbase/70 backdrop-blur-sm"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative z-10 w-full max-w-md bg-brand-surface border border-border rounded-2xl p-8 shadow-2xl"
-            >
-              <div className="flex items-center justify-between mb-8">
-                <div>
-                  <p className="text-[9px] font-black uppercase tracking-[3px] text-muted/40 mb-1">New Record</p>
-                  <h2 className="text-lg font-rajdhani font-black uppercase">Add Customer</h2>
-                </div>
-                <button
-                  onClick={() => setIsModalOpen(false)}
-                  className="p-2 hover:bg-brand-bgbase rounded-xl text-muted hover:text-main transition-colors"
-                >
-                  <X size={18} />
-                </button>
-              </div>
 
-              <form onSubmit={handleAddCustomer} className="space-y-5">
-                {[
-                  { label: "Full Name *", key: "name", type: "text", placeholder: "e.g. Juan dela Cruz" },
-                  { label: "Email Address", key: "email", type: "email", placeholder: "e.g. juan@email.com" },
-                  { label: "Phone Number", key: "phone", type: "tel", placeholder: "e.g. 09xxxxxxxxx" },
-                  { label: "Address", key: "address", type: "text", placeholder: "e.g. 123 Main St, Manila" },
-                ].map(({ label, key, type, placeholder }) => (
-                  <div key={key}>
-                    <label className="block text-[10px] font-black uppercase tracking-[2px] text-muted/50 mb-2">
-                      {label}
-                    </label>
-                    <input
-                      type={type}
-                      value={formData[key]}
-                      onChange={e => setFormData(prev => ({ ...prev, [key]: e.target.value }))}
-                      placeholder={placeholder}
-                      className="w-full bg-brand-bgbase border border-border rounded-xl py-3 px-4 text-sm text-main focus:outline-none focus:border-brand-neonblue/40 transition-colors font-bold placeholder:opacity-30"
-                    />
-                  </div>
-                ))}
-
-                {/* Branch selector — super admin only */}
-                {user?.role === "super_admin" && branches.length > 0 && (
-                  <div>
-                    <label className="block text-[10px] font-black uppercase tracking-[2px] text-muted/50 mb-2">Branch</label>
-                    <select
-                      value={formData.branchId || ""}
-                      onChange={e => setFormData(prev => ({ ...prev, branchId: e.target.value }))}
-                      className="w-full bg-brand-bgbase border border-border rounded-xl py-3 px-4 text-sm text-main focus:outline-none focus:border-brand-neonblue/40 transition-colors font-bold"
-                    >
-                      <option value="">No Branch (Walk-in)</option>
-                      {branches.map(b => (
-                        <option key={b.id} value={b.id}>{b.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                <div className="flex gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className="flex-1 h-11 rounded-xl border border-border text-[11px] font-black uppercase tracking-widest text-muted hover:text-main transition-all"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className="flex-1 h-11 rounded-xl bg-brand-neonblue/10 border border-brand-neonblue/30 text-[11px] font-black uppercase tracking-widest text-brand-neonblue hover:bg-brand-neonblue/20 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    {submitting ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                    {submitting ? "Saving..." : "Add Customer"}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

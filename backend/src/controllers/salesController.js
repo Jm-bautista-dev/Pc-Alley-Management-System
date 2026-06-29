@@ -154,7 +154,7 @@ const createSale = async (req, res) => {
         { model: SaleItem },
         { model: Branch },
         { model: Customer, attributes: ['name', 'email', 'phone', 'address'] },
-        { model: User, attributes: ['full_name', 'username'] }
+        { model: User, attributes: ['first_name', 'last_name', 'username'] }
       ]
     });
     res.status(201).json(result);

@@ -23,6 +23,41 @@ const TYPE_CONFIG = {
 
 const getConfig = (type) => TYPE_CONFIG[type] || TYPE_CONFIG.info;
 
+const safeString = (val, fallback = "") => {
+  if (val === null || val === undefined) return fallback;
+  if (typeof val === "object") {
+    try {
+      return val.message || val.title || JSON.stringify(val);
+    } catch {
+      return fallback;
+    }
+  }
+  const str = String(val).trim();
+  return str || fallback;
+};
+
+const sanitizeHtml = (htmlStr) => {
+  if (typeof htmlStr !== "string") return htmlStr;
+  return htmlStr
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+};
+
+function renderContent(text, fallback = "No details provided.") {
+  const rawText = safeString(text, fallback);
+  const clean = sanitizeHtml(rawText);
+  const parts = clean.split(/\*\*(.*?)\*\*/g);
+  return parts.map((part, index) => {
+    if (index % 2 === 1) {
+      return <strong key={index} className="font-bold text-main">{part}</strong>;
+    }
+    return part;
+  });
+}
+
 export default function NotificationsPanel({ isOpen, onClose }) {
   const { notifications, unreadCount, markAsRead, markAllAsRead, removeNotification, clearAll, refresh } = useNotifications();
   const router = useRouter();
@@ -153,6 +188,7 @@ export default function NotificationsPanel({ isOpen, onClose }) {
                     const cfg = getConfig(note.type);
                     const Icon = cfg.icon;
                     const isRestock = note.type === "restock_request";
+                    const cleanTitle = safeString(note.title, "System Alert");
 
                     return (
                       <div
@@ -169,13 +205,13 @@ export default function NotificationsPanel({ isOpen, onClose }) {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-start justify-between gap-2">
                               <p className={`text-sm font-semibold leading-tight ${note.read ? "text-muted" : "text-main"}`}>
-                                {note.title}
+                                {renderContent(cleanTitle, "System Alert")}
                               </p>
                               <span className="text-xs text-muted shrink-0">{note.time}</span>
                             </div>
 
                             <p className="text-xs text-muted mt-1 leading-relaxed">
-                              {note.message}
+                              {renderContent(note.message, "No details provided.")}
                             </p>
 
                             {/* Actions */}

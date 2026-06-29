@@ -5,15 +5,7 @@ const migrateUsers = async () => {
   const queryInterface = sequelize.getQueryInterface();
 
   try {
-    const table = await queryInterface.describeTable('Users');
-    if (!table.full_name) {
-      await queryInterface.addColumn('Users', 'full_name', {
-        type: DataTypes.STRING,
-        allowNull: false,
-        defaultValue: ''
-      });
-      console.log('DATABASE: Added Users.full_name column.');
-    }
+    // Removed obsolete full_name column check and addition
 
     const indexes = await queryInterface.showIndex('Users');
     const usernameUniqueIndexes = indexes.filter((index) => {

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Package, Users, UserPlus, LogOut, LayoutDashboard,
   Settings, ShieldCheck, ChevronDown, Download, Upload, ClipboardList,
-  DollarSign, FileText, CornerDownLeft,
+  DollarSign, FileText, CornerDownLeft, Activity,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import SettingsPanel from "./SettingsPanel";
@@ -24,12 +24,12 @@ const Sidebar = () => {
   const [openMenus, setOpenMenus] = useState(() => {
     const initial = {};
     const paths = {
-      "Contacts":        ["/customers", "/customer-groups", "/import-contacts"],
-      "Products":        ["/products", "/reports/stock", "/products/my-requests", "/admin/product-requests"],
+      "Contacts":        ["/customers", "/customer-groups", "/import-contacts", "/suppliers"],
+      "Products":        ["/products", "/reports/stock", "/products/my-requests", "/admin/product-requests", "/products/brands", "/products/import"],
       "Purchases":       ["/purchases"],
       "Sell":            ["/sell"],
-      "Expenses":        ["/expenses"],
       "Reports":         ["/reports"],
+      "Analytics":       ["/forecasting", "/prescriptive-analytics"],
       "User Management": ["/staff", "/roles"],
     };
     Object.entries(paths).forEach(([key, matches]) => {
@@ -55,26 +55,28 @@ const Sidebar = () => {
     ];
     if (role === "super_admin") return [
       { title: "Dashboard",    icon: LayoutDashboard, path: "/dashboard", group: "MAIN" },
-      { title: "Customers",    icon: Users,           path: "#contacts",  group: "SALES", subItems: [{ title: "Customer List", path: "/customers" }] },
-      { title: "Products",     icon: Package,         path: "#products",  group: "SALES", subItems: [{ title: "Product List", path: "/products" }, { title: "Manage Stock", path: "/reports/stock" }, { title: "Categories", path: "/products/categories" }, { title: "Product Requests", path: "/admin/product-requests" }] },
+      { title: "Contacts",     icon: Users,           path: "#contacts",  group: "SALES", subItems: [{ title: "Customer", path: "/customers" }, { title: "Supplier", path: "/suppliers" }] },
+      { title: "Products",     icon: Package,         path: "#products",  group: "SALES", subItems: [{ title: "Product List", path: "/products" }, { title: "Manage Stock", path: "/reports/stock" }, { title: "Categories", path: "/products/categories" }, { title: "Brands", path: "/products/brands" }, { title: "Import Products", path: "/products/import" }, { title: "Product Requests", path: "/admin/product-requests" }] },
       { title: "Sales",        icon: Upload,          path: "#sell",      group: "SALES", subItems: [
         { title: "All Sales", path: "/sell/all" },
         { title: "Warranties", path: "/sell/quotations" },
-        { title: "Saved Drafts", path: "/sell/drafts" },
         { title: "Returns", path: "/sell/returns" },
         { title: "Shipments", path: "/sell/shipments" },
         { title: "Discounts", path: "/sell/discounts" },
         { title: "Import Sales", path: "/sell/import" }
       ] },
       { title: "Buy Stock",    icon: Download,        path: "#purchases", group: "SALES", subItems: [{ title: "Stock Purchases", path: "/purchases" }, { title: "Order Stock", path: "/purchases/restock" }] },
-      { title: "Expenses",     icon: DollarSign,      path: "/expenses",  group: "SALES" },
-      { title: "Reports",      icon: ClipboardList,   path: "#reports",   group: "SYSTEM", subItems: [{ title: "Profit / Loss", path: "/reports/profit-loss" }, { title: "Stock Activity", path: "/reports/purchase-sale" }] },
+      { title: "Reports",      icon: ClipboardList,   path: "#reports",   group: "SYSTEM", subItems: [{ title: "Profit / Loss", path: "/reports/profit-loss" }, { title: "Stock Activity", path: "/reports/purchase-sale" }, { title: "Brand Reports", path: "/reports/brands" }] },
+      { title: "Analytics",    icon: Activity,        path: "#analytics", group: "SYSTEM", subItems: [
+        { title: "Forecasting", path: "/forecasting" },
+        { title: "Prescriptive Analytics", path: "/prescriptive-analytics" }
+      ] },
       { title: "System Admin", icon: ShieldCheck,     path: "/admin",     group: "SYSTEM" },
     ];
     return [
       { title: "Dashboard",    icon: LayoutDashboard, path: "/dashboard",        group: "MAIN" },
       { title: "Customers",    icon: Users,           path: "#contacts",         group: "SALES", subItems: [{ title: "Customer List", path: "/customers" }] },
-      { title: "Products",     icon: Package,         path: "#products",         group: "SALES", subItems: [{ title: "Product List", path: "/products" }, { title: "Manage Stock", path: "/reports/stock" }, { title: "Categories", path: "/products/categories" }, { title: "My Requests", path: "/products/my-requests" }] },
+      { title: "Products",     icon: Package,         path: "#products",         group: "SALES", subItems: [{ title: "Product List", path: "/products" }, { title: "Manage Stock", path: "/reports/stock" }, { title: "Categories", path: "/products/categories" }, { title: "Brands", path: "/products/brands" }, { title: "My Requests", path: "/products/my-requests" }] },
       { title: "Buy Stock",    icon: Download,        path: "#purchases",        group: "SALES", subItems: [{ title: "Stock Purchases", path: "/purchases" }, { title: "Order Stock", path: "/purchases/restock" }] },
       { title: "Sales",        icon: Upload,          path: "#sell",             group: "SALES", subItems: [
         { title: "All Sales", path: "/sell/all" },
@@ -86,7 +88,6 @@ const Sidebar = () => {
         { title: "Import Sales", path: "/sell/import" }
       ] },
       { title: personnelTitle, icon: UserPlus,        path: "#user-management",  group: "SALES", subItems: [{ title: "Staff List", path: "/staff" }] },
-      { title: "Expenses",     icon: DollarSign,      path: "/expenses",         group: "SALES" },
       { title: "Reports",      icon: ClipboardList,   path: "#reports",          group: "SYSTEM", subItems: [{ title: "Profit / Loss", path: "/reports/profit-loss" }, { title: "Stock Activity", path: "/reports/purchase-sale" }] },
     ];
   };
@@ -139,8 +140,9 @@ const Sidebar = () => {
   };
 
   const roleTheme  = getRoleTheme(user?.role);
-  const initials   = (user?.username || user?.name || "AD").substring(0, 2).toUpperCase();
-  const userName   = user?.username || user?.name || "Admin User";
+  const userFullName = user?.first_name ? `${user.first_name} ${user.last_name}` : (user?.username || "Admin User");
+  const initials   = (user?.first_name ? `${user.first_name[0]}${user.last_name?.[0] || ''}` : (user?.username || "AD")).substring(0, 2).toUpperCase();
+  const userName   = userFullName;
   const roleName   = { super_admin: "Super Admin", branch_admin: "Branch Manager", employee: "Staff Associate" }[user?.role] || "Administrator";
   const isAllowed  = (p) => user?.role === "employee" ? !["/analytics", "/admin", "/staff"].includes(p) : true;
   const isExpanded = !isCollapsed || isHovered || isMobile;
