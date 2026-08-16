@@ -150,10 +150,11 @@ const login = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error(`[AUTH] Critical server error during login: ${error.message}`, error);
+    const errMsg = error.original?.message || error.message || error.name || 'Database query error';
+    console.error(`[AUTH] Critical server error during login: ${errMsg}`, error);
     res.status(500).json({
-      error: error.message,
-      message: `System Error: ${error.message}`
+      error: errMsg,
+      message: `System Error: ${errMsg}`
     });
   }
 };
