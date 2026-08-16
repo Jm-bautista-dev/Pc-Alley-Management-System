@@ -5,17 +5,17 @@ const RestockRequest = sequelize.define('RestockRequest', {
   product_id: { 
     type: DataTypes.INTEGER, 
     allowNull: false, 
-    references: { model: 'Products', key: 'id' } 
+    references: { model: 'products', key: 'id' } 
   },
   branch_id: { 
     type: DataTypes.INTEGER, 
     allowNull: false, 
-    references: { model: 'Branches', key: 'id' } 
+    references: { model: 'branches', key: 'id' } 
   },
   manager_id: { 
     type: DataTypes.INTEGER, 
     allowNull: false, 
-    references: { model: 'Users', key: 'id' } 
+    references: { model: 'users', key: 'id' } 
   },
   quantity: { 
     type: DataTypes.INTEGER, 
@@ -26,7 +26,7 @@ const RestockRequest = sequelize.define('RestockRequest', {
   },
   supplier_id: {
     type: DataTypes.INTEGER,
-    references: { model: 'Suppliers', key: 'id' }
+    references: { model: 'suppliers', key: 'id' }
   },
   notes: { 
     type: DataTypes.TEXT 
@@ -37,7 +37,7 @@ const RestockRequest = sequelize.define('RestockRequest', {
   },
   admin_id: { 
     type: DataTypes.INTEGER, 
-    references: { model: 'Users', key: 'id' } 
+    references: { model: 'users', key: 'id' } 
   },
   rejection_reason: { 
     type: DataTypes.TEXT 
@@ -46,6 +46,8 @@ const RestockRequest = sequelize.define('RestockRequest', {
     type: DataTypes.DATE,
     allowNull: true
   }
+}, {
+  tableName: 'restockrequests'
 });
 
 module.exports = RestockRequest;

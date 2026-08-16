@@ -23,6 +23,8 @@ const AuditLog = sequelize.define('AuditLog', {
     type: DataTypes.STRING,
     allowNull: true
   }
+}, {
+  tableName: 'auditlogs'
 });
 
 module.exports = AuditLog;

@@ -36,9 +36,11 @@ const Notification = sequelize.define('Notification', {
   branchId: {
     type: DataTypes.INTEGER,
     allowNull: true,
-    references: { model: 'Branches', key: 'id' },
+    references: { model: 'branches', key: 'id' },
     field: 'branch_id'
   }
+}, {
+  tableName: 'notifications'
 });
 
 module.exports = Notification;

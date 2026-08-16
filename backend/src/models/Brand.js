@@ -8,6 +8,7 @@ const Brand = sequelize.define('Brand', {
   description: { type: DataTypes.TEXT, allowNull: true },
   status: { type: DataTypes.STRING, defaultValue: 'active', allowNull: false }
 }, {
+  tableName: 'brands',
   timestamps: true,
   createdAt: 'created_at',
   updatedAt: 'updated_at'

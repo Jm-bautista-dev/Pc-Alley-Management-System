@@ -19,6 +19,7 @@ const ProductRequest = sequelize.define('ProductRequest', {
   scheduled_time: { type: DataTypes.TIME, allowNull: true },
   rejection_reason: { type: DataTypes.TEXT, allowNull: true },
 }, {
+  tableName: 'product_requests',
   hooks: {
     beforeCreate: async (request, options) => {
       if (!request.request_number) {

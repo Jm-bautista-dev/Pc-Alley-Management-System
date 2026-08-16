@@ -10,7 +10,9 @@ const User = sequelize.define('User', {
     type: DataTypes.ENUM('super_admin', 'branch_admin', 'employee'),
     defaultValue: 'employee'
   },
-  branch_id: { type: DataTypes.INTEGER, references: { model: 'Branches', key: 'id' } }
+  branch_id: { type: DataTypes.INTEGER, references: { model: 'branches', key: 'id' } }
+}, {
+  tableName: 'users'
 });
 
 module.exports = User;
