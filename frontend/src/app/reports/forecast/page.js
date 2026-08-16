@@ -147,11 +147,11 @@ export default function ForecastPage() {
   const labels = [...trends.map(t => t.month), ...projections.map(p => p.month)];
 
   const historicalVals = [...trends.map(t => parseFloat(t.revenue) || 0), ...Array(projections.length).fill(null)];
-  const projectedVals = [
+  const projectedVals = trends.length > 0 ? [
     ...Array(trends.length - 1).fill(null),
     parseFloat(trends[trends.length - 1]?.revenue || 0),
     ...projections.map(p => p.revenue)
-  ];
+  ] : projections.map(p => p.revenue);
 
   const chartData = {
     labels,

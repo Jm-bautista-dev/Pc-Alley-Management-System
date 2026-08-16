@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, Suspense } from "react";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import StatCard from "@/components/StatCard";
@@ -62,7 +62,7 @@ const PesoSign = ({ size }) => <span style={{ fontSize: size }} className="font-
 // Helper to format date as YYYY-MM-DD
 const formatDateStr = (d) => d.toISOString().substring(0, 10);
 
-export default function ForecastingPage() {
+function ForecastingPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, isChecking } = useAuthGuard();
@@ -1081,5 +1081,17 @@ export default function ForecastingPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function ForecastingPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen bg-brand-bgbase text-main">
+        <div className="text-[10px] font-black uppercase tracking-[4px] animate-pulse">Loading Forecasting...</div>
+      </div>
+    }>
+      <ForecastingPageContent />
+    </Suspense>
   );
 }
