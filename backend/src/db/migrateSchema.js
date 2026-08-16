@@ -15,77 +15,63 @@ const slugify = (text) => {
 };
 
 const addColumnIfMissing = async (queryInterface, tableName, columnName, definition) => {
-  const table = await queryInterface.describeTable(tableName);
-
-  if (table[columnName]) {
-    return;
+  try {
+    const table = await queryInterface.describeTable(tableName);
+    if (table[columnName]) {
+      return;
+    }
+    await queryInterface.addColumn(tableName, columnName, definition);
+    console.log(`DATABASE: Added ${tableName}.${columnName} column.`);
+  } catch (err) {
+    console.warn(`DATABASE: Column add check failed for ${tableName}.${columnName}: ${err.message}`);
   }
-
-  await queryInterface.addColumn(tableName, columnName, definition);
-  console.log(`DATABASE: Added ${tableName}.${columnName} column.`);
 };
 
 const migrateSchema = async () => {
   const queryInterface = sequelize.getQueryInterface();
 
   try {
-    await addColumnIfMissing(queryInterface, 'users', 'first_name', {
-      type: DataTypes.STRING,
-      allowNull: true
-    });
-    await addColumnIfMissing(queryInterface, 'users', 'last_name', {
-      type: DataTypes.STRING,
-      allowNull: true
-    });
-
     const userTable = await queryInterface.describeTable('users');
-    if (userTable.full_name) {
-      console.log('DATABASE: Found full_name column in users. Starting backfill...');
-      const users = await sequelize.query("SELECT id, full_name, first_name, last_name FROM users", { type: sequelize.QueryTypes.SELECT });
-      for (const u of users) {
-        if (!u.first_name || !u.last_name) {
-          let first = '';
-          let last = '';
-          if (u.full_name) {
-            const parts = u.full_name.trim().split(/\s+/);
-            if (parts.length > 1) {
-              first = parts[0];
-              last = parts.slice(1).join(' ');
-            } else {
-              first = parts[0] || 'User';
-              last = 'System';
-            }
-          } else {
-            first = 'User';
-            last = 'System';
-          }
-          await sequelize.query("UPDATE users SET first_name = ?, last_name = ? WHERE id = ?", {
-            replacements: [first, last, u.id]
-          });
-        }
-      }
-      // Make them non-nullable now that we backfilled them
-      await queryInterface.changeColumn('users', 'first_name', {
+    if (!userTable.first_name) {
+      await addColumnIfMissing(queryInterface, 'users', 'first_name', {
         type: DataTypes.STRING,
-        allowNull: false
-      });
-      await queryInterface.changeColumn('users', 'last_name', {
-        type: DataTypes.STRING,
-        allowNull: false
-      });
-      // Remove full_name column
-      await queryInterface.removeColumn('users', 'full_name');
-      console.log('DATABASE: Successfully backfilled first_name/last_name and dropped users.full_name.');
-    } else {
-      await queryInterface.changeColumn('users', 'first_name', {
-        type: DataTypes.STRING,
-        allowNull: false
-      });
-      await queryInterface.changeColumn('users', 'last_name', {
-        type: DataTypes.STRING,
-        allowNull: false
+        allowNull: true
       });
     }
+    if (!userTable.last_name) {
+      await addColumnIfMissing(queryInterface, 'users', 'last_name', {
+        type: DataTypes.STRING,
+        allowNull: true
+      });
+    }
+
+    if (userTable.full_name) {
+      console.log('DATABASE: Found full_name column in users. Starting backfill...');
+      const users = await sequelize.query("SELECT id, full_name FROM users", { type: sequelize.QueryTypes.SELECT });
+      for (const u of users) {
+        let first = 'Admin';
+        let last = 'User';
+        if (u.full_name) {
+          const parts = u.full_name.trim().split(/\s+/);
+          if (parts.length > 1) {
+            first = parts[0];
+            last = parts.slice(1).join(' ');
+          } else {
+            first = parts[0] || 'Admin';
+            last = 'User';
+          }
+        }
+        await sequelize.query("UPDATE users SET first_name = ?, last_name = ? WHERE id = ?", {
+          replacements: [first, last, u.id]
+        });
+      }
+      console.log('DATABASE: Successfully backfilled first_name/last_name.');
+    }
+  } catch (error) {
+    console.warn(`DATABASE: User migration check failed: ${error.message}`);
+  }
+
+  try {
     await addColumnIfMissing(queryInterface, 'products', 'product_image', {
       type: DataTypes.STRING,
       allowNull: true
