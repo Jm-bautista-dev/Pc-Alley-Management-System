@@ -110,37 +110,40 @@ io.on('connection', (socket) => {
   });
 });
 
-sequelize
-  .sync({ force: false })
-  .then(() => migrateUsers())
-  .then(() => migrateSchema())
-  .then(() => backfillSkus())
-  .then(() => {
-    console.log('--------------------------------------------------');
-    console.log('DATABASE: Synced successfully.');
+const server = httpServer.listen(PORT, () => {
+  console.log(`SERVER: Running on http://localhost:${PORT} (with WebSockets)`);
+  console.log(`ENV: JWT_SECRET loaded: ${process.env.JWT_SECRET ? 'YES (' + process.env.JWT_SECRET.substring(0, 4) + '...)' : 'NO'}`);
+  console.log('--------------------------------------------------');
+});
 
-    const server = httpServer.listen(PORT, () => {
-      console.log(`SERVER: Running on http://localhost:${PORT} (with WebSockets)`);
-      console.log(`ENV: JWT_SECRET loaded: ${process.env.JWT_SECRET ? 'YES (' + process.env.JWT_SECRET.substring(0, 4) + '...)' : 'NO'}`);
-      console.log('--------------------------------------------------');
-    });
+server.on('error', (err) => {
+  console.log('--------------------------------------------------');
+  if (err.code === 'EADDRINUSE') {
+    console.log(`SERVER ERROR: Port ${PORT} is already in use.`);
+  } else {
+    console.log('SERVER ERROR: Failed to start the API server.');
+  }
+  console.log('--------------------------------------------------');
+  console.error('Technical Details:', err.message);
+  process.exit(1);
+});
 
-    server.on('error', (err) => {
-      console.log('--------------------------------------------------');
-      if (err.code === 'EADDRINUSE') {
-        console.log(`SERVER ERROR: Port ${PORT} is already in use.`);
-      } else {
-        console.log('SERVER ERROR: Failed to start the API server.');
-      }
-      console.log('--------------------------------------------------');
-      console.error('Technical Details:', err.message);
-      process.exit(1);
-    });
-  })
-  .catch((err) => {
-    console.log('--------------------------------------------------');
-    console.log('DATABASE ERROR: Could not connect to MySQL.');
-    console.log('Tip: Please ensure XAMPP is open and MySQL is STARTED.');
-    console.log('--------------------------------------------------');
-    console.error('Technical Details:', err.message);
-  });
+// Run database connection and migrations asynchronously
+(async () => {
+  try {
+    await sequelize.authenticate();
+    console.log('DATABASE: Connected to MySQL successfully.');
+    await sequelize.sync({ force: false });
+    await migrateUsers();
+    await migrateSchema();
+    await backfillSkus();
+    console.log('DATABASE: Schema synced and migrations completed.');
+  } catch (err) {
+    console.error('--------------------------------------------------');
+    console.error('DATABASE ERROR: Could not connect or sync with MySQL.');
+    console.error(`Config -> Host: ${process.env.DB_HOST || '127.0.0.1'}, Port: ${process.env.DB_PORT || 3306}, DB: ${process.env.DB_NAME || 'pc_alley_db'}, User: ${process.env.DB_USER || 'root'}`);
+    console.error('Technical Details:', err.message || err);
+    console.error('--------------------------------------------------');
+  }
+})();
+
