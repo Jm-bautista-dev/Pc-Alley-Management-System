@@ -17,7 +17,9 @@ import {
   ChevronLeft,
   Calendar,
   FileDown,
-  ChevronDown
+  ChevronDown,
+  Wrench,
+  Package
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { showSuccess, showError } from "@/context/ModalContext";
@@ -37,8 +39,12 @@ const OrderDetailsModal = ({ isOpen, onClose, order }) => {
   const invoiceNum   = order.invoiceNumber || `INV-${order.id.toString().padStart(6, "0")}`;
   const customerName = order.customerName || order.customer_name || "Walk-in Customer";
   const paymentMethod = (order.paymentMethod || order.payment_method || "CASH").toUpperCase();
+  const saleType = (order.sale_type || order.saleType || "product").toLowerCase();
 
   const items    = order.SaleItems || order.OrderItems || [];
+  const productItems = items.filter(i => (i.item_type || i.itemType) !== 'service' && !i.Service && !i.serviceId);
+  const serviceItems = items.filter(i => (i.item_type || i.itemType) === 'service' || i.Service || i.serviceId);
+
   const subtotal = items.reduce((sum, item) => {
     const price = parseFloat(item.unitPrice || item.price_at_sale || 0);
     return sum + price * item.quantity;
@@ -75,9 +81,20 @@ const OrderDetailsModal = ({ isOpen, onClose, order }) => {
 
             <div className="flex justify-between items-start mb-6 border-b border-border/50 pb-6 text-left">
               <div>
-                <h2 className="text-2xl font-rajdhani font-black tracking-tight text-main uppercase">
-                  {invoiceNum}
-                </h2>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-2xl font-rajdhani font-black tracking-tight text-main uppercase">
+                    {invoiceNum}
+                  </h2>
+                  <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${
+                    saleType === 'service'
+                      ? 'bg-purple-500/15 text-purple-400 border-purple-500/30'
+                      : saleType === 'mixed'
+                        ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                        : 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30'
+                  }`}>
+                    {saleType} Sale
+                  </span>
+                </div>
                 <p className="text-muted text-xs font-bold uppercase tracking-widest flex items-center gap-2 mt-1">
                   <Calendar size={12} /> {new Date(order.createdAt).toLocaleString()}
                 </p>
@@ -89,34 +106,70 @@ const OrderDetailsModal = ({ isOpen, onClose, order }) => {
             </div>
 
             {/* Itemized list */}
-            <div className="mb-6 text-left">
-              <h3 className="text-[10px] font-black uppercase tracking-[3px] text-brand-neonblue mb-3">
-                Itemized Receipt
-              </h3>
-              <div className="space-y-3">
-                {items.map((item, idx) => {
-                  const name  = item.productName || item.Product?.name || "Unknown Item";
-                  const price = parseFloat(item.unitPrice || item.price_at_sale || 0);
-                  return (
-                    <div key={idx} className="flex justify-between items-center p-3 rounded-lg bg-brand-bgbase/50 border border-border/20">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded bg-brand-surface flex items-center justify-center text-muted border border-border/50">
-                          <Tag size={16} />
+            <div className="mb-6 text-left space-y-4">
+              {productItems.length > 0 && (
+                <div>
+                  <h3 className="text-[10px] font-black uppercase tracking-[3px] text-cyan-400 mb-2 flex items-center gap-1.5">
+                    <Package size={12} /> Physical Products ({productItems.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {productItems.map((item, idx) => {
+                      const name  = item.productName || item.Product?.name || "Product Item";
+                      const price = parseFloat(item.unitPrice || item.price_at_sale || 0);
+                      return (
+                        <div key={`p-${idx}`} className="flex justify-between items-center p-3 rounded-lg bg-brand-bgbase/50 border border-border/20">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded bg-brand-surface flex items-center justify-center text-muted border border-border/50">
+                              <Package size={14} />
+                            </div>
+                            <div>
+                              <p className="font-bold text-main text-xs">{name}</p>
+                              <p className="text-[9px] uppercase tracking-widest font-bold text-muted">
+                                Qty: {item.quantity} × ₱{price.toLocaleString()}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="font-black text-main text-xs">
+                            ₱{(item.quantity * price).toLocaleString()}
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-bold text-main text-sm">{name}</p>
-                          <p className="text-[10px] uppercase tracking-widest font-bold text-muted">
-                            Qty: {item.quantity} × ₱{price.toLocaleString()}
-                          </p>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {serviceItems.length > 0 && (
+                <div>
+                  <h3 className="text-[10px] font-black uppercase tracking-[3px] text-purple-400 mb-2 flex items-center gap-1.5">
+                    <Wrench size={12} /> Technical Services ({serviceItems.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {serviceItems.map((item, idx) => {
+                      const name  = item.serviceName || item.Service?.name || item.productName || item.Product?.name || "Technical Service";
+                      const price = parseFloat(item.unitPrice || item.price_at_sale || 0);
+                      return (
+                        <div key={`s-${idx}`} className="flex justify-between items-center p-3 rounded-lg bg-purple-500/5 border border-purple-500/20">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded bg-purple-500/10 text-purple-400 flex items-center justify-center border border-purple-500/20">
+                              <Wrench size={14} />
+                            </div>
+                            <div>
+                              <p className="font-bold text-main text-xs">{name}</p>
+                              <p className="text-[9px] uppercase tracking-widest font-bold text-purple-400/80">
+                                Labor Fee: {item.quantity} × ₱{price.toLocaleString()} {item.priceOverrideReason ? `(${item.priceOverrideReason})` : ''}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="font-black text-purple-400 text-xs">
+                            ₱{(item.quantity * price).toLocaleString()}
+                          </div>
                         </div>
-                      </div>
-                      <div className="font-black text-main">
-                        ₱{(item.quantity * price).toLocaleString()}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Totals */}
@@ -218,6 +271,7 @@ export default function SalesLedgerPage() {
   const [branches, setBranches] = useState([]);
   const [selectedBranchId, setSelectedBranchId] = useState("");
   const [dateFilter, setDateFilter] = useState("");
+  const [saleTypeFilter, setSaleTypeFilter] = useState("");
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
   const [loading, setLoading] = useState(false);
@@ -249,13 +303,14 @@ export default function SalesLedgerPage() {
       fetchSales();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedBranchId, dateFilter, customStartDate, customEndDate]);
+  }, [selectedBranchId, dateFilter, saleTypeFilter, customStartDate, customEndDate]);
 
   const fetchSales = async () => {
     setLoading(true);
     try {
       let params = [];
       if (selectedBranchId) params.push(`branch_id=${selectedBranchId}`);
+      if (saleTypeFilter) params.push(`saleType=${saleTypeFilter}`);
       if (dateFilter === "custom") {
         if (customStartDate) params.push(`startDate=${customStartDate}`);
         if (customEndDate) params.push(`endDate=${customEndDate}`);
@@ -414,6 +469,23 @@ export default function SalesLedgerPage() {
                 </div>
               )}
 
+              {/* Sale Type Filter dropdown */}
+              <div className="relative w-full sm:w-44">
+                <select
+                  value={saleTypeFilter}
+                  onChange={(e) => setSaleTypeFilter(e.target.value)}
+                  className="w-full bg-brand-bgbase border border-border/50 text-muted hover:text-main text-xs font-bold rounded-lg px-4 py-3 outline-none focus:border-brand-neonblue transition-colors appearance-none cursor-pointer pr-10"
+                >
+                  <option value="" className="bg-brand-surface">All Sale Types</option>
+                  <option value="product" className="bg-brand-surface">📦 Product Sales</option>
+                  <option value="service" className="bg-brand-surface">🛠️ Service Sales</option>
+                  <option value="mixed" className="bg-brand-surface">⚡ Mixed Sales</option>
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-muted">
+                  <ChevronDown size={14} />
+                </div>
+              </div>
+
               {/* Date Filter dropdown */}
               <div className="relative w-full sm:w-48">
                 <select
@@ -451,6 +523,7 @@ export default function SalesLedgerPage() {
                 <thead>
                   <tr className="bg-brand-bgbase/50 text-[10px] uppercase font-black tracking-widest text-muted border-b border-border/50">
                     <th className="py-4 px-6">Order ID</th>
+                    <th className="py-4 px-6">Type</th>
                     <th className="py-4 px-6">Date &amp; Time</th>
                     <th className="py-4 px-6">Customer</th>
                     {isSuperAdmin && <th className="py-4 px-6">Branch</th>}
@@ -466,7 +539,10 @@ export default function SalesLedgerPage() {
                     const customerName  = order.customerName  || order.customer_name || "Walk-in";
                     const paymentMethod = order.paymentMethod || order.payment_method || "CASH";
                     const totalAmount   = parseFloat(order.totalAmount || order.total_amount || 0);
+                    const saleType      = (order.sale_type || order.saleType || "product").toLowerCase();
                     const items         = order.SaleItems || order.OrderItems || [];
+                    const pCount        = items.filter(i => (i.item_type || i.itemType) !== 'service' && !i.Service && !i.serviceId).length;
+                    const sCount        = items.filter(i => (i.item_type || i.itemType) === 'service' || i.Service || i.serviceId).length;
 
                     return (
                       <motion.tr
@@ -477,6 +553,17 @@ export default function SalesLedgerPage() {
                         className="border-b border-border/20 text-sm hover:bg-brand-bgbase/30 transition-colors group"
                       >
                         <td className="py-4 px-6 font-black text-brand-neonblue">{invoiceNum}</td>
+                        <td className="py-4 px-6">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border inline-flex items-center gap-1 ${
+                            saleType === 'service'
+                              ? 'bg-purple-500/15 text-purple-400 border-purple-500/30'
+                              : saleType === 'mixed'
+                                ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                                : 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30'
+                          }`}>
+                            {saleType === 'service' ? '🛠️ Service' : saleType === 'mixed' ? '⚡ Mixed' : '📦 Product'}
+                          </span>
+                        </td>
                         <td className="py-4 px-6 font-bold text-muted/80 text-xs">
                           {new Date(order.createdAt).toLocaleString()}
                         </td>
@@ -488,7 +575,9 @@ export default function SalesLedgerPage() {
                         )}
                         <td className="py-4 px-6">
                           <span className="px-2.5 py-1 bg-brand-bgbase border border-border/50 rounded text-[9px] font-black text-muted">
-                            {items.length} Products
+                            {pCount > 0 && `${pCount} Prod `}
+                            {sCount > 0 && `${sCount} Svc`}
+                            {items.length === 0 && '0 Items'}
                           </span>
                         </td>
                         <td className="py-4 px-6">
@@ -503,7 +592,7 @@ export default function SalesLedgerPage() {
                           </div>
                         </td>
                         <td className="py-4 px-6 text-right font-black text-main text-lg tracking-tight">
-                          ₱{totalAmount.toLocaleString()}
+                          ₱{totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </td>
                         <td className="py-4 px-6 text-center">
                           <button

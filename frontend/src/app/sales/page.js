@@ -39,7 +39,11 @@ import {
   ShoppingBag,
   ArrowLeft,
   Info,
-  Tag
+  Tag,
+  Wrench,
+  Clock,
+  Sparkles,
+  ClipboardList
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiUrl } from "@/lib/api";
@@ -421,6 +425,21 @@ export default function SalesPage() {
   const [searchOpen, setSearchOpen] = useState(false); // search overlay switcher
   const [settingsOpen, setSettingsOpen] = useState(false); // gear options modal
 
+  // ── TECHNICAL SERVICES STATES ──
+  const [posMode, setPosMode] = useState("products"); // "products" | "services"
+  const [services, setServices] = useState([]);
+  const [serviceCategories, setServiceCategories] = useState(["All"]);
+  const [activeServiceCategory, setActiveServiceCategory] = useState("All");
+  const [servicesLoading, setServicesLoading] = useState(false);
+
+  // Variable / Custom Service Price Input Modal
+  const [selectedServiceDetail, setSelectedServiceDetail] = useState(null);
+  const [variablePriceInput, setVariablePriceInput] = useState("");
+  const [priceReasonInput, setPriceReasonInput] = useState("");
+  const [deviceTypeInput, setDeviceTypeInput] = useState("Desktop PC");
+  const [deviceSpecsInput, setDeviceSpecsInput] = useState("");
+  const [reportedIssueInput, setReportedIssueInput] = useState("");
+
   // Discount state — reads from localStorage shared with Discounts page
   const [availableDiscounts, setAvailableDiscounts] = useState([]);
   const [selectedDiscount, setSelectedDiscount] = useState(null); // full discount object | null
@@ -600,6 +619,44 @@ export default function SalesPage() {
       setLoading(false);
     }
   };
+
+  const fetchServices = async () => {
+    setServicesLoading(true);
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(apiUrl("/api/services?status=active"), {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setServices(data);
+      }
+    } catch (e) {
+      console.error("Failed to load services:", e);
+    } finally {
+      setServicesLoading(false);
+    }
+  };
+
+  const fetchServiceCategories = async () => {
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(apiUrl("/api/services/categories"), {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const cats = await res.json();
+        setServiceCategories(["All", ...cats]);
+      }
+    } catch (e) {
+      console.error("Failed to load service categories:", e);
+    }
+  };
+
+  useEffect(() => {
+    fetchServices();
+    fetchServiceCategories();
+  }, []);
 
   // Customer search with debounce
   const handleCustomerSearch = (val) => {
@@ -867,11 +924,85 @@ export default function SalesPage() {
     }, 1200);
   };
 
-  const updateQuantity = (id, delta) => {
+  // ── TECHNICAL SERVICE CART HANDLERS ──
+  const handleQuickAddService = (service) => {
+    if (service.pricing_type === "variable" || service.pricing_type === "custom") {
+      setSelectedServiceDetail(service);
+      setVariablePriceInput(String(service.base_price || ""));
+      setPriceReasonInput("");
+      setDeviceTypeInput("Desktop PC");
+      setDeviceSpecsInput("");
+      setReportedIssueInput("");
+      return;
+    }
+
+    const existingIndex = cart.findIndex(c => c.id === service.id && c.isService);
+    if (existingIndex > -1) {
+      const updatedCart = [...cart];
+      updatedCart[existingIndex] = {
+        ...updatedCart[existingIndex],
+        quantity: updatedCart[existingIndex].quantity + 1
+      };
+      setCart(updatedCart);
+    } else {
+      const cartItem = {
+        id: service.id,
+        name: service.name,
+        price: parseFloat(service.base_price || 0),
+        unitPrice: parseFloat(service.base_price || 0),
+        quantity: 1,
+        maxStock: 9999,
+        item_type: "service",
+        isService: true,
+        selectedVariant: "Standard",
+        selectedAddons: [],
+        notes: "",
+        selectionSummary: `Technical Service (${service.category}) • Labor`
+      };
+      setCart([...cart, cartItem]);
+    }
+
+    setToastMessage(`${t[language].addedToOrder}: ${service.name}`);
+    clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = setTimeout(() => setToastMessage(""), 1500);
+  };
+
+  const handleConfirmVariableService = () => {
+    if (!selectedServiceDetail) return;
+    const priceVal = parseFloat(variablePriceInput);
+    if (isNaN(priceVal) || priceVal < 0) {
+      showError("Please enter a valid service price (≥ 0)");
+      return;
+    }
+
+    const reason = priceReasonInput.trim() || (selectedServiceDetail.pricing_type === 'custom' ? 'Custom evaluated service quote' : 'Standard variable price adjustment');
+    const summary = `Fee: ₱${priceVal.toLocaleString()} | Reason: ${reason}${deviceSpecsInput ? ` | ${deviceTypeInput} (${deviceSpecsInput})` : ''}`;
+
+    const cartItem = {
+      id: selectedServiceDetail.id,
+      name: selectedServiceDetail.name,
+      price: priceVal,
+      unitPrice: priceVal,
+      quantity: 1,
+      maxStock: 9999,
+      item_type: "service",
+      isService: true,
+      priceOverrideReason: reason,
+      notes: reportedIssueInput ? `Reported Issue: ${reportedIssueInput}` : "",
+      selectionSummary: summary
+    };
+
+    setCart([...cart, cartItem]);
+    setSelectedServiceDetail(null);
+    showSuccess(`Added ${selectedServiceDetail.name} to order`);
+  };
+
+  const updateQuantity = (id, delta, isServiceItem) => {
     setCart(cart.map(item => {
-      if (item.id !== id) return item;
+      const match = isServiceItem !== undefined ? (item.id === id && !!item.isService === !!isServiceItem) : (item.id === id);
+      if (!match) return item;
       const newQty = Math.max(1, item.quantity + delta);
-      if (newQty > item.maxStock) {
+      if (!item.isService && newQty > item.maxStock) {
         showError(t[language].insufficientStock);
         return item;
       }
@@ -879,9 +1010,22 @@ export default function SalesPage() {
     }));
   };
 
-  const removeFromCart = (id) => setCart(cart.filter(item => item.id !== id));
+  const removeFromCart = (id, isServiceItem) => setCart(cart.filter(item => {
+    if (isServiceItem !== undefined) {
+      return !(item.id === id && !!item.isService === !!isServiceItem);
+    }
+    return item.id !== id;
+  }));
 
-  const subtotal       = cart.reduce((s, i) => s + i.price * i.quantity, 0);
+  const productSubtotal = cart
+    .filter(i => !i.isService && i.item_type !== "service")
+    .reduce((s, i) => s + i.price * i.quantity, 0);
+
+  const serviceSubtotal = cart
+    .filter(i => i.isService || i.item_type === "service")
+    .reduce((s, i) => s + i.price * i.quantity, 0);
+
+  const subtotal       = productSubtotal + serviceSubtotal;
   const discountAmount = (() => {
     if (!selectedDiscount) return 0;
     const isPercent = selectedDiscount.type === "Percentage (%)";
@@ -908,7 +1052,7 @@ export default function SalesPage() {
 
     // Construct unified items metadata note to save in DB
     const itemsNotes = cart.map(item => 
-      `${item.name} (Qty: ${item.quantity}) [${item.selectionSummary}]`
+      `${item.isService ? '[SERVICE]' : '[PRODUCT]'} ${item.name} (Qty: ${item.quantity}) [${item.selectionSummary}]`
     ).join("\n");
     
     const combinedNotes = customNotes 
@@ -927,7 +1071,15 @@ export default function SalesPage() {
         amount_paid:   paymentMethod === "Cash" ? parseFloat(cashPaid) : grandTotal,
         change_amount: paymentMethod === "Cash" ? Math.max(0, parseFloat(cashPaid) - grandTotal) : 0,
         notes:         combinedNotes,
-        items:         cart.map(item => ({ product_id: item.id, quantity: item.quantity }))
+        items:         cart.map(item => ({
+          item_type: item.item_type || (item.isService ? "service" : "product"),
+          product_id: (item.item_type === "product" || !item.isService) ? item.id : undefined,
+          service_id: (item.item_type === "service" || item.isService) ? item.id : undefined,
+          quantity: item.quantity,
+          unit_price: item.price,
+          price_override_reason: item.priceOverrideReason || undefined,
+          service_job_id: item.serviceJobId || undefined
+        }))
       };
 
       let res;
@@ -1074,24 +1226,51 @@ export default function SalesPage() {
           </div>
         </div>
 
-        {/* Center: Language selector */}
-        <div className="flex bg-brand-bgbase p-1.5 rounded-full border border-brand-border">
-          <button
-            onClick={() => setLanguage("en")}
-            className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-wider transition-all uppercase ${
-              language === "en" ? `${activeTheme.primaryBg} ${activeTheme.primaryText} shadow-sm` : "text-brand-muted hover:text-main"
-            }`}
-          >
-            EN
-          </button>
-          <button
-            onClick={() => setLanguage("tg")}
-            className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-wider transition-all uppercase ${
-              language === "tg" ? `${activeTheme.primaryBg} ${activeTheme.primaryText} shadow-sm` : "text-brand-muted hover:text-main"
-            }`}
-          >
-            PH
-          </button>
+        {/* Center: Mode switcher (Products vs Services) & Language */}
+        <div className="flex items-center gap-3">
+          <div className="flex bg-brand-bgbase p-1 rounded-full border border-brand-border shadow-inner">
+            <button
+              type="button"
+              onClick={() => { setPosMode("products"); setActiveCategory("All"); }}
+              className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-wider uppercase transition-all flex items-center gap-1.5 ${
+                posMode === "products"
+                  ? `${activeTheme.primaryBg} ${activeTheme.primaryText} shadow-sm`
+                  : "text-brand-muted hover:text-main"
+              }`}
+            >
+              <Package size={13} /> Products
+            </button>
+            <button
+              type="button"
+              onClick={() => { setPosMode("services"); setActiveServiceCategory("All"); }}
+              className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-wider uppercase transition-all flex items-center gap-1.5 ${
+                posMode === "services"
+                  ? "bg-purple-600 text-white shadow-sm"
+                  : "text-brand-muted hover:text-main"
+              }`}
+            >
+              <Wrench size={13} /> Services
+            </button>
+          </div>
+
+          <div className="flex bg-brand-bgbase p-1 rounded-full border border-brand-border">
+            <button
+              onClick={() => setLanguage("en")}
+              className={`px-3 py-1 rounded-full text-[9px] font-black tracking-wider transition-all uppercase ${
+                language === "en" ? `${activeTheme.primaryBg} ${activeTheme.primaryText} shadow-sm` : "text-brand-muted hover:text-main"
+              }`}
+            >
+              EN
+            </button>
+            <button
+              onClick={() => setLanguage("tg")}
+              className={`px-3 py-1 rounded-full text-[9px] font-black tracking-wider transition-all uppercase ${
+                language === "tg" ? `${activeTheme.primaryBg} ${activeTheme.primaryText} shadow-sm` : "text-brand-muted hover:text-main"
+              }`}
+            >
+              PH
+            </button>
+          </div>
         </div>
 
         {/* Right: Actions */}
@@ -1163,7 +1342,7 @@ export default function SalesPage() {
                 autoFocus
                 value={productSearch}
                 onChange={e => setProductSearch(e.target.value)}
-                placeholder={t[language].searchPlaceholder}
+                placeholder={posMode === "products" ? t[language].searchPlaceholder : "Search technical services..."}
                 className="w-full pl-12 pr-10 py-3 bg-brand-bgbase border border-brand-border rounded-full text-sm font-bold text-main focus:outline-none focus:border-brand-neonblue/40 transition-all placeholder:text-brand-muted/50"
               />
               {productSearch && (
@@ -1183,31 +1362,52 @@ export default function SalesPage() {
           CATEGORY TABS (STICKY BAR BELOW HEADER)
           ───────────────────────────────────────────────────────────────── */}
       <nav className="shrink-0 bg-brand-surface border-b border-brand-border shadow-sm dark:shadow-none relative z-20 flex gap-2 overflow-x-auto py-3 px-6 no-scrollbar">
-        {categories.map(cat => {
-          const Icon = getCategoryIcon(cat);
-          const isSelected = activeCategory === cat;
-          return (
-            <motion.button
-              key={cat}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => { setActiveCategory(cat); setActiveBrand("All"); }}
-              className={`h-11 px-6 rounded-full border text-[11px] font-black uppercase tracking-wider transition-all shrink-0 flex items-center gap-2 ${
-                isSelected
-                  ? `${activeTheme.primaryBg} ${activeTheme.primaryText} ${activeTheme.border} shadow-md dark:shadow-none`
-                  : "bg-brand-surface border-brand-border text-brand-muted hover:bg-brand-hover hover:text-main"
-              }`}
-            >
-              <Icon size={14} />
-              <span>{cat === "All" ? t[language].allCategories : cat}</span>
-            </motion.button>
-          );
-        })}
+        {posMode === "products" ? (
+          categories.map(cat => {
+            const Icon = getCategoryIcon(cat);
+            const isSelected = activeCategory === cat;
+            return (
+              <motion.button
+                key={cat}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => { setActiveCategory(cat); setActiveBrand("All"); }}
+                className={`h-11 px-6 rounded-full border text-[11px] font-black uppercase tracking-wider transition-all shrink-0 flex items-center gap-2 ${
+                  isSelected
+                    ? `${activeTheme.primaryBg} ${activeTheme.primaryText} ${activeTheme.border} shadow-md dark:shadow-none`
+                    : "bg-brand-surface border-brand-border text-brand-muted hover:bg-brand-hover hover:text-main"
+                }`}
+              >
+                <Icon size={14} />
+                <span>{cat === "All" ? t[language].allCategories : cat}</span>
+              </motion.button>
+            );
+          })
+        ) : (
+          serviceCategories.map(cat => {
+            const isSelected = activeServiceCategory === cat;
+            return (
+              <motion.button
+                key={cat}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setActiveServiceCategory(cat)}
+                className={`h-11 px-6 rounded-full border text-[11px] font-black uppercase tracking-wider transition-all shrink-0 flex items-center gap-2 ${
+                  isSelected
+                    ? "bg-purple-600 text-white border-purple-500 shadow-md"
+                    : "bg-brand-surface border-brand-border text-brand-muted hover:bg-brand-hover hover:text-main"
+                }`}
+              >
+                <Wrench size={14} />
+                <span>{cat === "All" ? "All Technical Services" : cat}</span>
+              </motion.button>
+            );
+          })
+        )}
       </nav>
 
       {/* ─────────────────────────────────────────────────────────────────
-          BRAND FILTER CHIPS (SHOWN ONLY IF BRANDS EXIST)
+          BRAND FILTER CHIPS (SHOWN ONLY FOR PRODUCTS IF BRANDS EXIST)
           ───────────────────────────────────────────────────────────────── */}
-      {brandsInCategory.length > 1 && (
+      {posMode === "products" && brandsInCategory.length > 1 && (
         <div className="shrink-0 bg-brand-bgbase border-b border-brand-border/50 flex gap-2 overflow-x-auto py-2.5 px-6 no-scrollbar">
           {brandsInCategory.map(brand => {
             const isSelected = activeBrand === brand;
@@ -1229,30 +1429,135 @@ export default function SalesPage() {
       )}
 
       {/* ─────────────────────────────────────────────────────────────────
-          PRODUCT GRID AREA (SCROLLABLE)
+          CATALOG GRID AREA (PRODUCTS OR TECHNICAL SERVICES)
           ───────────────────────────────────────────────────────────────── */}
       <main className="flex-1 overflow-y-auto px-6 py-8 custom-scrollbar bg-brand-bgbase">
-        {loading ? (
-          <div className="w-full py-40 flex flex-col items-center justify-center opacity-40">
-            <Loader2 className="animate-spin mb-4 text-main" size={40} />
-            <p className="text-[10px] font-black uppercase tracking-[4px] text-brand-muted">Loading Products…</p>
-          </div>
-        ) : filteredInventory.length === 0 ? (
-          <div className="w-full py-32 flex flex-col items-center justify-center opacity-40 text-center">
-            <Package size={64} className="text-brand-muted mb-4 stroke-[1px]" />
-            <h4 className="text-[12px] font-black uppercase tracking-[3px] text-brand-muted">No matching products</h4>
-            <p className="text-xs text-brand-muted mt-1">Try searching a different item name or SKU</p>
-          </div>
+        {posMode === "services" ? (
+          /* TECHNICAL SERVICES CATALOG */
+          servicesLoading ? (
+            <div className="w-full py-40 flex flex-col items-center justify-center opacity-40">
+              <Loader2 className="animate-spin mb-4 text-purple-400" size={40} />
+              <p className="text-[10px] font-black uppercase tracking-[4px] text-brand-muted">Loading Technical Services…</p>
+            </div>
+          ) : services.filter(s => {
+              const matchCat = activeServiceCategory === "All" || s.category === activeServiceCategory;
+              const matchSearch = !productSearch ||
+                s.name.toLowerCase().includes(productSearch.toLowerCase()) ||
+                (s.description && s.description.toLowerCase().includes(productSearch.toLowerCase())) ||
+                s.category.toLowerCase().includes(productSearch.toLowerCase());
+              return matchCat && matchSearch;
+            }).length === 0 ? (
+            <div className="w-full py-32 flex flex-col items-center justify-center opacity-40 text-center">
+              <Wrench size={64} className="text-purple-400 mb-4 stroke-[1px]" />
+              <h4 className="text-[12px] font-black uppercase tracking-[3px] text-brand-muted">No matching services</h4>
+              <p className="text-xs text-brand-muted mt-1">Try selecting another service category</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-24">
+              {services
+                .filter(s => {
+                  const matchCat = activeServiceCategory === "All" || s.category === activeServiceCategory;
+                  const matchSearch = !productSearch ||
+                    s.name.toLowerCase().includes(productSearch.toLowerCase()) ||
+                    (s.description && s.description.toLowerCase().includes(productSearch.toLowerCase())) ||
+                    s.category.toLowerCase().includes(productSearch.toLowerCase());
+                  return matchCat && matchSearch;
+                })
+                .map((service) => {
+                  const cartItem = cart.find(c => c.id === service.id && c.isService);
+                  const pricingMeta = {
+                    fixed: { label: "FIXED FEE", bg: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" },
+                    variable: { label: "VARIABLE PRICE", bg: "bg-purple-500/10 text-purple-400 border-purple-500/20" },
+                    custom: { label: "CUSTOM QUOTE", bg: "bg-amber-500/10 text-amber-400 border-amber-500/20" }
+                  }[service.pricing_type] || { label: "LABOR", bg: "bg-brand-panel text-brand-muted border-brand-border" };
+
+                  return (
+                    <motion.div
+                      key={service.id}
+                      onClick={() => handleQuickAddService(service)}
+                      className="bg-brand-surface rounded-3xl border border-brand-border hover:border-purple-500/40 p-5 flex flex-col justify-between cursor-pointer shadow-sm hover:shadow-md transition-all relative overflow-hidden group"
+                    >
+                      <div>
+                        {cartItem && (
+                          <div className="absolute top-3 left-3 z-30 bg-purple-600 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-md">
+                            +{cartItem.quantity} in order
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between gap-2 mb-3">
+                          <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-brand-panel border border-brand-border text-brand-muted">
+                            {service.category}
+                          </span>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${pricingMeta.bg}`}>
+                            {pricingMeta.label}
+                          </span>
+                        </div>
+
+                        <div className="w-full h-28 bg-purple-500/5 rounded-2xl border border-purple-500/10 mb-4 flex flex-col items-center justify-center text-purple-400 group-hover:scale-102 transition-transform">
+                          <Wrench size={32} className="stroke-[1.5px] mb-1" />
+                          <span className="text-[8px] font-black uppercase tracking-widest text-purple-400/70">
+                            Zero Inventory • Pure Labor
+                          </span>
+                        </div>
+
+                        <h3 className="text-sm font-rajdhani font-black text-main uppercase tracking-wide leading-tight line-clamp-1 group-hover:text-purple-400 transition-colors">
+                          {service.name}
+                        </h3>
+
+                        <p className="text-[11px] text-brand-muted leading-relaxed line-clamp-2 my-2">
+                          {service.description || "Professional technical service performed by PC Alley technicians."}
+                        </p>
+                      </div>
+
+                      <div className="border-t border-brand-border/60 pt-3 mt-2 flex items-center justify-between gap-2">
+                        <div>
+                          <span className="text-[9px] font-bold uppercase tracking-wider text-brand-muted block">
+                            {service.pricing_type === "fixed" ? "Fixed Fee" : "Starting Fee"}
+                          </span>
+                          <span className="text-base font-rajdhani font-black text-main">
+                            ₱{parseFloat(service.base_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleQuickAddService(service);
+                          }}
+                          className="px-3.5 py-1.5 bg-purple-600/10 hover:bg-purple-600 text-purple-400 hover:text-white border border-purple-500/20 rounded-xl text-xs font-black uppercase tracking-wider transition-all"
+                        >
+                          {service.pricing_type === "fixed" ? "Add" : "Price & Add"}
+                        </button>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+            </div>
+          )
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 pb-24">
-            {filteredInventory.map((item) => {
-              const hasImage = item.Product?.product_image || item.Product?.image_url;
-              const formattedPrice = parseFloat(item.Product.price).toLocaleString();
-              const isLowStock = item.quantity <= 5;
-              const isOutOfStock = item.quantity <= 0;
-              
-              // Find matching cart item to display visual badges
-              const cartItem = cart.find(c => c.id === item.product_id);
+          /* PHYSICAL PRODUCTS CATALOG */
+          loading ? (
+            <div className="w-full py-40 flex flex-col items-center justify-center opacity-40">
+              <Loader2 className="animate-spin mb-4 text-main" size={40} />
+              <p className="text-[10px] font-black uppercase tracking-[4px] text-brand-muted">Loading Products…</p>
+            </div>
+          ) : filteredInventory.length === 0 ? (
+            <div className="w-full py-32 flex flex-col items-center justify-center opacity-40 text-center">
+              <Package size={64} className="text-brand-muted mb-4 stroke-[1px]" />
+              <h4 className="text-[12px] font-black uppercase tracking-[3px] text-brand-muted">No matching products</h4>
+              <p className="text-xs text-brand-muted mt-1">Try searching a different item name or SKU</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 pb-24">
+              {filteredInventory.map((item) => {
+                const hasImage = item.Product?.product_image || item.Product?.image_url;
+                const formattedPrice = parseFloat(item.Product.price).toLocaleString();
+                const isLowStock = item.quantity <= 5;
+                const isOutOfStock = item.quantity <= 0;
+                
+                // Find matching cart item to display visual badges
+                const cartItem = cart.find(c => c.id === item.product_id && !c.isService);
               
               // Friendly Description Fallback
               const descText = item.Product.description 
@@ -1375,7 +1680,7 @@ export default function SalesPage() {
               );
             })}
           </div>
-        )}
+        ))}
       </main>
 
       {/* ─────────────────────────────────────────────────────────────────
@@ -1591,141 +1896,282 @@ export default function SalesPage() {
         )}
       </AnimatePresence>
 
-      {/* CONFIRMATION SPLASH ANIMATION */}
-      <AnimatePresence>
-        {showConfirmation && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-brand-surface/95 backdrop-blur-md"
-          >
-            <motion.div
-              initial={{ scale: 0.5, rotate: -30 }}
-              animate={{ scale: 1, rotate: 0 }}
-              transition={{ type: "spring", stiffness: 200, damping: 15 }}
-              className={`w-28 h-28 rounded-full border-4 ${activeTheme.border} flex items-center justify-center mb-6 text-green-550 shadow-lg bg-green-500/10`}
-            >
-              <CheckCircle2 size={64} className="text-green-500" />
-            </motion.div>
-            <h3 className="text-2xl font-rajdhani font-black tracking-widest uppercase text-main">
-              {t[language].confirmAdded}
-            </h3>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ─────────────────────────────────────────────────────────────────
-          FULL-SCREEN CART REVIEW OVERLAY & CHECKOUT SCREEN
-          ───────────────────────────────────────────────────────────────── */}
-      <AnimatePresence>
-        {isReviewOpen && (
-          <div className="fixed inset-0 z-50 bg-brand-surface flex flex-col text-main">
-            {/* Header review */}
-            <header className="h-20 border-b border-brand-border px-6 flex items-center justify-between shrink-0 bg-brand-surface">
-              <div className="flex items-center gap-2.5">
-                <button
-                  onClick={() => {
-                    if (checkoutStep === "payment") {
-                      setCheckoutStep("review");
-                    } else {
-                      setIsReviewOpen(false);
-                    }
-                  }}
-                  className="w-10 h-10 rounded-full bg-brand-panel hover:bg-brand-hover flex items-center justify-center text-main transition-colors border border-brand-border"
-                >
-                  <ArrowLeft size={16} />
-                </button>
-                <h2 className="text-lg font-rajdhani font-black tracking-wider uppercase">
-                  {checkoutStep === "review" ? t[language].reviewOrder : t[language].paymentTitle}
-                </h2>
-              </div>
-              
-              <button
-                onClick={() => setIsReviewOpen(false)}
-                className="w-10 h-10 rounded-full bg-brand-panel hover:bg-brand-hover flex items-center justify-center text-brand-muted border border-brand-border"
+        {/* ─────────────────────────────────────────────────────────────────
+            VARIABLE / CUSTOM SERVICE PRICING MODAL
+            ───────────────────────────────────────────────────────────────── */}
+        <AnimatePresence>
+          {selectedServiceDetail && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="bg-brand-surface rounded-3xl w-full max-w-lg p-7 border border-brand-border shadow-2xl relative"
               >
-                <X size={18} />
-              </button>
-            </header>
+                <button
+                  onClick={() => setSelectedServiceDetail(null)}
+                  className="absolute top-5 right-5 w-8 h-8 rounded-full bg-brand-panel flex items-center justify-center hover:bg-brand-hover text-main border border-brand-border"
+                >
+                  <X size={16} />
+                </button>
 
-            {/* Split Main Content Area */}
-            <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-brand-bgbase">
-              
-              {/* LEFT COLUMN: Item Lists OR Payment Method Forms */}
-              <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar border-r border-brand-border bg-brand-bgbase/40">
-                {checkoutStep === "review" ? (
-                  /* REVIEW STEP ITEMS LIST */
-                  <div className="space-y-4 max-w-3xl mx-auto">
-                    {cart.map((item) => (
-                      <div
-                        key={item.id}
-                        onClick={() => {
-                          const invItem = inventory.find(i => i.product_id === item.id);
-                          if (invItem) {
-                            handleProductCustomize(invItem);
-                          }
-                        }}
-                        className="bg-brand-surface rounded-3xl p-5 border border-brand-border shadow-sm dark:shadow-none flex items-center justify-between gap-6 cursor-pointer hover:border-brand-neonblue/20 dark:hover:border-brand-neonblue/40 transition-all"
-                      >
-                        <div className="flex items-center gap-4 flex-1 min-w-0">
-                          {/* Image Box */}
-                          <div className="w-16 h-16 rounded-xl bg-brand-panel border border-brand-border flex items-center justify-center shrink-0 overflow-hidden">
-                            <Package size={24} className="text-brand-muted stroke-[1.5px]" />
-                          </div>
-                          
-                          {/* Title / Meta */}
-                          <div className="flex-1 min-w-0">
-                            <h4 className="text-sm font-rajdhani font-black text-main uppercase tracking-wide leading-tight truncate">
-                              {item.name}
-                            </h4>
-                            <p className="text-[9px] font-mono text-brand-muted mt-0.5 tracking-wider">{item.sku}</p>
-                            
-                            {/* Variant / Addon descriptors */}
-                            <p className="text-[10px] font-bold text-main mt-2 bg-brand-panel border border-brand-border inline-block px-2.5 py-0.5 rounded-lg leading-relaxed">
-                              {item.selectionSummary}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Quantity Counter & Price Column */}
-                        <div className="flex items-center gap-6" onClick={e => e.stopPropagation()}>
-                          <div className="flex items-center gap-3 bg-brand-panel border border-brand-border rounded-xl p-1 shrink-0">
-                            <button
-                              onClick={() => updateQuantity(item.id, -1)}
-                              className="w-7 h-7 bg-brand-surface rounded-lg hover:bg-brand-hover flex items-center justify-center text-main transition-colors border border-brand-border"
-                            >
-                              <Minus size={12} />
-                            </button>
-                            <span className="text-xs font-black min-w-[20px] text-center text-main">
-                              {item.quantity}
-                            </span>
-                            <button
-                              onClick={() => updateQuantity(item.id, 1)}
-                              className="w-7 h-7 bg-brand-surface rounded-lg hover:bg-brand-hover flex items-center justify-center text-main transition-colors border border-brand-border"
-                            >
-                              <Plus size={12} />
-                            </button>
-                          </div>
-
-                          <div className="text-right min-w-[80px]">
-                            <span className="text-sm font-rajdhani font-black text-main">
-                              ₱{(item.price * item.quantity).toLocaleString()}
-                            </span>
-                          </div>
-
-                          <button
-                            onClick={() => removeFromCart(item.id)}
-                            className="text-brand-muted hover:text-red-500 transition-colors"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
+                    <Wrench size={20} />
                   </div>
-                ) : (
-                  /* PAYMENT STEP DETAILS */
+                  <div>
+                    <h2 className="text-xl font-rajdhani font-black text-main uppercase tracking-wide">
+                      {selectedServiceDetail.name}
+                    </h2>
+                    <p className="text-[10px] font-bold text-purple-400 uppercase tracking-widest">
+                      {selectedServiceDetail.pricing_type === 'custom' ? 'Custom Service Quote' : 'Variable Pricing Evaluation'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-brand-muted mb-1.5">
+                      Evaluated Service Fee (₱) *
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      autoFocus
+                      placeholder="Enter final evaluated price"
+                      value={variablePriceInput}
+                      onChange={e => setVariablePriceInput(e.target.value)}
+                      className="w-full px-4 py-3 bg-brand-panel border border-brand-border rounded-xl text-sm font-black text-main focus:outline-none focus:border-purple-500 font-mono"
+                    />
+                    <p className="text-[10px] text-brand-muted mt-1">
+                      Base catalog starting price: ₱{parseFloat(selectedServiceDetail.base_price || 0).toLocaleString()}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-brand-muted mb-1.5">
+                      Reason for Price Adjustment * (Audit Trail)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Component-level diagnostic & ultrasonic cleaning required"
+                      value={priceReasonInput}
+                      onChange={e => setPriceReasonInput(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-brand-panel border border-brand-border rounded-xl text-xs font-bold text-main focus:outline-none focus:border-purple-500"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-brand-muted mb-1.5">
+                        Device Type (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Gaming PC / Laptop"
+                        value={deviceTypeInput}
+                        onChange={e => setDeviceTypeInput(e.target.value)}
+                        className="w-full px-4 py-2 bg-brand-panel border border-brand-border rounded-xl text-xs font-bold text-main focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-brand-muted mb-1.5">
+                        Device Specs (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. RTX 3060, i5 12400"
+                        value={deviceSpecsInput}
+                        onChange={e => setDeviceSpecsInput(e.target.value)}
+                        className="w-full px-4 py-2 bg-brand-panel border border-brand-border rounded-xl text-xs font-bold text-main focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-brand-muted mb-1.5">
+                      Customer Problem / Symptoms Notes
+                    </label>
+                    <textarea
+                      rows={2}
+                      placeholder="e.g. Freezes during boot sequence..."
+                      value={reportedIssueInput}
+                      onChange={e => setReportedIssueInput(e.target.value)}
+                      className="w-full px-4 py-2 bg-brand-panel border border-brand-border rounded-xl text-xs font-bold text-main focus:outline-none custom-scrollbar"
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-3 border-t border-brand-border">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedServiceDetail(null)}
+                      className="px-5 py-2.5 bg-brand-panel hover:bg-brand-hover text-brand-muted font-bold text-xs rounded-xl"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleConfirmVariableService}
+                      className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md flex items-center gap-2"
+                    >
+                      <CheckCircle2 size={15} /> Add to Order (₱{parseFloat(variablePriceInput || 0).toLocaleString()})
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* CONFIRMATION SPLASH ANIMATION */}
+        <AnimatePresence>
+          {showConfirmation && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-brand-surface/95 backdrop-blur-md"
+            >
+              <motion.div
+                initial={{ scale: 0.5, rotate: -30 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ type: "spring", stiffness: 200, damping: 15 }}
+                className={`w-28 h-28 rounded-full border-4 ${activeTheme.border} flex items-center justify-center mb-6 text-green-550 shadow-lg bg-green-500/10`}
+              >
+                <CheckCircle2 size={64} className="text-green-500" />
+              </motion.div>
+              <h3 className="text-2xl font-rajdhani font-black tracking-widest uppercase text-main">
+                {t[language].confirmAdded}
+              </h3>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ─────────────────────────────────────────────────────────────────
+            FULL-SCREEN CART REVIEW OVERLAY & CHECKOUT SCREEN
+            ───────────────────────────────────────────────────────────────── */}
+        <AnimatePresence>
+          {isReviewOpen && (
+            <div className="fixed inset-0 z-50 bg-brand-surface flex flex-col text-main">
+              {/* Header review */}
+              <header className="h-20 border-b border-brand-border px-6 flex items-center justify-between shrink-0 bg-brand-surface">
+                <div className="flex items-center gap-2.5">
+                  <button
+                    onClick={() => {
+                      if (checkoutStep === "payment") {
+                        setCheckoutStep("review");
+                      } else {
+                        setIsReviewOpen(false);
+                      }
+                    }}
+                    className="w-10 h-10 rounded-full bg-brand-panel hover:bg-brand-hover flex items-center justify-center text-main transition-colors border border-brand-border"
+                  >
+                    <ArrowLeft size={16} />
+                  </button>
+                  <h2 className="text-lg font-rajdhani font-black tracking-wider uppercase">
+                    {checkoutStep === "review" ? t[language].reviewOrder : t[language].paymentTitle}
+                  </h2>
+                </div>
+                
+                <button
+                  onClick={() => setIsReviewOpen(false)}
+                  className="w-10 h-10 rounded-full bg-brand-panel hover:bg-brand-hover flex items-center justify-center text-brand-muted border border-brand-border"
+                >
+                  <X size={18} />
+                </button>
+              </header>
+
+              {/* Split Main Content Area */}
+              <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-brand-bgbase">
+                
+                {/* LEFT COLUMN: Item Lists OR Payment Method Forms */}
+                <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar border-r border-brand-border bg-brand-bgbase/40">
+                  {checkoutStep === "review" ? (
+                    /* REVIEW STEP ITEMS LIST */
+                    <div className="space-y-4 max-w-3xl mx-auto">
+                      {cart.map((item) => (
+                        <div
+                          key={`${item.id}-${item.isService ? 'svc' : 'prod'}`}
+                          onClick={() => {
+                            if (!item.isService) {
+                              const invItem = inventory.find(i => i.product_id === item.id);
+                              if (invItem) {
+                                handleProductCustomize(invItem);
+                              }
+                            }
+                          }}
+                          className={`bg-brand-surface rounded-3xl p-5 border ${
+                            item.isService ? 'border-purple-500/30' : 'border-brand-border'
+                          } shadow-sm dark:shadow-none flex items-center justify-between gap-6 cursor-pointer hover:border-brand-neonblue/20 dark:hover:border-brand-neonblue/40 transition-all`}
+                        >
+                          <div className="flex items-center gap-4 flex-1 min-w-0">
+                            {/* Image / Icon Box */}
+                            <div className={`w-16 h-16 rounded-xl ${item.isService ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'bg-brand-panel border border-brand-border'} flex items-center justify-center shrink-0 overflow-hidden`}>
+                              {item.isService ? <Wrench size={24} className="stroke-[1.5px]" /> : <Package size={24} className="text-brand-muted stroke-[1.5px]" />}
+                            </div>
+                            
+                            {/* Title / Meta */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider ${
+                                  item.isService ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30' : 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30'
+                                }`}>
+                                  {item.isService ? 'Technical Service' : 'Physical Product'}
+                                </span>
+                                {item.sku && <p className="text-[9px] font-mono text-brand-muted tracking-wider">{item.sku}</p>}
+                              </div>
+
+                              <h4 className="text-sm font-rajdhani font-black text-main uppercase tracking-wide leading-tight truncate mt-1">
+                                {item.name}
+                              </h4>
+                              
+                              {/* Variant / Addon descriptors */}
+                              <p className="text-[10px] font-bold text-main mt-1.5 bg-brand-panel border border-brand-border inline-block px-2.5 py-0.5 rounded-lg leading-relaxed">
+                                {item.selectionSummary}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Quantity Counter & Price Column */}
+                          <div className="flex items-center gap-6" onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center gap-3 bg-brand-panel border border-brand-border rounded-xl p-1 shrink-0">
+                              <button
+                                onClick={() => updateQuantity(item.id, -1, item.isService)}
+                                className="w-7 h-7 bg-brand-surface rounded-lg hover:bg-brand-hover flex items-center justify-center text-main transition-colors border border-brand-border"
+                              >
+                                <Minus size={12} />
+                              </button>
+                              <span className="text-xs font-black min-w-[20px] text-center text-main">
+                                {item.quantity}
+                              </span>
+                              <button
+                                onClick={() => updateQuantity(item.id, 1, item.isService)}
+                                className="w-7 h-7 bg-brand-surface rounded-lg hover:bg-brand-hover flex items-center justify-center text-main transition-colors border border-brand-border"
+                              >
+                                <Plus size={12} />
+                              </button>
+                            </div>
+
+                            <div className="text-right min-w-[80px]">
+                              <span className="text-sm font-rajdhani font-black text-main">
+                                ₱{(item.price * item.quantity).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+
+                            <button
+                              onClick={() => removeFromCart(item.id, item.isService)}
+                              className="text-brand-muted hover:text-red-500 transition-colors"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    /* PAYMENT STEP DETAILS */
                   <div className="max-w-xl mx-auto space-y-6">
                     {/* Method Selector Boxes */}
                     <div className="grid grid-cols-3 gap-3">
@@ -1962,7 +2408,19 @@ export default function SalesPage() {
                 {/* Subtotals & primary Checkout CTA */}
                 <div className="space-y-4 pt-4 border-t border-brand-border">
                   <div className="space-y-2 text-xs text-brand-muted font-semibold">
-                    <div className="flex justify-between">
+                    {productSubtotal > 0 && (
+                      <div className="flex justify-between">
+                        <span className="flex items-center gap-1.5"><Package size={12} className="text-cyan-400" /> Physical Products</span>
+                        <span className="text-main font-bold">₱{productSubtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                    )}
+                    {serviceSubtotal > 0 && (
+                      <div className="flex justify-between">
+                        <span className="flex items-center gap-1.5"><Wrench size={12} className="text-purple-400" /> Technical Services</span>
+                        <span className="text-main font-bold">₱{serviceSubtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between border-t border-brand-border/40 pt-1.5">
                       <span>{t[language].subtotal}</span>
                       <span className="text-main font-bold">₱{subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
@@ -2318,17 +2776,6 @@ export default function SalesPage() {
               </form>
             </motion.div>
           </div>
-        )}
-      </AnimatePresence>
-
-      {/* SUCCESS RECEIPT MODAL */}
-      <AnimatePresence>
-        {showReceiptModal && receiptData && (
-          <ReceiptModal
-            isOpen={showReceiptModal}
-            onClose={handleReceiptClose}
-            receipt={displayReceipt}
-          />
         )}
       </AnimatePresence>
 

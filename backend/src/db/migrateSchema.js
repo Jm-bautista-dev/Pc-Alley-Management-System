@@ -296,6 +296,127 @@ const migrateSchema = async () => {
         console.warn('DATABASE: Could not backfill branch_products rows:', e.message);
       }
     }
+
+    // ── Service Sales & Work Orders Migration ─────────────────────────────
+    try {
+      // 1. Create services table if missing
+      await sequelize.query(`
+        CREATE TABLE IF NOT EXISTS \`services\` (
+          \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+          \`name\` VARCHAR(255) NOT NULL UNIQUE,
+          \`category\` VARCHAR(100) NOT NULL DEFAULT 'Other',
+          \`description\` TEXT NULL,
+          \`pricing_type\` ENUM('fixed', 'variable', 'custom') NOT NULL DEFAULT 'fixed',
+          \`base_price\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+          \`estimated_duration_mins\` INT DEFAULT 60,
+          \`requires_device_info\` TINYINT(1) NOT NULL DEFAULT 1,
+          \`status\` ENUM('active', 'inactive', 'archived') NOT NULL DEFAULT 'active',
+          \`created_by\` INT NULL,
+          \`updated_by\` INT NULL,
+          \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          \`deleted_at\` DATETIME NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+
+      // 2. Create service_jobs table if missing
+      await sequelize.query(`
+        CREATE TABLE IF NOT EXISTS \`service_jobs\` (
+          \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+          \`job_number\` VARCHAR(50) NOT NULL UNIQUE,
+          \`customer_id\` CHAR(36) NULL,
+          \`customer_name\` VARCHAR(255) NOT NULL DEFAULT 'Walk-in Customer',
+          \`customer_phone\` VARCHAR(50) NULL,
+          \`service_id\` INT NOT NULL,
+          \`service_name\` VARCHAR(255) NOT NULL,
+          \`branch_id\` INT NOT NULL,
+          \`device_type\` VARCHAR(100) DEFAULT 'Desktop PC',
+          \`device_specs\` TEXT NULL,
+          \`serial_number\` VARCHAR(100) NULL,
+          \`reported_issue\` TEXT NULL,
+          \`diagnosis\` TEXT NULL,
+          \`status\` ENUM('received', 'diagnosing', 'waiting_for_approval', 'in_progress', 'ready_for_release', 'completed', 'cancelled') NOT NULL DEFAULT 'received',
+          \`estimated_price\` DECIMAL(12, 2) DEFAULT 0.00,
+          \`final_price\` DECIMAL(12, 2) DEFAULT 0.00,
+          \`price_override_reason\` TEXT NULL,
+          \`technician_id\` INT NULL,
+          \`technician_name\` VARCHAR(255) NULL,
+          \`sale_id\` CHAR(36) NULL,
+          \`invoice_number\` VARCHAR(100) NULL,
+          \`customer_approved\` TINYINT(1) NOT NULL DEFAULT 0,
+          \`received_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          \`approved_at\` DATETIME NULL,
+          \`completed_at\` DATETIME NULL,
+          \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+
+      // 3. Alter sales table
+      await addColumnIfMissing(queryInterface, 'sales', 'sale_type', {
+        type: DataTypes.ENUM('product', 'service', 'mixed'),
+        allowNull: false,
+        defaultValue: 'product'
+      });
+      await addColumnIfMissing(queryInterface, 'sales', 'product_amount', {
+        type: DataTypes.DECIMAL(12, 2),
+        allowNull: false,
+        defaultValue: 0.00
+      });
+      await addColumnIfMissing(queryInterface, 'sales', 'service_amount', {
+        type: DataTypes.DECIMAL(12, 2),
+        allowNull: false,
+        defaultValue: 0.00
+      });
+
+      // 4. Alter saleitems table
+      await addColumnIfMissing(queryInterface, 'saleitems', 'item_type', {
+        type: DataTypes.ENUM('product', 'service'),
+        allowNull: false,
+        defaultValue: 'product'
+      });
+      await addColumnIfMissing(queryInterface, 'saleitems', 'serviceId', {
+        type: DataTypes.INTEGER,
+        allowNull: true
+      });
+      await addColumnIfMissing(queryInterface, 'saleitems', 'serviceJobId', {
+        type: DataTypes.INTEGER,
+        allowNull: true
+      });
+      await addColumnIfMissing(queryInterface, 'saleitems', 'priceOverrideReason', {
+        type: DataTypes.TEXT,
+        allowNull: true
+      });
+      await addColumnIfMissing(queryInterface, 'saleitems', 'approvedBy', {
+        type: DataTypes.INTEGER,
+        allowNull: true
+      });
+
+      // 5. Seed default PC technical services if catalog is empty
+      const existingServices = await sequelize.query("SELECT COUNT(*) AS cnt FROM `services`", { type: sequelize.QueryTypes.SELECT });
+      if (parseInt(existingServices[0]?.cnt || 0) === 0) {
+        const defaultServices = [
+          ['PC Diagnostic & Inspection', 'Diagnostics', 'Comprehensive component-level inspection and stress testing to isolate hardware or thermal faults.', 'variable', 500.00, 45, 1],
+          ['Operating System Installation & Driver Setup', 'Software', 'Clean install of Windows/Linux OS, latest WHQL certified hardware drivers, and essential utilities.', 'fixed', 800.00, 60, 1],
+          ['Deep Cleaning & Thermal Paste Replacement', 'Maintenance', 'Thorough dust removal, fan ultrasonic cleaning, and high-performance thermal paste application (Arctic MX-4/Noctua).', 'fixed', 650.00, 45, 1],
+          ['Custom Gaming PC Assembly & Cable Management', 'Assembly', 'Full system assembly from bare parts, professional routing, cable dressing, and initial POST/BIOS setup.', 'variable', 1500.00, 120, 1],
+          ['Hardware Component Upgrade & Installation', 'Installation', 'Safe installation of new GPU, SSD/HDD, RAM modules, CPU cooler, or PSU with verification tests.', 'fixed', 350.00, 30, 1],
+          ['Component-Level Board & Circuit Repair', 'Repair', 'Precision soldering and trace repair for motherboards, GPUs, or power delivery circuits.', 'custom', 1200.00, 180, 1],
+          ['Virus, Malware & Rootkit Removal', 'Software', 'Deep system scanning, malicious software neutralization, security patch installation, and system registry cleaning.', 'fixed', 500.00, 45, 1],
+          ['Data Recovery & Drive Cloning', 'Software', 'Extraction of files from failing storage drives or full bit-by-bit system migration to a new high-speed NVMe SSD.', 'variable', 1000.00, 90, 1]
+        ];
+
+        for (const s of defaultServices) {
+          await sequelize.query(`
+            INSERT INTO \`services\` (\`name\`, \`category\`, \`description\`, \`pricing_type\`, \`base_price\`, \`estimated_duration_mins\`, \`requires_device_info\`, \`status\`)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'active')
+          `, { replacements: s });
+        }
+        console.log('DATABASE: Seeded default PC technical service catalog.');
+      }
+    } catch (sErr) {
+      console.warn('DATABASE: Service tables migration warning:', sErr.message);
+    }
   } catch (error) {
     console.warn(`DATABASE: Schema migration skipped or failed: ${error.message}`);
   }

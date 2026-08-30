@@ -281,37 +281,82 @@ export function CashReceiptContent({ receipt, copy = "ORIGINAL" }) {
         </div>
       </div>
 
-      {/* ── Item breakdown (compact) ── */}
+      {/* ── Item breakdown (segregated by Products & Services) ── */}
       {items.length > 0 && (
         <div style={{ marginTop: "10px", borderTop: "1px dashed #ccc", paddingTop: "6px" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "9px" }}>
             <thead>
               <tr style={{ backgroundColor: "#1e3a8a", color: "#fff" }}>
-                <th style={{ padding: "3px 5px", textAlign: "left", fontWeight: "700" }}>Item</th>
+                <th style={{ padding: "3px 5px", textAlign: "left", fontWeight: "700" }}>Item Description</th>
                 <th style={{ padding: "3px 5px", textAlign: "center", fontWeight: "700" }}>Qty</th>
                 <th style={{ padding: "3px 5px", textAlign: "right", fontWeight: "700" }}>Unit</th>
                 <th style={{ padding: "3px 5px", textAlign: "right", fontWeight: "700" }}>Total</th>
               </tr>
             </thead>
             <tbody>
-              {items.map((item, idx) => {
-                const name  = item.productName || item.Product?.name || "Item";
-                const price = parseFloat(item.unitPrice || item.price_at_sale || 0);
-                return (
-                  <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? "#f9fafb" : "#fff" }}>
-                    <td style={{ padding: "2px 5px", borderBottom: "1px solid #e5e7eb" }}>
-                      {name.length > 30 ? name.slice(0, 29) + "…" : name}
-                    </td>
-                    <td style={{ padding: "2px 5px", textAlign: "center", borderBottom: "1px solid #e5e7eb" }}>{item.quantity}</td>
-                    <td style={{ padding: "2px 5px", textAlign: "right", borderBottom: "1px solid #e5e7eb" }}>
-                      ₱{price.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
-                    </td>
-                    <td style={{ padding: "2px 5px", textAlign: "right", fontWeight: "700", borderBottom: "1px solid #e5e7eb" }}>
-                      ₱{(item.quantity * price).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+              {/* Physical Products Section */}
+              {items.filter(i => (i.item_type || i.itemType) !== 'service' && !i.Service && !i.serviceId).length > 0 && (
+                <>
+                  <tr style={{ backgroundColor: "#f0fdf4" }}>
+                    <td colSpan={4} style={{ padding: "2px 5px", fontWeight: "900", color: "#166534", fontSize: "8px", textTransform: "uppercase", letterSpacing: "1px" }}>
+                      📦 Physical Products
                     </td>
                   </tr>
-                );
-              })}
+                  {items.filter(i => (i.item_type || i.itemType) !== 'service' && !i.Service && !i.serviceId).map((item, idx) => {
+                    const name  = item.productName || item.Product?.name || "Product Item";
+                    const price = parseFloat(item.unitPrice || item.price_at_sale || 0);
+                    return (
+                      <tr key={`p-${idx}`} style={{ backgroundColor: idx % 2 === 0 ? "#f9fafb" : "#fff" }}>
+                        <td style={{ padding: "2px 5px", borderBottom: "1px solid #e5e7eb" }}>
+                          {name}
+                        </td>
+                        <td style={{ padding: "2px 5px", textAlign: "center", borderBottom: "1px solid #e5e7eb" }}>{item.quantity}</td>
+                        <td style={{ padding: "2px 5px", textAlign: "right", borderBottom: "1px solid #e5e7eb" }}>
+                          ₱{price.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                        </td>
+                        <td style={{ padding: "2px 5px", textAlign: "right", fontWeight: "700", borderBottom: "1px solid #e5e7eb" }}>
+                          ₱{(item.quantity * price).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </>
+              )}
+
+              {/* Technical Services Section */}
+              {items.filter(i => (i.item_type || i.itemType) === 'service' || i.Service || i.serviceId).length > 0 && (
+                <>
+                  <tr style={{ backgroundColor: "#faf5ff" }}>
+                    <td colSpan={4} style={{ padding: "2px 5px", fontWeight: "900", color: "#7e22ce", fontSize: "8px", textTransform: "uppercase", letterSpacing: "1px" }}>
+                      🛠️ Technical Services &amp; Labor
+                    </td>
+                  </tr>
+                  {items.filter(i => (i.item_type || i.itemType) === 'service' || i.Service || i.serviceId).map((item, idx) => {
+                    const name  = item.serviceName || item.Service?.name || item.productName || item.Product?.name || "Technical Service";
+                    const price = parseFloat(item.unitPrice || item.price_at_sale || 0);
+                    return (
+                      <tr key={`s-${idx}`} style={{ backgroundColor: idx % 2 === 0 ? "#f9fafb" : "#fff" }}>
+                        <td style={{ padding: "2px 5px", borderBottom: "1px solid #e5e7eb" }}>
+                          <span style={{ fontWeight: "700", color: "#6b21a8" }}>[SERVICE]</span> {name}
+                          {item.priceOverrideReason && (
+                            <div style={{ fontSize: "7.5px", color: "#6b7280", fontStyle: "italic" }}>
+                              Reason: {item.priceOverrideReason}
+                            </div>
+                          )}
+                        </td>
+                        <td style={{ padding: "2px 5px", textAlign: "center", borderBottom: "1px solid #e5e7eb" }}>{item.quantity}</td>
+                        <td style={{ padding: "2px 5px", textAlign: "right", borderBottom: "1px solid #e5e7eb" }}>
+                          ₱{price.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                        </td>
+                        <td style={{ padding: "2px 5px", textAlign: "right", fontWeight: "700", borderBottom: "1px solid #e5e7eb" }}>
+                          ₱{(item.quantity * price).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </>
+              )}
+
               <tr style={{ backgroundColor: "#eff6ff" }}>
                 <td colSpan={3} style={{ padding: "3px 5px", fontWeight: "700", fontSize: "10px" }}>VAT (12%)</td>
                 <td style={{ padding: "3px 5px", textAlign: "right", fontWeight: "700" }}>

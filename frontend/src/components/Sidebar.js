@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Package, Users, UserPlus, LogOut, LayoutDashboard,
   Settings, ShieldCheck, ChevronDown, Download, Upload, ClipboardList,
-  DollarSign, FileText, CornerDownLeft, Activity,
+  DollarSign, FileText, CornerDownLeft, Activity, Wrench
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import SettingsPanel from "./SettingsPanel";
@@ -26,6 +26,7 @@ const Sidebar = () => {
     const paths = {
       "Contacts":        ["/customers", "/customer-groups", "/import-contacts", "/suppliers"],
       "Products":        ["/products", "/reports/stock", "/products/my-requests", "/admin/product-requests", "/products/brands", "/products/import"],
+      "Services":        ["/services", "/services/jobs"],
       "Purchases":       ["/purchases"],
       "Sell":            ["/sell"],
       "Reports":         ["/reports"],
@@ -50,6 +51,7 @@ const Sidebar = () => {
       { title: "Dashboard",     icon: LayoutDashboard, path: "/dashboard",   group: "MAIN" },
       { title: "Sales Terminal", icon: Upload, path: "/sales",               group: "MAIN" },
       { title: "Sales",     icon: FileText,    path: "#sell",                group: "SALES", subItems: [{ title: "All Sales", path: "/sell/all" }, { title: "Warranties", path: "/sell/quotations" }, { title: "Saved Drafts", path: "/sell/drafts" }] },
+      { title: "Technical Services", icon: Wrench, path: "#services",        group: "SALES", subItems: [{ title: "Service Catalog", path: "/services" }, { title: "Work Orders", path: "/services/jobs" }] },
       { title: "Customers", icon: Users,       path: "#contacts",            group: "SALES", subItems: [{ title: "Customer List", path: "/customers" }] },
       { title: "Products",  icon: Package,     path: "#products",            group: "SALES", subItems: [{ title: "Product List", path: "/products" }, { title: "Manage Stock", path: "/reports/stock" }] },
     ];
@@ -57,6 +59,10 @@ const Sidebar = () => {
       { title: "Dashboard",    icon: LayoutDashboard, path: "/dashboard", group: "MAIN" },
       { title: "Contacts",     icon: Users,           path: "#contacts",  group: "SALES", subItems: [{ title: "Customer", path: "/customers" }, { title: "Supplier", path: "/suppliers" }] },
       { title: "Products",     icon: Package,         path: "#products",  group: "SALES", subItems: [{ title: "Product List", path: "/products" }, { title: "Manage Stock", path: "/reports/stock" }, { title: "Categories", path: "/products/categories" }, { title: "Brands", path: "/products/brands" }, { title: "Import Products", path: "/products/import" }, { title: "Product Requests", path: "/admin/product-requests" }] },
+      { title: "Services",     icon: Wrench,          path: "#services",  group: "SALES", subItems: [
+        { title: "Service Catalog", path: "/services" },
+        { title: "Work Orders / Jobs", path: "/services/jobs" }
+      ] },
       { title: "Sales",        icon: Upload,          path: "#sell",      group: "SALES", subItems: [
         { title: "All Sales", path: "/sell/all" },
         { title: "Warranties", path: "/sell/quotations" },
@@ -78,6 +84,7 @@ const Sidebar = () => {
       { title: "Dashboard",    icon: LayoutDashboard, path: "/dashboard",        group: "MAIN" },
       { title: "Customers",    icon: Users,           path: "#contacts",         group: "SALES", subItems: [{ title: "Customer List", path: "/customers" }] },
       { title: "Products",     icon: Package,         path: "#products",         group: "SALES", subItems: [{ title: "Product List", path: "/products" }, { title: "Manage Stock", path: "/reports/stock" }, { title: "Categories", path: "/products/categories" }, { title: "Brands", path: "/products/brands" }, { title: "My Requests", path: "/products/my-requests" }] },
+      { title: "Services",     icon: Wrench,          path: "#services",         group: "SALES", subItems: [{ title: "Service Catalog", path: "/services" }, { title: "Work Orders / Jobs", path: "/services/jobs" }] },
       { title: "Buy Stock",    icon: Download,        path: "#purchases",        group: "SALES", subItems: [{ title: "Stock Purchases", path: "/purchases" }, { title: "Order Stock", path: "/purchases/restock" }] },
       { title: "Sales",        icon: Upload,          path: "#sell",             group: "SALES", subItems: [
         { title: "All Sales", path: "/sell/all" },

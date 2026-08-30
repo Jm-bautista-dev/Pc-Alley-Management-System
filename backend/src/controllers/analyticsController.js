@@ -160,14 +160,66 @@ const getDashboardMetrics = async (req, res) => {
       limit: 12
     });
 
+    // Product vs Service Revenue Breakdown
+    const revBreakdown = await Sale.findOne({
+      where: whereSale,
+      attributes: [
+        [sequelize.fn('SUM', sequelize.col('product_amount')), 'prodTotal'],
+        [sequelize.fn('SUM', sequelize.col('service_amount')), 'servTotal']
+      ],
+      raw: true
+    });
+    let productRevenue = parseFloat(revBreakdown?.prodTotal || 0);
+    let serviceRevenue = parseFloat(revBreakdown?.servTotal || 0);
+
+    // Fallback for legacy sales where product_amount was 0
+    if (productRevenue === 0 && serviceRevenue === 0 && totalRevenue > 0) {
+      productRevenue = totalRevenue;
+    }
+
+    const productShare = totalRevenue > 0 ? parseFloat(((productRevenue / totalRevenue) * 100).toFixed(1)) : 100.0;
+    const serviceShare = totalRevenue > 0 ? parseFloat(((serviceRevenue / totalRevenue) * 100).toFixed(1)) : 0.0;
+
+    // Top Technical Services Sold
+    const topServicesStats = await SaleItem.findAll({
+      attributes: [
+        'productName',
+        [sequelize.fn('SUM', sequelize.col('SaleItem.quantity')), 'quantity'],
+        [sequelize.fn('SUM', sequelize.col('SaleItem.subtotal')), 'revenue']
+      ],
+      include: [{
+        model: Sale,
+        attributes: [],
+        where: whereSale
+      }],
+      where: { item_type: 'service' },
+      group: ['productName'],
+      order: [[sequelize.literal('revenue'), 'DESC']],
+      limit: 5,
+      raw: true
+    });
+
     res.json({
       totalRevenue,
+      productRevenue,
+      serviceRevenue,
+      productShare,
+      serviceShare,
       totalOrders,
       totalStock,
       productsSold,
       growthPercentage,
       ordersGrowthPercentage,
       productsSoldGrowthPercentage,
+      revenueComposition: [
+        { source: 'Physical Products', revenue: productRevenue, percentage: productShare, color: '#00F2FF' },
+        { source: 'Technical Services', revenue: serviceRevenue, percentage: serviceShare, color: '#A855F7' }
+      ],
+      topServices: topServicesStats.map(s => ({
+        name: s.productName,
+        quantity: parseInt(s.quantity || 0),
+        revenue: parseFloat(s.revenue || 0)
+      })),
       topBranches: branchStats.map(b => ({
         branchId: b.branchId,
         branchName: b.Branch?.name || `Branch #${b.branchId}`,
@@ -1075,13 +1127,50 @@ const getPrescriptiveAnalytics = async (req, res) => {
             expectedImpact: 'Buffer against sudden demand spikes during fluctuating sales periods.',
             priority: 'Medium',
             why: `Model backtesting detected elevated prediction variance (MAE: ₱${forecastReliability.mae.toLocaleString()}).`,
-            metrics: `Accuracy: ${benchmarkResult.overallMetrics.accuracy}% | Performance: ${forecastReliability.rating}`,
-            confidence: 75
+            metrics: `Accuracy: ${benchmarkResult.overallMetrics.accuracy}% | Performance: ${forecastReliability.rating}`
           });
         }
       }
     } catch (benchErr) {
       console.warn('[PRESCRIPTIVE_BENCHMARK_INTEGRATION_WARN]', benchErr.message);
+    }
+
+    // ── Product-Service Co-occurrence & Bundle Prescriptive Intelligence ──
+    try {
+      const mixedSales = await Sale.findAll({
+        where: {
+          ...branchFilter,
+          sale_type: 'mixed',
+          status: 'completed'
+        },
+        include: [{ model: SaleItem }],
+        limit: 50
+      });
+
+      if (mixedSales.length > 0) {
+        actionsTable.push({
+          issue: `Cross-Sell Synergy: Detected ${mixedSales.length} mixed hardware & service transactions`,
+          recommendation: 'Package hardware components (e.g. SSDs, Motherboards, GPUs) with installation/optimization services as discounted POS bundles.',
+          expectedImpact: 'Increase average transaction value by up to 15% and improve customer technical satisfaction.',
+          priority: 'Medium',
+          why: 'Customers frequently require professional installation and configuration alongside major component purchases.',
+          metrics: `Mixed Orders: ${mixedSales.length} | Service Conversion: Active`,
+          confidence: 88
+        });
+      } else {
+        // Feature default PC service bundle recommendation
+        actionsTable.push({
+          issue: 'Service Merchandising: Technical service attach rate opportunity',
+          recommendation: 'Prompt cashiers to offer PC Diagnostic or OS setup on storage drive and custom PC component checkouts.',
+          expectedImpact: 'Unlock higher margin service revenue without physical inventory holding costs.',
+          priority: 'Low',
+          why: 'Technical services yield 100% gross product margin since they utilize labor capacity.',
+          metrics: 'High Margin Category | Zero Inventory Risk',
+          confidence: 82
+        });
+      }
+    } catch (bundleErr) {
+      console.warn('[PRESCRIPTIVE_BUNDLE_ANALYSIS_WARN]', bundleErr.message);
     }
 
     res.json({

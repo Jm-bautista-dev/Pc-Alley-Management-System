@@ -26,6 +26,8 @@ const Expense = require('./Expense');
 const Payroll = require('./Payroll');
 const Attendance = require('./Attendance');
 const Warranty = require('./Warranty');
+const Service = require('./Service');
+const ServiceJob = require('./ServiceJob');
 
 // ── Existing Associations ──
 Branch.hasMany(User, { foreignKey: 'branch_id' });
@@ -156,6 +158,28 @@ Attendance.belongsTo(User, { foreignKey: 'userId' });
 Branch.hasMany(Attendance, { foreignKey: 'branchId' });
 Attendance.belongsTo(Branch, { foreignKey: 'branchId' });
 
+// Service associations
+Service.hasMany(SaleItem, { foreignKey: 'serviceId' });
+SaleItem.belongsTo(Service, { foreignKey: 'serviceId' });
+
+Service.hasMany(ServiceJob, { foreignKey: 'service_id' });
+ServiceJob.belongsTo(Service, { foreignKey: 'service_id' });
+
+Customer.hasMany(ServiceJob, { foreignKey: 'customer_id' });
+ServiceJob.belongsTo(Customer, { foreignKey: 'customer_id' });
+
+Branch.hasMany(ServiceJob, { foreignKey: 'branch_id' });
+ServiceJob.belongsTo(Branch, { foreignKey: 'branch_id' });
+
+User.hasMany(ServiceJob, { as: 'AssignedJobs', foreignKey: 'technician_id' });
+ServiceJob.belongsTo(User, { as: 'Technician', foreignKey: 'technician_id' });
+
+Sale.hasMany(ServiceJob, { foreignKey: 'sale_id' });
+ServiceJob.belongsTo(Sale, { foreignKey: 'sale_id' });
+
+ServiceJob.hasMany(SaleItem, { foreignKey: 'serviceJobId' });
+SaleItem.belongsTo(ServiceJob, { foreignKey: 'serviceJobId' });
+
 module.exports = {
   Branch,
   User,
@@ -185,5 +209,7 @@ module.exports = {
   Expense,
   Payroll,
   Attendance,
-  Warranty
+  Warranty,
+  Service,
+  ServiceJob
 };

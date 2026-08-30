@@ -58,6 +58,21 @@ const Sale = sequelize.define('Sale', {
   notes: {
     type: DataTypes.TEXT
   },
+  sale_type: {
+    type: DataTypes.ENUM('product', 'service', 'mixed'),
+    allowNull: false,
+    defaultValue: 'product'
+  },
+  product_amount: {
+    type: DataTypes.DECIMAL(12, 2),
+    allowNull: false,
+    defaultValue: 0.00
+  },
+  service_amount: {
+    type: DataTypes.DECIMAL(12, 2),
+    allowNull: false,
+    defaultValue: 0.00
+  },
   amountPaid: {
     type: DataTypes.DECIMAL(12, 2),
     allowNull: true,

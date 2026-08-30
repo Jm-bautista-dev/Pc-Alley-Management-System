@@ -73,6 +73,7 @@ app.use('/api/purchase-orders', require('./routes/purchaseRoutes'));
 app.use('/api/stock-transfers', require('./routes/transferRoutes'));
 app.use('/api/analytics', require('./routes/analyticsRoutes'));
 app.use('/api/warranties', require('./routes/warrantyRoutes'));
+app.use('/api/services', require('./routes/serviceRoutes'));
 
 app.get('/', (req, res) => {
   res.send('PC Alley API is running...');
