@@ -10,12 +10,12 @@ const BranchProduct = sequelize.define('BranchProduct', {
   product_id: {
     type: DataTypes.INTEGER,
     allowNull: false,
-    references: { model: 'Products', key: 'id' }
+    references: { model: 'products', key: 'id' }
   },
   branch_id: {
     type: DataTypes.INTEGER,
     allowNull: false,
-    references: { model: 'Branches', key: 'id' }
+    references: { model: 'branches', key: 'id' }
   },
   stock: {
     type: DataTypes.INTEGER,

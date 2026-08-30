@@ -48,18 +48,18 @@ CREATE TABLE IF NOT EXISTS Products (
     FOREIGN KEY (category_id) REFERENCES Categories(id) ON DELETE SET NULL
 );
 
--- Inventory Table (Branch-specific stock)
-CREATE TABLE IF NOT EXISTS Inventory (
+-- Branch Products Table (Branch-specific stock and pricing)
+CREATE TABLE IF NOT EXISTS branch_products (
     id INT AUTO_INCREMENT PRIMARY KEY,
     product_id INT NOT NULL,
     branch_id INT NOT NULL,
-    quantity INT DEFAULT 0,
-    low_stock_threshold INT DEFAULT 5,
-    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    stock INT NOT NULL DEFAULT 0,
+    price DECIMAL(10, 2) DEFAULT NULL,
+    enabled TINYINT(1) NOT NULL DEFAULT 1,
+    low_stock_threshold INT NOT NULL DEFAULT 5,
     UNIQUE KEY product_branch (product_id, branch_id),
-    FOREIGN KEY (product_id) REFERENCES Products(id) ON DELETE CASCADE,
-    FOREIGN KEY (branch_id) REFERENCES Branches(id) ON DELETE CASCADE
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+    FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE
 );
 
 -- Orders Table

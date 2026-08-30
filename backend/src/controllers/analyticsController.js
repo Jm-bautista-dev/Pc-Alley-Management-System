@@ -143,7 +143,7 @@ const getDashboardMetrics = async (req, res) => {
         [sequelize.fn('SUM', sequelize.col('totalAmount')), 'revenue']
       ],
       include: [{ model: Branch, attributes: ['name'] }],
-      group: ['branchId', 'Branch.id'],
+      group: ['branchId', 'Branch.id', 'Branch.name'],
       order: [[sequelize.literal('revenue'), 'DESC']],
       limit: 5
     });
@@ -377,7 +377,7 @@ const getRevenueForecast = async (req, res) => {
     const { Inventory } = require('../models');
     const lowStockCount = await Inventory.count({
       where: {
-        quantity: {
+        stock: {
           [Op.lte]: sequelize.col('low_stock_threshold')
         }
       }
@@ -990,7 +990,7 @@ const getPrescriptiveAnalytics = async (req, res) => {
 
     const lowStockItems = await Inventory.findAll({
       where: {
-        quantity: { [Op.lte]: sequelize.col('low_stock_threshold') }
+        stock: { [Op.lte]: sequelize.col('low_stock_threshold') }
       },
       include: [Product, Branch],
       limit: 10
@@ -998,7 +998,7 @@ const getPrescriptiveAnalytics = async (req, res) => {
 
     const overstockItems = await Inventory.findAll({
       where: {
-        quantity: { [Op.gt]: sequelize.literal('low_stock_threshold * 4') }
+        stock: { [Op.gt]: sequelize.literal('low_stock_threshold * 4') }
       },
       include: [Product, Branch],
       limit: 10
@@ -1106,8 +1106,8 @@ const getBrandAnalytics = async (req, res) => {
       where: whereInventory,
       attributes: [
         [sequelize.col('Product.brand_id'), 'brandId'],
-        [sequelize.fn('SUM', sequelize.col('Inventory.stock')), 'totalStock'],
-        [sequelize.fn('SUM', sequelize.literal('Inventory.stock * Product.price')), 'stockValue'],
+        [sequelize.fn('SUM', sequelize.col('BranchProduct.stock')), 'totalStock'],
+        [sequelize.fn('SUM', sequelize.literal('BranchProduct.stock * Product.price')), 'stockValue'],
         [sequelize.fn('COUNT', sequelize.fn('DISTINCT', sequelize.col('Product.id'))), 'productCount']
       ],
       include: [{

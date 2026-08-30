@@ -18,7 +18,7 @@ const SaleItem = sequelize.define('SaleItem', {
   productId: {
     type: DataTypes.INTEGER,
     references: {
-      model: 'Products',
+      model: 'products',
       key: 'id'
     }
   },

@@ -19,7 +19,7 @@ const StockTransferItem = sequelize.define('StockTransferItem', {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
-      model: 'Products',
+      model: 'products',
       key: 'id'
     }
   },

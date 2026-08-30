@@ -10,14 +10,14 @@ const Expense = sequelize.define('Expense', {
   branchId: {
     type: DataTypes.INTEGER,
     references: {
-      model: 'Branches',
+      model: 'branches',
       key: 'id'
     }
   },
   userId: {
     type: DataTypes.INTEGER,
     references: {
-      model: 'Users',
+      model: 'users',
       key: 'id'
     }
   },

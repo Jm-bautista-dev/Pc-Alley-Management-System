@@ -25,7 +25,7 @@ router.get('/', authenticateToken, authorizeRoles('super_admin', 'branch_admin',
 
 router.get('/low-stock', authenticateToken, authorizeRoles('super_admin', 'branch_admin', 'employee'), getLowStock);
 router.get('/restock-analytics', authenticateToken, getProductRestockAnalytics);
-router.get('/global-status', authenticateToken, authorizeRoles('super_admin'), getGlobalInventoryStatus);
+router.get('/global-status', authenticateToken, authorizeRoles('super_admin', 'branch_admin'), getGlobalInventoryStatus);
 
 router.patch('/stock', [
   authenticateToken, 

@@ -11,14 +11,14 @@ const Attendance = sequelize.define('Attendance', {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
-      model: 'Users',
+      model: 'users',
       key: 'id'
     }
   },
   branchId: {
     type: DataTypes.INTEGER,
     references: {
-      model: 'Branches',
+      model: 'branches',
       key: 'id'
     }
   },

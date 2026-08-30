@@ -10,7 +10,7 @@ const Notification = sequelize.define('Notification', {
   userId: { 
     type: DataTypes.INTEGER, 
     allowNull: false, 
-    references: { model: 'Users', key: 'id' },
+    references: { model: 'users', key: 'id' },
     field: 'user_id'
   },
   title: { 

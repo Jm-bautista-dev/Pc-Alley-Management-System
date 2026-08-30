@@ -11,7 +11,7 @@ const StockTransfer = sequelize.define('StockTransfer', {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
-      model: 'Branches',
+      model: 'branches',
       key: 'id'
     }
   },
@@ -19,7 +19,7 @@ const StockTransfer = sequelize.define('StockTransfer', {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
-      model: 'Branches',
+      model: 'branches',
       key: 'id'
     }
   },

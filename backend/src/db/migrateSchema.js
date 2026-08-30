@@ -171,23 +171,92 @@ const migrateSchema = async () => {
     }
 
     // ── Migrate Inventories → branch_products ──
-    const allTables = await queryInterface.showAllTables();
-    const hasInventories = allTables.map(t => t.toLowerCase()).includes('inventories');
-    const hasBranchProducts = allTables.map(t => t.toLowerCase()).includes('branch_products');
+    const rawTables = await queryInterface.showAllTables();
+    const allTables = rawTables.map(t => {
+      if (typeof t === 'string') return t.toLowerCase();
+      if (typeof t === 'object' && t !== null) {
+        return (t.tableName || Object.values(t)[0] || '').toString().toLowerCase();
+      }
+      return String(t).toLowerCase();
+    });
 
-    if (hasInventories && !hasBranchProducts) {
-      // Rename the table
-      await sequelize.query("RENAME TABLE `inventories` TO `branch_products`");
-      console.log('DATABASE: Renamed inventories → branch_products.');
+    let hasBranchProducts = allTables.includes('branch_products');
+    const legacyTableName = allTables.includes('inventories')
+      ? 'inventories'
+      : (allTables.includes('inventory') ? 'inventory' : null);
 
-      // Rename quantity → stock
-      const bpTable = await queryInterface.describeTable('branch_products');
-      if (bpTable.quantity && !bpTable.stock) {
-        await queryInterface.renameColumn('branch_products', 'quantity', 'stock');
-        console.log('DATABASE: Renamed branch_products.quantity → stock.');
+    if (legacyTableName && !hasBranchProducts) {
+      try {
+        await sequelize.query(`RENAME TABLE \`${legacyTableName}\` TO \`branch_products\``);
+        console.log(`DATABASE: Renamed ${legacyTableName} → branch_products.`);
+        hasBranchProducts = true;
+      } catch (renameErr) {
+        console.warn(`DATABASE: Failed to rename ${legacyTableName} to branch_products:`, renameErr.message);
+      }
+    }
+
+    if (!hasBranchProducts) {
+      try {
+        await sequelize.query(`
+          CREATE TABLE IF NOT EXISTS \`branch_products\` (
+            \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+            \`product_id\` INT NOT NULL,
+            \`branch_id\` INT NOT NULL,
+            \`stock\` INT NOT NULL DEFAULT 0,
+            \`price\` DECIMAL(10, 2) DEFAULT NULL,
+            \`enabled\` TINYINT(1) NOT NULL DEFAULT 1,
+            \`low_stock_threshold\` INT NOT NULL DEFAULT 5,
+            UNIQUE KEY \`product_branch_unique\` (\`product_id\`, \`branch_id\`),
+            FOREIGN KEY (\`product_id\`) REFERENCES \`products\` (\`id\`) ON DELETE CASCADE ON UPDATE CASCADE,
+            FOREIGN KEY (\`branch_id\`) REFERENCES \`branches\` (\`id\`) ON DELETE CASCADE ON UPDATE CASCADE
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        `);
+        console.log('DATABASE: Created branch_products table with foreign keys.');
+        hasBranchProducts = true;
+      } catch (createWithFkErr) {
+        console.warn('DATABASE: Retrying branch_products creation without foreign keys:', createWithFkErr.message);
+        try {
+          await sequelize.query(`
+            CREATE TABLE IF NOT EXISTS \`branch_products\` (
+              \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+              \`product_id\` INT NOT NULL,
+              \`branch_id\` INT NOT NULL,
+              \`stock\` INT NOT NULL DEFAULT 0,
+              \`price\` DECIMAL(10, 2) DEFAULT NULL,
+              \`enabled\` TINYINT(1) NOT NULL DEFAULT 1,
+              \`low_stock_threshold\` INT NOT NULL DEFAULT 5,
+              UNIQUE KEY \`product_branch_unique\` (\`product_id\`, \`branch_id\`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+          `);
+          console.log('DATABASE: Created branch_products table without foreign keys.');
+          hasBranchProducts = true;
+        } catch (createErr) {
+          console.error('DATABASE: Could not create branch_products table:', createErr.message);
+        }
+      }
+    }
+
+    if (hasBranchProducts) {
+      // Ensure all columns exist
+      try {
+        const bpCols = await queryInterface.describeTable('branch_products');
+        if (bpCols.quantity && !bpCols.stock) {
+          try {
+            await queryInterface.renameColumn('branch_products', 'quantity', 'stock');
+            console.log('DATABASE: Renamed branch_products.quantity → stock.');
+          } catch (e) {
+            console.warn('DATABASE: Column rename quantity->stock skipped:', e.message);
+          }
+        }
+      } catch (e) {
+        console.warn('DATABASE: Could not describe branch_products table:', e.message);
       }
 
-      // Add new columns
+      await addColumnIfMissing(queryInterface, 'branch_products', 'stock', {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 0
+      });
       await addColumnIfMissing(queryInterface, 'branch_products', 'price', {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: true,
@@ -198,23 +267,33 @@ const migrateSchema = async () => {
         allowNull: false,
         defaultValue: true
       });
-    } else if (hasBranchProducts) {
-      // Table already migrated — just ensure columns exist
-      await addColumnIfMissing(queryInterface, 'branch_products', 'price', {
-        type: DataTypes.DECIMAL(10, 2),
-        allowNull: true,
-        defaultValue: null
-      });
-      await addColumnIfMissing(queryInterface, 'branch_products', 'enabled', {
-        type: DataTypes.BOOLEAN,
+      await addColumnIfMissing(queryInterface, 'branch_products', 'low_stock_threshold', {
+        type: DataTypes.INTEGER,
         allowNull: false,
-        defaultValue: true
+        defaultValue: 5
       });
-      // Ensure stock column exists (in case old quantity column persists)
-      const bpCols = await queryInterface.describeTable('branch_products');
-      if (bpCols.quantity && !bpCols.stock) {
-        await queryInterface.renameColumn('branch_products', 'quantity', 'stock');
-        console.log('DATABASE: Renamed branch_products.quantity → stock.');
+
+      // Ensure enabled is not null
+      try {
+        await sequelize.query("UPDATE `branch_products` SET `enabled` = 1 WHERE `enabled` IS NULL");
+      } catch (e) {
+        // ignore
+      }
+
+      // Automatically populate missing branch_products entries for existing products and branches
+      try {
+        const branches = await sequelize.query("SELECT id FROM `branches`", { type: sequelize.QueryTypes.SELECT });
+        const products = await sequelize.query("SELECT id FROM `products` WHERE `deleted_at` IS NULL", { type: sequelize.QueryTypes.SELECT });
+        for (const b of branches) {
+          for (const p of products) {
+            await sequelize.query(`
+              INSERT IGNORE INTO \`branch_products\` (\`product_id\`, \`branch_id\`, \`stock\`, \`enabled\`, \`low_stock_threshold\`)
+              VALUES (?, ?, 0, 1, 5)
+            `, { replacements: [p.id, b.id] });
+          }
+        }
+      } catch (e) {
+        console.warn('DATABASE: Could not backfill branch_products rows:', e.message);
       }
     }
   } catch (error) {

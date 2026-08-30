@@ -272,7 +272,7 @@ const getLowStock = async (req, res) => {
     const inventory = await Inventory.findAll({
       where: {
         ...where,
-        quantity: { [Op.lte]: sequelize.col('low_stock_threshold') }
+        stock: { [Op.lte]: sequelize.col('low_stock_threshold') }
       },
       include: [
         { 
@@ -292,27 +292,39 @@ const getLowStock = async (req, res) => {
 const getGlobalInventoryStatus = async (req, res) => {
   try {
     const isSuperAdmin = req.user.role === 'super_admin';
-    const branches = await Branch.findAll(isSuperAdmin ? {} : { where: { id: req.user.branch_id } });
+    const branchWhere = isSuperAdmin ? {} : (req.user.branch_id ? { id: req.user.branch_id } : {});
+    const branches = await Branch.findAll({
+      where: branchWhere,
+      attributes: ['id', 'name']
+    });
     const products = await Product.findAll({
-      attributes: ['id', 'name', 'sku']
+      attributes: ['id', 'name', 'sku'],
+      order: [['id', 'ASC']]
     });
 
-    const status = [];
-    for (const product of products) {
+    const inventoryWhere = isSuperAdmin ? {} : (req.user.branch_id ? { branch_id: req.user.branch_id } : {});
+    const inventories = await Inventory.findAll({
+      where: inventoryWhere,
+      attributes: ['product_id', 'branch_id', 'stock']
+    });
+
+    const stockMap = {};
+    for (const inv of inventories) {
+      stockMap[`${inv.product_id}_${inv.branch_id}`] = inv.stock;
+    }
+
+    const status = products.map(product => {
       const stockPerBranch = {};
       for (const branch of branches) {
-        const inv = await Inventory.findOne({
-          where: { product_id: product.id, branch_id: branch.id }
-        });
-        stockPerBranch[branch.name] = inv ? inv.quantity : 0;
+        stockPerBranch[branch.name] = stockMap[`${product.id}_${branch.id}`] ?? 0;
       }
-      status.push({
+      return {
         id: product.id,
         name: product.name,
         sku: product.sku,
         stock: stockPerBranch
-      });
-    }
+      };
+    });
 
     res.json({
       branches: branches.map(b => b.name),
