@@ -983,13 +983,13 @@ const getForecastingAnalytics = async (req, res) => {
 const getPrescriptiveAnalytics = async (req, res) => {
   try {
     const branchId = req.query.branchId;
-    const where = {};
-    if (branchId) where.branchId = branchId;
+    const branchFilter = branchId ? { branch_id: branchId } : {};
 
     const { Inventory, Product, Branch } = require('../models');
 
     const lowStockItems = await Inventory.findAll({
       where: {
+        ...branchFilter,
         stock: { [Op.lte]: sequelize.col('low_stock_threshold') }
       },
       include: [Product, Branch],
@@ -998,6 +998,7 @@ const getPrescriptiveAnalytics = async (req, res) => {
 
     const overstockItems = await Inventory.findAll({
       where: {
+        ...branchFilter,
         stock: { [Op.gt]: sequelize.literal('low_stock_threshold * 4') }
       },
       include: [Product, Branch],
@@ -1008,44 +1009,36 @@ const getPrescriptiveAnalytics = async (req, res) => {
 
     lowStockItems.forEach(item => {
       actionsTable.push({
-        issue: `Low Stock: ${item.Product?.name || 'Product'} (${item.quantity} units left) at ${item.Branch?.name || 'Branch'}`,
+        issue: `Low Stock: ${item.Product?.name || 'Product'} (${item.stock} units left) at ${item.Branch?.name || 'Branch'}`,
         recommendation: `Increase stock buffer for ${item.Product?.name || 'product'} by submitting restock request for ${Math.max(20, item.low_stock_threshold * 3)} units.`,
         expectedImpact: 'Prevent sales stockouts and satisfy immediate demand.',
         priority: 'High',
         why: 'Replenishment threshold reached with sales activity ongoing.',
-        metrics: `Current: ${item.quantity} | Threshold: ${item.low_stock_threshold}`,
+        metrics: `Current: ${item.stock} | Threshold: ${item.low_stock_threshold}`,
         confidence: 90
       });
     });
 
     overstockItems.forEach(item => {
       actionsTable.push({
-        issue: `Overstock: ${item.Product?.name || 'Product'} (${item.quantity} units) at ${item.Branch?.name || 'Branch'}`,
+        issue: `Overstock: ${item.Product?.name || 'Product'} (${item.stock} units) at ${item.Branch?.name || 'Branch'}`,
         recommendation: 'Reduce purchasing frequency, run promotions or bundle with high-performing items.',
         expectedImpact: 'Reduce inventory holding fees and release tied capital.',
         priority: 'Medium',
         why: 'Available units are 4 times higher than standard safety stock thresholds.',
-        metrics: `Current: ${item.quantity} | Buffer: ${item.low_stock_threshold}`,
+        metrics: `Current: ${item.stock} | Buffer: ${item.low_stock_threshold}`,
         confidence: 85
       });
     });
 
-    if (actionsTable.length === 0) {
-      actionsTable.push({
-        issue: 'Optimal Inventory Levels',
-        recommendation: 'No action required. Buffer stock levels are healthy across sectors.',
-        expectedImpact: 'None',
-        priority: 'Low',
-        why: 'Zero items matched threshold alerts.',
-        metrics: 'All items within normal margins',
-        confidence: 95
-      });
-    }
-
     res.json({
-      actionsTable
+      actions: actionsTable,
+      summary: {
+        lowStockCount: lowStockItems.length,
+        overstockCount: overstockItems.length,
+        totalRecommendations: actionsTable.length
+      }
     });
-
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1056,67 +1049,66 @@ const getBrandAnalytics = async (req, res) => {
     const branchId = req.user.role !== 'super_admin' ? req.user.branch_id : req.query.branchId;
     const { days, startDate, endDate } = req.query;
 
-    const whereSale = { status: 'completed' };
-    const whereInventory = {};
-
-    if (branchId) {
-      whereSale.branchId = branchId;
-      whereInventory.branch_id = branchId;
-    }
-
-    if (startDate && endDate) {
-      whereSale.createdAt = {
-        [Op.between]: [
-          new Date(startDate),
-          new Date(new Date(endDate).setHours(23, 59, 59, 999))
-        ]
-      };
-    } else if (days) {
-      const limitDate = new Date();
-      limitDate.setDate(limitDate.getDate() - parseInt(days));
-      whereSale.createdAt = { [Op.gte]: limitDate };
-    }
-
     const brands = await Brand.findAll({ raw: true });
     const brandMap = {};
     brands.forEach(b => {
       brandMap[b.id] = b.name;
     });
 
-    const salesByBrand = await SaleItem.findAll({
-      attributes: [
-        [sequelize.col('Product.brand_id'), 'brandId'],
-        [sequelize.fn('SUM', sequelize.col('SaleItem.quantity')), 'unitsSold'],
-        [sequelize.fn('SUM', sequelize.literal('SaleItem.quantity * SaleItem.unitPrice')), 'revenue']
-      ],
-      include: [{
-        model: Sale,
-        where: whereSale,
-        attributes: []
-      }, {
-        model: Product,
-        attributes: [],
-        paranoid: false
-      }],
-      group: [sequelize.col('Product.brand_id')],
-      raw: true
+    let saleWhereClause = "WHERE s.status = 'completed'";
+    const saleReplacements = [];
+
+    if (branchId) {
+      saleWhereClause += " AND s.branchId = ?";
+      saleReplacements.push(branchId);
+    }
+
+    if (startDate && endDate) {
+      saleWhereClause += " AND s.createdAt BETWEEN ? AND ?";
+      saleReplacements.push(new Date(startDate), new Date(new Date(endDate).setHours(23, 59, 59, 999)));
+    } else if (days) {
+      const limitDate = new Date();
+      limitDate.setDate(limitDate.getDate() - parseInt(days));
+      saleWhereClause += " AND s.createdAt >= ?";
+      saleReplacements.push(limitDate);
+    }
+
+    const salesByBrand = await sequelize.query(`
+      SELECT 
+        p.brand_id AS brandId,
+        COALESCE(SUM(si.quantity), 0) AS unitsSold,
+        COALESCE(SUM(si.quantity * si.unitPrice), 0) AS revenue
+      FROM saleitems si
+      INNER JOIN sales s ON si.saleId = s.id
+      LEFT JOIN products p ON si.productId = p.id
+      ${saleWhereClause}
+      GROUP BY p.brand_id
+    `, {
+      replacements: saleReplacements,
+      type: sequelize.QueryTypes.SELECT
     });
 
-    const inventoryByBrand = await Inventory.findAll({
-      where: whereInventory,
-      attributes: [
-        [sequelize.col('Product.brand_id'), 'brandId'],
-        [sequelize.fn('SUM', sequelize.col('BranchProduct.stock')), 'totalStock'],
-        [sequelize.fn('SUM', sequelize.literal('BranchProduct.stock * Product.price')), 'stockValue'],
-        [sequelize.fn('COUNT', sequelize.fn('DISTINCT', sequelize.col('Product.id'))), 'productCount']
-      ],
-      include: [{
-        model: Product,
-        attributes: [],
-        where: { deleted_at: null }
-      }],
-      group: [sequelize.col('Product.brand_id')],
-      raw: true
+    let invWhereClause = "WHERE p.deleted_at IS NULL";
+    const invReplacements = [];
+
+    if (branchId) {
+      invWhereClause += " AND bp.branch_id = ?";
+      invReplacements.push(branchId);
+    }
+
+    const inventoryByBrand = await sequelize.query(`
+      SELECT 
+        p.brand_id AS brandId,
+        COALESCE(SUM(bp.stock), 0) AS totalStock,
+        COALESCE(SUM(bp.stock * p.price), 0) AS stockValue,
+        COUNT(DISTINCT p.id) AS productCount
+      FROM branch_products bp
+      INNER JOIN products p ON bp.product_id = p.id
+      ${invWhereClause}
+      GROUP BY p.brand_id
+    `, {
+      replacements: invReplacements,
+      type: sequelize.QueryTypes.SELECT
     });
 
     const reportData = {};
