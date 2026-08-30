@@ -129,7 +129,7 @@ export default function PrescriptiveAnalyticsPage() {
   }
 
   // ── Derived counts ───────────────────────────────────────────────────────────
-  const actions   = data?.actionsTable || [];
+  const actions   = data?.actions || data?.actionsTable || [];
   const highCount = actions.filter(a => a.priority === "High").length;
   const medCount  = actions.filter(a => a.priority === "Medium").length;
   const lowCount  = actions.filter(a => a.priority === "Low").length;

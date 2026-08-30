@@ -29,7 +29,7 @@ const Sidebar = () => {
       "Purchases":       ["/purchases"],
       "Sell":            ["/sell"],
       "Reports":         ["/reports"],
-      "Analytics":       ["/forecasting", "/prescriptive-analytics"],
+      "Analytics":       ["/forecasting", "/prescriptive-analytics", "/forecasting/benchmark"],
       "User Management": ["/staff", "/roles"],
     };
     Object.entries(paths).forEach(([key, matches]) => {
@@ -69,6 +69,7 @@ const Sidebar = () => {
       { title: "Reports",      icon: ClipboardList,   path: "#reports",   group: "SYSTEM", subItems: [{ title: "Profit / Loss", path: "/reports/profit-loss" }, { title: "Stock Activity", path: "/reports/purchase-sale" }, { title: "Brand Reports", path: "/reports/brands" }] },
       { title: "Analytics",    icon: Activity,        path: "#analytics", group: "SYSTEM", subItems: [
         { title: "Forecasting", path: "/forecasting" },
+        { title: "Model Benchmarking", path: "/forecasting/benchmark" },
         { title: "Prescriptive Analytics", path: "/prescriptive-analytics" }
       ] },
       { title: "System Admin", icon: ShieldCheck,     path: "/admin",     group: "SYSTEM" },
