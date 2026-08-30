@@ -54,12 +54,16 @@ export default function BrandReportsPage() {
     }
     try {
       const res = await fetch(apiUrl(`/api/analytics/brands${query}`), {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "x-access-token": token || ""
+        }
       });
       if (res.ok) {
         setData(await res.json());
       } else {
-        showError("Failed to fetch brand report metrics.");
+        const errJson = await res.json().catch(() => ({}));
+        showError(errJson.message || "Failed to fetch brand report metrics.");
       }
     } catch (err) {
       showError("Network error. Please check connections.");
