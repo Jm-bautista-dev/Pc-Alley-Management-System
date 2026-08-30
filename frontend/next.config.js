@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = { allowedDevOrigins: ['192.168.1.5', 'localhost'],
+const nextConfig = { 
+  output: 'standalone',
+  allowedDevOrigins: ['192.168.1.5', 'localhost'],
   async rewrites() {
     const backendBaseUrl =
       process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
