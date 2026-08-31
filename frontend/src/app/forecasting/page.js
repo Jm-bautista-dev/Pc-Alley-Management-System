@@ -180,7 +180,10 @@ function ForecastingPageContent() {
       const res = await fetch(apiUrl("/api/branches"), {
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (res.ok) setBranches(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        setBranches(Array.isArray(data) ? data : (data?.branches || []));
+      }
     } catch (err) {
       console.error("Failed to load branches:", err);
     }

@@ -114,10 +114,13 @@ function BenchmarkContent() {
           fetch(apiUrl("/api/branches"), { headers: { Authorization: `Bearer ${token}` } }),
           fetch(apiUrl("/api/products?limit=200"), { headers: { Authorization: `Bearer ${token}` } })
         ]);
-        if (bRes.ok) setBranches(await bRes.json());
+        if (bRes.ok) {
+          const bData = await bRes.json();
+          setBranches(Array.isArray(bData) ? bData : (bData?.branches || []));
+        }
         if (pRes.ok) {
           const pData = await pRes.json();
-          setProducts(pData.products || pData || []);
+          setProducts(Array.isArray(pData) ? pData : (pData?.products || []));
         }
       } catch (err) {
         console.error("Failed to load benchmark metadata:", err);
@@ -395,7 +398,7 @@ function BenchmarkContent() {
                 className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-brand-neonblue transition"
               >
                 <option value="all">All Branches (Consolidated)</option>
-                {branches.map(b => (
+                {(branches || []).map(b => (
                   <option key={b.id} value={b.id}>{b.name}</option>
                 ))}
               </select>
@@ -412,7 +415,7 @@ function BenchmarkContent() {
                 className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-brand-neonblue transition"
               >
                 <option value="all">All Products (Aggregate Revenue)</option>
-                {products.map(p => (
+                {(products || []).map(p => (
                   <option key={p.id} value={p.id}>{p.name} ({p.sku || 'No SKU'})</option>
                 ))}
               </select>
@@ -686,7 +689,7 @@ function BenchmarkContent() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/50">
-                    {data.modelsComparison.map((m, idx) => {
+                    {(data?.modelsComparison || []).map((m, idx) => {
                       const isBest = idx === 0;
                       const perf = PERFORMANCE_CONFIG[m.performance] || PERFORMANCE_CONFIG["Needs Improvement"];
 
@@ -822,7 +825,7 @@ function BenchmarkContent() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/50">
-                    {data.backtestHistory.map((row, idx) => {
+                    {(data?.backtestHistory || []).map((row, idx) => {
                       const isOver = row.error > 0;
                       const isExact = row.error === 0;
 

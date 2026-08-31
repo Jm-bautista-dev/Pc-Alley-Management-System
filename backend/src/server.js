@@ -13,24 +13,59 @@ const { Server } = require('socket.io');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const allowedOrigins = (
+const defaultOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:3002',
+  'https://pcalley.shop',
+  'https://www.pcalley.shop',
+  'https://api.pcalley.shop'
+];
+
+const envOrigins = (
   process.env.FRONTEND_URLS ||
   process.env.FRONTEND_URL ||
-  'http://localhost:3000,http://localhost:3001,http://localhost:3002'
+  ''
 )
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+const allowedOrigins = Array.from(new Set([...defaultOrigins, ...envOrigins]));
+
+const isOriginAllowed = (origin) => {
+  if (!origin) return true;
+  if (allowedOrigins.includes(origin)) return true;
+  try {
+    const url = new URL(origin);
+    if (url.hostname === 'pcalley.shop' || url.hostname.endsWith('.pcalley.shop') || url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+      return true;
+    }
+  } catch (e) {}
+  return false;
+};
+
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (isOriginAllowed(origin)) {
       return callback(null, true);
     }
     return callback(new Error(`CORS blocked for origin: ${origin}`));
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'x-access-token',
+    'x-auth-token',
+    'token',
+    'x-token',
+    'Accept',
+    'Origin',
+    'X-Requested-With',
+    'Access-Control-Request-Method',
+    'Access-Control-Request-Headers'
+  ],
   credentials: true
 }));
 app.use(express.json());
@@ -98,8 +133,25 @@ app.use((err, req, res, next) => {
 const httpServer = http.createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: allowedOrigins,
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+    origin: (origin, callback) => {
+      if (isOriginAllowed(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS blocked for socket origin: ${origin}`));
+    },
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'x-access-token',
+      'x-auth-token',
+      'token',
+      'x-token',
+      'Accept',
+      'Origin',
+      'X-Requested-With'
+    ],
+    credentials: true
   }
 });
 app.set('io', io);
