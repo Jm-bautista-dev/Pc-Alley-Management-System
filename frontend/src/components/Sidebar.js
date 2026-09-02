@@ -106,7 +106,30 @@ const Sidebar = () => {
     if (userData) setUser(JSON.parse(userData));
   }, []);
 
+  const handleOpenSettings = () => {
+    setIsSettingsOpen(true);
+    try {
+      window.history.pushState({ panel: "settings" }, "", window.location.href);
+    } catch (_) {}
+  };
+
+  const handleCloseSettings = () => {
+    setIsSettingsOpen(false);
+    if (typeof window !== "undefined" && window.history.state?.panel === "settings") {
+      window.history.back();
+    }
+  };
+
   useEffect(() => {
+    const handlePopState = () => {
+      setIsSettingsOpen(false);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  useEffect(() => {
+    setIsSettingsOpen(false);
     if (isMobile) setIsSidebarOpen(false);
     const items = getNavItems();
     setOpenMenus((prev) => {
@@ -329,7 +352,7 @@ const Sidebar = () => {
           {/* Settings row */}
           <div className="pt-3 mt-3 border-t border-border">
             <button
-              onClick={() => setIsSettingsOpen(true)}
+              onClick={handleOpenSettings}
               className={`
                 w-full flex items-center gap-3
                 h-10 px-3 rounded-lg
@@ -387,7 +410,7 @@ const Sidebar = () => {
         />
       )}
 
-      <SettingsPanel isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <SettingsPanel isOpen={isSettingsOpen} onClose={handleCloseSettings} />
     </>
   );
 };

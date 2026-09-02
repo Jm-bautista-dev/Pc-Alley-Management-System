@@ -26,6 +26,17 @@ const SettingsPanel = ({ isOpen, onClose }) => {
   const [formData, setFormData] = useState({ name: "", email: "" });
 
   useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
+  useEffect(() => {
     const userData = localStorage.getItem("user");
     if (userData) {
       const parsed = JSON.parse(userData);
