@@ -2,13 +2,29 @@ const { Notification } = require('../models');
 
 const getNotifications = async (req, res) => {
   try {
+    const { Op } = require('sequelize');
+    const where = {};
+    if (req.user?.role === 'super_admin') {
+      if (req.query.branchId) {
+        where.branchId = req.query.branchId;
+      }
+    } else {
+      const userBranch = req.user?.branchId || req.user?.branch_id;
+      where[Op.or] = [
+        { userId: req.user?.id || 0 },
+        ...(userBranch ? [{ branchId: userBranch }] : []),
+        { branchId: null }
+      ];
+    }
+
     const notifications = await Notification.findAll({
-      where: { userId: req.user.id },
+      where,
       order: [['createdAt', 'DESC']],
       limit: 50
     });
-    res.json(notifications);
+    res.json(notifications || []);
   } catch (error) {
+    console.error('getNotifications error:', error);
     res.status(500).json({ error: error.message });
   }
 };

@@ -7,6 +7,10 @@ const getAllCustomers = async (req, res) => {
     if (req.user.role !== 'super_admin' && req.user.branch_id) {
       where.branchId = req.user.branch_id;
     }
+    // Super admin can filter by branch via query param
+    if (req.user.role === 'super_admin' && req.query.branchId) {
+      where.branchId = req.query.branchId;
+    }
 
     const customers = await Customer.findAll({
       where,
@@ -25,6 +29,12 @@ const getCustomerById = async (req, res) => {
       include: [{ model: Branch, attributes: ['name'] }]
     });
     if (!customer) return res.status(404).json({ message: 'Customer not found.' });
+
+    // Validate branch authorization
+    if (req.user.role !== 'super_admin' && customer.branchId !== req.user.branch_id) {
+      return res.status(403).json({ message: 'Forbidden: You cannot access customers outside your branch.' });
+    }
+
     res.json(customer);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -35,6 +45,11 @@ const getCustomerHistory = async (req, res) => {
   try {
     const customer = await Customer.findByPk(req.params.id);
     if (!customer) return res.status(404).json({ message: 'Customer not found.' });
+
+    // Validate branch authorization
+    if (req.user.role !== 'super_admin' && customer.branchId !== req.user.branch_id) {
+      return res.status(403).json({ message: 'Forbidden: You cannot access customers outside your branch.' });
+    }
 
     const sales = await Sale.findAll({
       where: { customerId: req.params.id },
@@ -57,14 +72,42 @@ const getCustomerHistory = async (req, res) => {
 const createCustomer = async (req, res) => {
   try {
     const { name, email, phone, address, branchId } = req.body;
-    if (!name) return res.status(400).json({ message: 'Name is required.' });
+    const trimmedName = (name || '').trim();
+    if (!trimmedName) return res.status(400).json({ message: 'Customer name is required.' });
+    if (/\d/.test(trimmedName)) return res.status(400).json({ message: 'Customer name cannot contain numbers.' });
+    if (!/^[A-Za-z\s.\'-]+$/.test(trimmedName)) return res.status(400).json({ message: 'Customer name can only contain letters, spaces, hyphens, apostrophes, and dots.' });
+    if (trimmedName.length < 2 || trimmedName.length > 100) return res.status(400).json({ message: 'Customer name must be between 2 and 100 characters.' });
+
+    if (email && email.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ message: 'Please enter a valid email address.' });
+      }
+    }
+
+    let cleanPhone = null;
+    if (phone && phone.trim()) {
+      const digits = phone.replace(/[^0-9]/g, '');
+      if (digits.length !== 11) {
+        return res.status(400).json({ message: 'Phone number must contain exactly 11 digits.' });
+      }
+      if (!digits.startsWith('09')) {
+        return res.status(400).json({ message: 'Phone number must start with 09.' });
+      }
+      if (/^(.)\1+$/.test(digits)) {
+        return res.status(400).json({ message: 'Phone number cannot consist of only repeating identical digits.' });
+      }
+      cleanPhone = digits;
+    }
+
+    const targetBranchId = req.user.role !== 'super_admin' ? req.user.branch_id : (branchId || null);
 
     const customer = await Customer.create({
-      name,
-      email:    email    || null,
-      phone:    phone    || null,
-      address:  address  || null,
-      branchId: branchId || req.user.branch_id || null
+      name: trimmedName,
+      email: (email && email.trim()) || null,
+      phone: cleanPhone,
+      address: address ? address.trim().slice(0, 255) : null,
+      branchId: targetBranchId
     });
     res.status(201).json(customer);
   } catch (error) {
@@ -77,12 +120,55 @@ const updateCustomer = async (req, res) => {
     const customer = await Customer.findByPk(req.params.id);
     if (!customer) return res.status(404).json({ message: 'Customer not found.' });
 
+    // Validate branch authorization
+    if (req.user.role !== 'super_admin' && customer.branchId !== req.user.branch_id) {
+      return res.status(403).json({ message: 'Forbidden: You cannot modify customers outside your branch.' });
+    }
+
     const { name, email, phone, address, branchId } = req.body;
-    if (name      !== undefined) customer.name      = name;
-    if (email     !== undefined) customer.email     = email;
-    if (phone     !== undefined) customer.phone     = phone;
-    if (address   !== undefined) customer.address   = address;
-    if (branchId  !== undefined) customer.branchId  = branchId || null;
+    if (name !== undefined) {
+      const trimmedUpdateName = (name || '').trim();
+      if (!trimmedUpdateName) return res.status(400).json({ message: 'Customer name is required.' });
+      if (/\d/.test(trimmedUpdateName)) return res.status(400).json({ message: 'Customer name cannot contain numbers.' });
+      if (!/^[A-Za-z\s.\'-]+$/.test(trimmedUpdateName)) return res.status(400).json({ message: 'Customer name can only contain letters, spaces, hyphens, apostrophes, and dots.' });
+      if (trimmedUpdateName.length < 2 || trimmedUpdateName.length > 100) return res.status(400).json({ message: 'Customer name must be between 2 and 100 characters.' });
+      customer.name = trimmedUpdateName;
+    }
+    if (email !== undefined) {
+      if (email && email.trim()) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+          return res.status(400).json({ message: 'Please enter a valid email address.' });
+        }
+        customer.email = email.trim();
+      } else {
+        customer.email = null;
+      }
+    }
+    if (phone !== undefined) {
+      if (phone && phone.trim()) {
+        const digits = phone.replace(/[^0-9]/g, '');
+        if (digits.length !== 11) {
+          return res.status(400).json({ message: 'Phone number must contain exactly 11 digits.' });
+        }
+        if (!digits.startsWith('09')) {
+          return res.status(400).json({ message: 'Phone number must start with 09.' });
+        }
+        if (/^(.)\1+$/.test(digits)) {
+          return res.status(400).json({ message: 'Phone number cannot consist of only repeating identical digits.' });
+        }
+        customer.phone = digits;
+      } else {
+        customer.phone = null;
+      }
+    }
+    if (address !== undefined) {
+      customer.address = address;
+    }
+    
+    if (branchId !== undefined) {
+      customer.branchId = req.user.role !== 'super_admin' ? req.user.branch_id : (branchId || null);
+    }
 
     await customer.save();
     res.json(customer);
@@ -95,6 +181,12 @@ const deleteCustomer = async (req, res) => {
   try {
     const customer = await Customer.findByPk(req.params.id);
     if (!customer) return res.status(404).json({ message: 'Customer not found.' });
+
+    // Validate branch authorization
+    if (req.user.role !== 'super_admin' && customer.branchId !== req.user.branch_id) {
+      return res.status(403).json({ message: 'Forbidden: You cannot delete customers outside your branch.' });
+    }
+
     await customer.destroy();
     res.json({ message: 'Customer removed.' });
   } catch (error) {
@@ -109,14 +201,20 @@ const searchCustomers = async (req, res) => {
     if (!q || q.length < 2) return res.json([]);
 
     const { Op } = require('sequelize');
+    const where = {
+      [Op.or]: [
+        { name:  { [Op.like]: `%${q}%` } },
+        { phone: { [Op.like]: `%${q}%` } },
+        { email: { [Op.like]: `%${q}%` } }
+      ]
+    };
+
+    if (req.user.role !== 'super_admin' && req.user.branch_id) {
+      where.branchId = req.user.branch_id;
+    }
+
     const customers = await Customer.findAll({
-      where: {
-        [Op.or]: [
-          { name:  { [Op.like]: `%${q}%` } },
-          { phone: { [Op.like]: `%${q}%` } },
-          { email: { [Op.like]: `%${q}%` } }
-        ]
-      },
+      where,
       attributes: ['id', 'name', 'phone', 'email', 'totalSpent', 'totalOrders'],
       limit: 10
     });

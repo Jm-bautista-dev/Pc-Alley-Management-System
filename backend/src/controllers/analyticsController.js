@@ -1,17 +1,32 @@
 const sequelize = require('../db');
-const { Sale, SaleItem, Customer, Inventory, Product, Branch, Category } = require('../models');
+const { Sale, SaleItem, Customer, Inventory, Product, Branch, Category, Brand } = require('../models');
 const { Op } = require('sequelize');
 
 // 1. Dashboard Overview Metrics
 const getDashboardMetrics = async (req, res) => {
   try {
     const branchId = req.user.role !== 'super_admin' ? req.user.branch_id : req.query.branchId;
+    const { days, startDate, endDate } = req.query;
+
     const whereSale = { status: 'completed' };
     const whereInventory = {};
 
     if (branchId) {
       whereSale.branchId = branchId;
       whereInventory.branch_id = branchId;
+    }
+
+    if (startDate && endDate) {
+      whereSale.createdAt = {
+        [Op.between]: [
+          new Date(startDate),
+          new Date(new Date(endDate).setHours(23, 59, 59, 999))
+        ]
+      };
+    } else if (days) {
+      const limitDate = new Date();
+      limitDate.setDate(limitDate.getDate() - parseInt(days));
+      whereSale.createdAt = { [Op.gte]: limitDate };
     }
 
     // Total Revenue
@@ -25,23 +40,110 @@ const getDashboardMetrics = async (req, res) => {
     // Total Orders
     const totalOrders = await Sale.count({ where: whereSale });
 
-    // Total Stock
+    // Total Stock (current snapshot)
     const stockStats = await Inventory.findOne({
       where: whereInventory,
-      attributes: [[sequelize.fn('SUM', sequelize.col('quantity')), 'total']],
+      attributes: [[sequelize.fn('SUM', sequelize.col('stock')), 'total']],
       raw: true
     });
     const totalStock = parseInt(stockStats?.total || 0);
 
+    // Products Sold
+    const productsSoldStats = await SaleItem.findOne({
+      attributes: [[sequelize.fn('SUM', sequelize.col('SaleItem.quantity')), 'total']],
+      include: [{
+        model: Sale,
+        attributes: [],
+        where: whereSale
+      }],
+      raw: true
+    });
+    const productsSold = parseInt(productsSoldStats?.total || 0);
+
+    // Growth Rates Calculation
+    const prevWhereSale = { status: 'completed' };
+    if (branchId) prevWhereSale.branchId = branchId;
+    let hasGrowth = false;
+
+    if (startDate && endDate) {
+      const d1 = new Date(startDate);
+      const d2 = new Date(new Date(endDate).setHours(23, 59, 59, 999));
+      const diff = Math.abs(d2 - d1);
+      const prevD1 = new Date(d1.getTime() - diff);
+      const prevD2 = new Date(d1.getTime() - 1);
+      prevWhereSale.createdAt = { [Op.between]: [prevD1, prevD2] };
+      hasGrowth = true;
+    } else if (days) {
+      const daysNum = parseInt(days);
+      const d1 = new Date();
+      d1.setDate(d1.getDate() - daysNum);
+      const prevD1 = new Date();
+      prevD1.setDate(d1.getDate() - daysNum * 2);
+      const prevD2 = new Date(d1.getTime() - 1);
+      prevWhereSale.createdAt = { [Op.between]: [prevD1, prevD2] };
+      hasGrowth = true;
+    } else {
+      // Default: Last 30 days vs 30 days before that
+      const daysNum = 30;
+      const d1 = new Date();
+      d1.setDate(d1.getDate() - daysNum);
+      const prevD1 = new Date();
+      prevD1.setDate(d1.getDate() - daysNum * 2);
+      const prevD2 = new Date(d1.getTime() - 1);
+      prevWhereSale.createdAt = { [Op.between]: [prevD1, prevD2] };
+      hasGrowth = true;
+    }
+
+    let growthPercentage = 0;
+    let ordersGrowthPercentage = 0;
+    let productsSoldGrowthPercentage = 0;
+
+    if (hasGrowth) {
+      const prevRevenueStats = await Sale.findOne({
+        where: prevWhereSale,
+        attributes: [[sequelize.fn('SUM', sequelize.col('totalAmount')), 'total']],
+        raw: true
+      });
+      const prevRevenue = parseFloat(prevRevenueStats?.total || 0);
+      if (prevRevenue > 0) {
+        growthPercentage = parseFloat(((totalRevenue - prevRevenue) / prevRevenue * 100).toFixed(2));
+      } else if (totalRevenue > 0) {
+        growthPercentage = 100.0;
+      }
+
+      const prevOrders = await Sale.count({ where: prevWhereSale });
+      if (prevOrders > 0) {
+        ordersGrowthPercentage = parseFloat(((totalOrders - prevOrders) / prevOrders * 100).toFixed(2));
+      } else if (totalOrders > 0) {
+        ordersGrowthPercentage = 100.0;
+      }
+
+      const prevProductsSoldStats = await SaleItem.findOne({
+        attributes: [[sequelize.fn('SUM', sequelize.col('SaleItem.quantity')), 'total']],
+        include: [{
+          model: Sale,
+          attributes: [],
+          where: prevWhereSale
+        }],
+        raw: true
+      });
+      const prevProductsSold = parseInt(prevProductsSoldStats?.total || 0);
+      if (prevProductsSold > 0) {
+        productsSoldGrowthPercentage = parseFloat(((productsSold - prevProductsSold) / prevProductsSold * 100).toFixed(2));
+      } else if (productsSold > 0) {
+        productsSoldGrowthPercentage = 100.0;
+      }
+    }
+
     // Top Branches Revenue
     const branchStats = await Sale.findAll({
-      where: { status: 'completed' },
+      where: whereSale,
       attributes: [
         'branchId',
         [sequelize.fn('SUM', sequelize.col('totalAmount')), 'revenue']
       ],
       include: [{ model: Branch, attributes: ['name'] }],
-      group: ['branchId', 'Branch.id'],
+      group: ['branchId', 'Branch.id', 'Branch.name'],
       order: [[sequelize.literal('revenue'), 'DESC']],
       limit: 5
     });
@@ -58,10 +160,66 @@ const getDashboardMetrics = async (req, res) => {
       limit: 12
     });
 
+    // Product vs Service Revenue Breakdown
+    const revBreakdown = await Sale.findOne({
+      where: whereSale,
+      attributes: [
+        [sequelize.fn('SUM', sequelize.col('product_amount')), 'prodTotal'],
+        [sequelize.fn('SUM', sequelize.col('service_amount')), 'servTotal']
+      ],
+      raw: true
+    });
+    let productRevenue = parseFloat(revBreakdown?.prodTotal || 0);
+    let serviceRevenue = parseFloat(revBreakdown?.servTotal || 0);
+
+    // Fallback for legacy sales where product_amount was 0
+    if (productRevenue === 0 && serviceRevenue === 0 && totalRevenue > 0) {
+      productRevenue = totalRevenue;
+    }
+
+    const productShare = totalRevenue > 0 ? parseFloat(((productRevenue / totalRevenue) * 100).toFixed(1)) : 100.0;
+    const serviceShare = totalRevenue > 0 ? parseFloat(((serviceRevenue / totalRevenue) * 100).toFixed(1)) : 0.0;
+
+    // Top Technical Services Sold
+    const topServicesStats = await SaleItem.findAll({
+      attributes: [
+        'productName',
+        [sequelize.fn('SUM', sequelize.col('SaleItem.quantity')), 'quantity'],
+        [sequelize.fn('SUM', sequelize.col('SaleItem.subtotal')), 'revenue']
+      ],
+      include: [{
+        model: Sale,
+        attributes: [],
+        where: whereSale
+      }],
+      where: { item_type: 'service' },
+      group: ['productName'],
+      order: [[sequelize.literal('revenue'), 'DESC']],
+      limit: 5,
+      raw: true
+    });
+
     res.json({
       totalRevenue,
+      productRevenue,
+      serviceRevenue,
+      productShare,
+      serviceShare,
       totalOrders,
       totalStock,
+      productsSold,
+      growthPercentage,
+      ordersGrowthPercentage,
+      productsSoldGrowthPercentage,
+      revenueComposition: [
+        { source: 'Physical Products', revenue: productRevenue, percentage: productShare, color: '#00F2FF' },
+        { source: 'Technical Services', revenue: serviceRevenue, percentage: serviceShare, color: '#A855F7' }
+      ],
+      topServices: topServicesStats.map(s => ({
+        name: s.productName,
+        quantity: parseInt(s.quantity || 0),
+        revenue: parseFloat(s.revenue || 0)
+      })),
       topBranches: branchStats.map(b => ({
         branchId: b.branchId,
         branchName: b.Branch?.name || `Branch #${b.branchId}`,
@@ -80,13 +238,53 @@ const getDashboardMetrics = async (req, res) => {
 // 2. Branch Performance Metrics
 const getBranchPerformance = async (req, res) => {
   try {
+    const { days, startDate, endDate } = req.query;
     const branches = await Branch.findAll();
     const performance = [];
+
+    const whereSale = { status: 'completed' };
+    const prevWhereSale = { status: 'completed' };
+    let hasGrowth = false;
+
+    if (startDate && endDate) {
+      const d1 = new Date(startDate);
+      const d2 = new Date(new Date(endDate).setHours(23, 59, 59, 999));
+      whereSale.createdAt = { [Op.between]: [d1, d2] };
+
+      const diff = Math.abs(d2 - d1);
+      const prevD1 = new Date(d1.getTime() - diff);
+      const prevD2 = new Date(d1.getTime() - 1);
+      prevWhereSale.createdAt = { [Op.between]: [prevD1, prevD2] };
+      hasGrowth = true;
+    } else if (days) {
+      const daysNum = parseInt(days);
+      const d1 = new Date();
+      d1.setDate(d1.getDate() - daysNum);
+      whereSale.createdAt = { [Op.gte]: d1 };
+
+      const prevD1 = new Date();
+      prevD1.setDate(d1.getDate() - daysNum * 2);
+      const prevD2 = new Date(d1.getTime() - 1);
+      prevWhereSale.createdAt = { [Op.between]: [prevD1, prevD2] };
+      hasGrowth = true;
+    } else {
+      // Default: Last 30 days vs 30 days before that
+      const daysNum = 30;
+      const d1 = new Date();
+      d1.setDate(d1.getDate() - daysNum);
+      whereSale.createdAt = { [Op.gte]: d1 };
+
+      const prevD1 = new Date();
+      prevD1.setDate(d1.getDate() - daysNum * 2);
+      const prevD2 = new Date(d1.getTime() - 1);
+      prevWhereSale.createdAt = { [Op.between]: [prevD1, prevD2] };
+      hasGrowth = true;
+    }
 
     for (const b of branches) {
       // Branch Revenue & Orders
       const salesStats = await Sale.findOne({
-        where: { branchId: b.id, status: 'completed' },
+        where: { ...whereSale, branchId: b.id },
         attributes: [
           [sequelize.fn('SUM', sequelize.col('totalAmount')), 'revenue'],
           [sequelize.fn('COUNT', sequelize.col('id')), 'orders']
@@ -105,45 +303,27 @@ const getBranchPerformance = async (req, res) => {
         include: [{
           model: Sale,
           attributes: [],
-          where: { branchId: b.id, status: 'completed' }
+          where: { ...whereSale, branchId: b.id }
         }],
         group: ['productId', 'productName'],
         order: [[sequelize.literal('totalSold'), 'DESC']],
         raw: true
       });
 
-      // Growth % Calculation (Current month vs Previous month)
-      const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
-      const prevDate = new Date();
-      prevDate.setMonth(prevDate.getMonth() - 1);
-      const prevMonth = prevDate.toISOString().slice(0, 7);
-
-      const curRevenueStats = await Sale.findOne({
-        where: {
-          branchId: b.id,
-          status: 'completed',
-          createdAt: { [Op.like]: `${currentMonth}%` }
-        },
-        attributes: [[sequelize.fn('SUM', sequelize.col('totalAmount')), 'total']],
-        raw: true
-      });
-      const prevRevenueStats = await Sale.findOne({
-        where: {
-          branchId: b.id,
-          status: 'completed',
-          createdAt: { [Op.like]: `${prevMonth}%` }
-        },
-        attributes: [[sequelize.fn('SUM', sequelize.col('totalAmount')), 'total']],
-        raw: true
-      });
-
-      const curRev = parseFloat(curRevenueStats?.total || 0);
-      const prevRev = parseFloat(prevRevenueStats?.total || 0);
+      // Growth % Calculation
       let growth = 0;
-      if (prevRev > 0) {
-        growth = parseFloat(((curRev - prevRev) / prevRev * 100).toFixed(2));
-      } else if (curRev > 0) {
-        growth = 100.0;
+      if (hasGrowth) {
+        const prevRevenueStats = await Sale.findOne({
+          where: { ...prevWhereSale, branchId: b.id },
+          attributes: [[sequelize.fn('SUM', sequelize.col('totalAmount')), 'total']],
+          raw: true
+        });
+        const prevRev = parseFloat(prevRevenueStats?.total || 0);
+        if (prevRev > 0) {
+          growth = parseFloat(((revenue - prevRev) / prevRev * 100).toFixed(2));
+        } else if (revenue > 0) {
+          growth = 100.0;
+        }
       }
 
       performance.push({
@@ -164,8 +344,21 @@ const getBranchPerformance = async (req, res) => {
 
 // 3. Revenue Forecast (Linear Regression model using monthly trends)
 const getRevenueForecast = async (req, res) => {
+  const getNextMonth = (lastMonthStr, stepsAhead) => {
+    if (!lastMonthStr) return new Date().toISOString().substring(0, 7);
+    let parts = lastMonthStr.split('-');
+    let year = parseInt(parts[0]);
+    let month = parseInt(parts[1]);
+    let d = new Date(year, month - 1 + stepsAhead, 1);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  };
+
   try {
     const branchId = req.user.role !== 'super_admin' ? req.user.branch_id : req.query.branchId;
+    const period = parseInt(req.query.period || 3); // forecast horizon (1, 3, or 6 months)
+    
     const where = { status: 'completed' };
     if (branchId) where.branchId = branchId;
 
@@ -180,14 +373,25 @@ const getRevenueForecast = async (req, res) => {
       raw: true
     });
 
-    let forecast = 0;
-    let confidence = 'Low'; // Confidence level indicator
+    let slope = 0;
+    let intercept = 0;
+    let confidence = 'Low';
+    let projections = [];
+    let diagnostics = [];
+    let recommendations = [];
 
-    if (trends.length > 1) {
-      const n = trends.length;
+    const n = trends.length;
+    
+    if (n === 0) {
+      trends.push({ month: new Date().toISOString().substring(0, 7), revenue: 0 });
+    }
+
+    const lastMonthStr = trends[trends.length - 1].month;
+
+    if (n > 1) {
       let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
       trends.forEach((t, i) => {
-        const x = i + 1; // Month index
+        const x = i + 1;
         const y = parseFloat(t.revenue) || 0;
         sumX += x;
         sumY += y;
@@ -195,23 +399,108 @@ const getRevenueForecast = async (req, res) => {
         sumXX += x * x;
       });
 
-      const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
-      const intercept = (sumY - slope * sumX) / n;
-      
-      // Predict next index: n + 1
-      forecast = parseFloat((slope * (n + 1) + intercept).toFixed(2));
+      const denominator = n * sumXX - sumX * sumX;
+      if (denominator !== 0) {
+        slope = (n * sumXY - sumX * sumY) / denominator;
+        intercept = (sumY - slope * sumX) / n;
+      } else {
+        slope = 0;
+        intercept = parseFloat(trends[0].revenue) || 0;
+      }
       confidence = n >= 6 ? 'High' : 'Medium';
-      if (forecast < 0) forecast = 0; // Prevent negative prediction
-    } else if (trends.length === 1) {
-      forecast = parseFloat(trends[0].revenue) || 0;
+    } else {
+      slope = 0;
+      intercept = parseFloat(trends[0]?.revenue || 0);
       confidence = 'Low';
     }
 
+    // Project forward
+    for (let s = 1; s <= period; s++) {
+      const nextMonthIdx = n + s;
+      let revenue = parseFloat((slope * nextMonthIdx + intercept).toFixed(2));
+      if (revenue < 0) revenue = 0;
+      projections.push({
+        month: getNextMonth(lastMonthStr, s),
+        revenue
+      });
+    }
+
+    // Get low stock alert count from database
+    const { Inventory } = require('../models');
+    const lowStockCount = await Inventory.count({
+      where: {
+        stock: {
+          [Op.lte]: sequelize.col('low_stock_threshold')
+        }
+      }
+    });
+
+    // Diagnostic explanations
+    if (slope > 0) {
+      diagnostics.push({
+        type: 'growth',
+        title: 'Upward Revenue Trend',
+        description: `Revenue shows a monthly positive trajectory (+₱${slope.toLocaleString(undefined, { minimumFractionDigits: 2 })}/month). This suggests healthy sales and good customer retention.`
+      });
+    } else if (slope < 0) {
+      diagnostics.push({
+        type: 'decline',
+        title: 'Downward Revenue Trend',
+        description: `Revenue exhibits a retraction trend (-₱${Math.abs(slope).toLocaleString(undefined, { minimumFractionDigits: 2 })}/month). Recommend bundle promotions to mitigate the contraction.`
+      });
+    } else {
+      diagnostics.push({
+        type: 'stable',
+        title: 'Stable Revenue',
+        description: 'Revenue trends are flat or stationary, indicating consistent, steady trade operations.'
+      });
+    }
+
+    if (lowStockCount > 0) {
+      diagnostics.push({
+        type: 'inventory_alert',
+        title: 'Stockout Risk Warning',
+        description: `Currently, ${lowStockCount} inventory items are at or below thresholds, posing a revenue ceiling risk due to potential stockouts.`
+      });
+    }
+
+    // Prescriptive actions
+    if (slope < 0) {
+      recommendations.push({
+        priority: 'High',
+        title: 'Launch Bundle Promotions',
+        action: 'Design and deploy bundle offers matching accessories with core components to increase the average checkout price.'
+      });
+    }
+    if (lowStockCount > 0) {
+      recommendations.push({
+        priority: 'High',
+        title: 'Procure Low-Stock Inventory',
+        action: `Initiate restock orders for the ${lowStockCount} critical items to prevent lost demand from stockouts.`
+      });
+    }
+    if (slope >= 0) {
+      recommendations.push({
+        priority: 'Medium',
+        title: 'Expand Product Lines',
+        action: 'Capitalize on sales growth by expanding offerings in high-margin peripherals and next-gen components.'
+      });
+    }
+    recommendations.push({
+      priority: 'Low',
+      title: 'Analyze Supplier Efficiency',
+      action: 'Evaluate supplier delivery performance to minimize cycle times and lower safety stock inventory levels.'
+    });
+
     res.json({
-      historicalDataCount: trends.length,
-      nextMonthIndex: trends.length + 1,
-      predictedRevenue: forecast,
-      confidenceScore: confidence
+      historicalDataCount: n,
+      confidenceScore: confidence,
+      slope,
+      intercept,
+      trends,
+      projections,
+      diagnostics,
+      recommendations
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -222,13 +511,27 @@ const getRevenueForecast = async (req, res) => {
 const getBestSellers = async (req, res) => {
   try {
     const branchId = req.user.role !== 'super_admin' ? req.user.branch_id : req.query.branchId;
+    const { days, startDate, endDate } = req.query;
     const where = { status: 'completed' };
     if (branchId) where.branchId = branchId;
+
+    if (startDate && endDate) {
+      where.createdAt = {
+        [Op.between]: [
+          new Date(startDate),
+          new Date(new Date(endDate).setHours(23, 59, 59, 999))
+        ]
+      };
+    } else if (days) {
+      const limit = new Date();
+      limit.setDate(limit.getDate() - parseInt(days));
+      where.createdAt = { [Op.gte]: limit };
+    }
 
     const stats = await SaleItem.findAll({
       attributes: [
         'productId', 'productName', 'productSku',
-        [sequelize.fn('SUM', sequelize.col('quantity')), 'quantitySold'],
+        [sequelize.fn('SUM', sequelize.col('SaleItem.quantity')), 'quantitySold'],
         [sequelize.fn('SUM', sequelize.col('subtotal')), 'revenueGenerated']
       ],
       include: [{
@@ -332,6 +635,720 @@ const getCustomerAnalytics = async (req, res) => {
   }
 };
 
+const getForecastingAnalytics = async (req, res) => {
+  const getNextPeriod = (lastPeriodStr, stepsAhead, mode) => {
+    if (!lastPeriodStr) return new Date().toISOString().substring(0, 10);
+    
+    if (mode === 'daily' || mode === 'weekly') {
+      const d = new Date(lastPeriodStr);
+      const offset = mode === 'daily' ? stepsAhead : stepsAhead * 7;
+      d.setDate(d.getDate() + offset);
+      return d.toISOString().substring(0, 10);
+    } else if (mode === 'monthly') {
+      let parts = lastPeriodStr.split('-');
+      let year = parseInt(parts[0]);
+      let month = parseInt(parts[1]);
+      let d = new Date(year, month - 1 + stepsAhead, 1);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      return `${y}-${m}`;
+    } else if (mode === 'quarterly') {
+      let parts = lastPeriodStr.split('-Q');
+      let year = parseInt(parts[0]);
+      let quarter = parseInt(parts[1]);
+      
+      let newQuarter = quarter + stepsAhead;
+      while (newQuarter > 4) {
+        newQuarter -= 4;
+        year += 1;
+      }
+      return `${year}-Q${newQuarter}`;
+    } else if (mode === 'yearly') {
+      const year = parseInt(lastPeriodStr);
+      return String(year + stepsAhead);
+    }
+    return lastPeriodStr;
+  };
+
+  try {
+    const { startDate, endDate, groupBy = 'monthly', horizon = '3m', branchId } = req.query;
+
+    const where = { status: 'completed' };
+    if (branchId) where.branchId = branchId;
+
+    let computedStart = startDate;
+    let computedEnd = endDate;
+    if (!computedStart || !computedEnd) {
+      const end = new Date();
+      const start = new Date();
+      start.setMonth(start.getMonth() - 6);
+      computedStart = start.toISOString().substring(0, 10);
+      computedEnd = end.toISOString().substring(0, 10);
+    }
+
+    where.createdAt = {
+      [Op.between]: [
+        new Date(computedStart),
+        new Date(new Date(computedEnd).setHours(23, 59, 59, 999))
+      ]
+    };
+
+    // Grouping settings
+    let groupField = '';
+    if (groupBy === 'daily') {
+      groupField = sequelize.fn('DATE_FORMAT', sequelize.col('createdAt'), '%Y-%m-%d');
+    } else if (groupBy === 'weekly') {
+      groupField = sequelize.literal("DATE_FORMAT(DATE_SUB(createdAt, INTERVAL WEEKDAY(createdAt) DAY), '%Y-%m-%d')");
+    } else if (groupBy === 'monthly') {
+      groupField = sequelize.fn('DATE_FORMAT', sequelize.col('createdAt'), '%Y-%m');
+    } else if (groupBy === 'quarterly') {
+      groupField = sequelize.literal("CONCAT(YEAR(createdAt), '-Q', QUARTER(createdAt))");
+    } else if (groupBy === 'yearly') {
+      groupField = sequelize.fn('YEAR', sequelize.col('createdAt'));
+    } else {
+      groupField = sequelize.fn('DATE_FORMAT', sequelize.col('createdAt'), '%Y-%m');
+    }
+
+    // 1. Fetch raw records
+    const rawSales = await Sale.findAll({
+      where,
+      attributes: [
+        [groupField, 'period'],
+        [sequelize.fn('SUM', sequelize.col('totalAmount')), 'revenue'],
+        [sequelize.fn('COUNT', sequelize.col('id')), 'transactions']
+      ],
+      group: [groupField],
+      order: [[groupField, 'ASC']],
+      raw: true
+    });
+
+    const rawInventory = await SaleItem.findAll({
+      attributes: [
+        [sequelize.literal(groupBy === 'weekly' ? "DATE_FORMAT(DATE_SUB(SaleItem.createdAt, INTERVAL WEEKDAY(SaleItem.createdAt) DAY), '%Y-%m-%d')" : (groupBy === 'quarterly' ? "CONCAT(YEAR(SaleItem.createdAt), '-Q', QUARTER(SaleItem.createdAt))" : (groupBy === 'yearly' ? "YEAR(SaleItem.createdAt)" : (groupBy === 'daily' ? "DATE_FORMAT(SaleItem.createdAt, '%Y-%m-%d')" : "DATE_FORMAT(SaleItem.createdAt, '%Y-%m')")))), 'period'],
+        [sequelize.fn('SUM', sequelize.col('SaleItem.quantity')), 'quantitySold']
+      ],
+      include: [{ model: Sale, attributes: [], where }],
+      group: [sequelize.literal(groupBy === 'weekly' ? "DATE_FORMAT(DATE_SUB(SaleItem.createdAt, INTERVAL WEEKDAY(SaleItem.createdAt) DAY), '%Y-%m-%d')" : (groupBy === 'quarterly' ? "CONCAT(YEAR(SaleItem.createdAt), '-Q', QUARTER(SaleItem.createdAt))" : (groupBy === 'yearly' ? "YEAR(SaleItem.createdAt)" : (groupBy === 'daily' ? "DATE_FORMAT(SaleItem.createdAt, '%Y-%m-%d')" : "DATE_FORMAT(SaleItem.createdAt, '%Y-%m')"))))],
+      order: [[sequelize.literal('period'), 'ASC']],
+      raw: true
+    });
+
+    // 2. Gap filling
+    const generateTimeline = (startStr, endStr, mode) => {
+      const list = [];
+      let current = new Date(startStr);
+      const end = new Date(endStr);
+      
+      const formatDate = (d) => d.toISOString().substring(0, 10);
+      const formatMonth = (d) => d.toISOString().substring(0, 7);
+      const formatYear = (d) => String(d.getFullYear());
+      const formatQuarter = (d) => `${d.getFullYear()}-Q${Math.floor(d.getMonth() / 3) + 1}`;
+      const formatWeek = (d) => {
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        const mon = new Date(d.setDate(diff));
+        return mon.toISOString().substring(0, 10);
+      };
+
+      if (mode === 'daily') {
+        while (current <= end) {
+          list.push(formatDate(current));
+          current.setDate(current.getDate() + 1);
+        }
+      } else if (mode === 'weekly') {
+        let firstWeekMon = new Date(formatWeek(current));
+        while (firstWeekMon <= end) {
+          list.push(formatDate(firstWeekMon));
+          firstWeekMon.setDate(firstWeekMon.getDate() + 7);
+        }
+      } else if (mode === 'monthly') {
+        while (formatMonth(current) <= formatMonth(end)) {
+          list.push(formatMonth(current));
+          current.setMonth(current.getMonth() + 1);
+        }
+      } else if (mode === 'quarterly') {
+        while (formatQuarter(current) <= formatQuarter(end)) {
+          list.push(formatQuarter(current));
+          current.setMonth(current.getMonth() + 3);
+        }
+      } else if (mode === 'yearly') {
+        while (formatYear(current) <= formatYear(end)) {
+          list.push(formatYear(current));
+          current.setFullYear(current.getFullYear() + 1);
+        }
+      }
+      return Array.from(new Set(list));
+    };
+
+    const timeline = generateTimeline(computedStart, computedEnd, groupBy);
+
+    const salesMap = {};
+    rawSales.forEach(s => {
+      if (s.period) {
+        salesMap[String(s.period)] = {
+          revenue: parseFloat(s.revenue) || 0,
+          transactions: parseInt(s.transactions) || 0
+        };
+      }
+    });
+
+    const invMap = {};
+    rawInventory.forEach(i => {
+      if (i.period) {
+        invMap[String(i.period)] = parseFloat(i.quantitySold) || 0;
+      }
+    });
+
+    let preparedData = timeline.map(p => ({
+      month: p,
+      revenue: salesMap[p]?.revenue || 0,
+      transactions: salesMap[p]?.transactions || 0,
+      quantitySold: invMap[p] || 0
+    }));
+
+    // 3. Outlier and Anomaly detection (2.5 std dev)
+    if (preparedData.length > 2) {
+      const revenues = preparedData.map(d => d.revenue);
+      const meanRev = revenues.reduce((a, b) => a + b, 0) / revenues.length;
+      const varianceRev = revenues.reduce((a, b) => a + Math.pow(b - meanRev, 2), 0) / revenues.length;
+      const stdDevRev = Math.sqrt(varianceRev);
+
+      if (stdDevRev > 0) {
+        preparedData = preparedData.map(d => {
+          const zScore = Math.abs(d.revenue - meanRev) / stdDevRev;
+          if (zScore > 2.5) {
+            return {
+              ...d,
+              revenue: parseFloat(meanRev.toFixed(2)),
+              isAnomaly: true
+            };
+          }
+          return d;
+        });
+      }
+    }
+
+    // 4. Linear Regression function
+    const calculateRegression = (dataArray, key) => {
+      const n = dataArray.length;
+      if (n <= 1) {
+        return {
+          slope: 0,
+          intercept: n === 1 ? parseFloat(dataArray[0][key]) || 0 : 0
+        };
+      }
+      let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+      dataArray.forEach((t, i) => {
+        const x = i + 1;
+        const y = parseFloat(t[key]) || 0;
+        sumX += x;
+        sumY += y;
+        sumXY += x * y;
+        sumXX += x * x;
+      });
+      const denominator = n * sumXX - sumX * sumX;
+      const slope = denominator !== 0 ? (n * sumXY - sumX * sumY) / denominator : 0;
+      const intercept = (sumY - slope * sumX) / n;
+      return { slope, intercept };
+    };
+
+    // 5. Validation Split
+    let mae = 0, rmse = 0, accuracy = 100.0, confidence = "High";
+    if (preparedData.length >= 3) {
+      const splitIdx = Math.round(preparedData.length * 0.8);
+      const trainSet = preparedData.slice(0, splitIdx);
+      const testSet = preparedData.slice(splitIdx);
+      if (testSet.length > 0) {
+        const testReg = calculateRegression(trainSet, 'revenue');
+        let errorSum = 0, squaredErrorSum = 0, actualSum = 0;
+        testSet.forEach((t, i) => {
+          const xIndex = trainSet.length + i + 1;
+          const predicted = Math.max(0, testReg.slope * xIndex + testReg.intercept);
+          errorSum += Math.abs(t.revenue - predicted);
+          squaredErrorSum += Math.pow(t.revenue - predicted, 2);
+          actualSum += t.revenue;
+        });
+        mae = parseFloat((errorSum / testSet.length).toFixed(2));
+        rmse = parseFloat(Math.sqrt(squaredErrorSum / testSet.length).toFixed(2));
+        const meanActual = actualSum / testSet.length;
+        accuracy = meanActual > 0 ? parseFloat((Math.max(0, 1 - (mae / meanActual)) * 100).toFixed(1)) : 100.0;
+        confidence = accuracy < 70 ? "Low" : (accuracy <= 85 ? "Medium" : "High");
+      }
+    }
+
+    // 6. Train final model on 100% data
+    const finalRevReg = calculateRegression(preparedData, 'revenue');
+    const finalDemReg = calculateRegression(preparedData, 'transactions');
+    const finalInvReg = calculateRegression(preparedData, 'quantitySold');
+
+    const lastMonthStr = preparedData.length > 0 ? preparedData[preparedData.length - 1].month : computedEnd;
+
+    // Projection size based on horizon config
+    let horizonSteps = 3;
+    if (horizon === '7d') horizonSteps = 7;
+    else if (horizon === '30d') horizonSteps = 30;
+    else if (horizon === '3m') horizonSteps = 3;
+    else if (horizon === '6m') horizonSteps = 6;
+    else if (horizon === '1y') {
+      if (groupBy === 'daily') horizonSteps = 365;
+      else if (groupBy === 'weekly') horizonSteps = 52;
+      else if (groupBy === 'monthly') horizonSteps = 12;
+      else if (groupBy === 'quarterly') horizonSteps = 4;
+      else if (groupBy === 'yearly') horizonSteps = 1;
+    }
+
+    const projections = [];
+    for (let s = 1; s <= horizonSteps; s++) {
+      const xIdx = preparedData.length + s;
+      
+      let predRev = finalRevReg.slope * xIdx + finalRevReg.intercept;
+      if (predRev < 0) predRev = 0;
+
+      let predDem = finalDemReg.slope * xIdx + finalDemReg.intercept;
+      if (predDem < 0) predDem = 0;
+
+      let predInv = finalInvReg.slope * xIdx + finalInvReg.intercept;
+      if (predInv < 0) predInv = 0;
+
+      projections.push({
+        month: getNextPeriod(lastMonthStr, s, groupBy),
+        predictedRevenue: parseFloat(predRev.toFixed(2)),
+        predictedDemand: Math.round(predDem),
+        predictedInventory: Math.round(predInv)
+      });
+    }
+
+    const accuracyComparison = preparedData.map((d, i) => {
+      const predictedVal = Math.max(0, finalRevReg.slope * (i + 1) + finalRevReg.intercept);
+      return {
+        month: d.month,
+        actual: d.revenue,
+        predicted: parseFloat(predictedVal.toFixed(2))
+      };
+    });
+
+    const tableData = preparedData.map((d, i) => {
+      const predictedVal = Math.max(0, finalRevReg.slope * (i + 1) + finalRevReg.intercept);
+      return {
+        period: d.month,
+        actual: d.revenue,
+        predicted: parseFloat(predictedVal.toFixed(2)),
+        variance: parseFloat((d.revenue - predictedVal).toFixed(2))
+      };
+    });
+
+    projections.forEach(p => {
+      tableData.push({
+        period: p.month,
+        actual: null,
+        predicted: p.predictedRevenue,
+        variance: 0
+      });
+    });
+
+    // 7. Branch Comparison ranking
+    const { Branch } = require('../models');
+    const branches = await Branch.findAll({ attributes: ['id', 'name'] });
+    const branchForecasts = [];
+
+    for (const b of branches) {
+      const bSales = await Sale.findAll({
+        where: { 
+          branchId: b.id, 
+          status: 'completed',
+          createdAt: {
+            [Op.between]: [
+              new Date(computedStart),
+              new Date(new Date(computedEnd).setHours(23, 59, 59, 999))
+            ]
+          }
+        },
+        attributes: [
+          [groupField, 'period'],
+          [sequelize.fn('SUM', sequelize.col('totalAmount')), 'revenue']
+        ],
+        group: [groupField],
+        raw: true
+      });
+
+      const bReg = calculateRegression(bSales, 'revenue');
+      const bNextVal = Math.max(0, bReg.slope * (bSales.length + 1) + bReg.intercept);
+      branchForecasts.push({
+        branchName: b.name,
+        predictedSales: parseFloat(bNextVal.toFixed(2))
+      });
+    }
+
+    branchForecasts.sort((a, b) => b.predictedSales - a.predictedSales);
+
+    // 8. Generate dynamic insights
+    const nextMonthProj = projections[0] || { predictedRevenue: 0, predictedInventory: 0, predictedDemand: 0 };
+    const lastMonthRev = preparedData.length > 0 ? preparedData[preparedData.length - 1].revenue : 0;
+    const growthPercent = lastMonthRev !== 0 ? ((nextMonthProj.predictedRevenue - lastMonthRev) / lastMonthRev) * 100 : 0;
+
+    const insights = [];
+    if (growthPercent > 0) {
+      insights.push(`Sales are predicted to increase by ${Math.abs(growthPercent).toFixed(1)}% next period.`);
+    } else if (growthPercent < 0) {
+      insights.push(`Sales are predicted to contract by ${Math.abs(growthPercent).toFixed(1)}% next period.`);
+    } else {
+      insights.push(`Sales are predicted to remain stable.`);
+    }
+
+    const { Inventory } = require('../models');
+    const totalInventoryCount = await Inventory.sum('stock') || 0;
+    if (nextMonthProj.predictedInventory > totalInventoryCount) {
+      insights.push(`Inventory may become insufficient. Projected demand (${nextMonthProj.predictedInventory} units) exceeds total stock count (${totalInventoryCount} units).`);
+    }
+
+    if (branchForecasts.length > 0) {
+      insights.push(`Branch '${branchForecasts[0].branchName}' is expected to outperform with the highest predicted sales.`);
+    }
+
+    const currentDemand = preparedData.length > 0 ? preparedData[preparedData.length - 1].transactions : 0;
+    if (nextMonthProj.predictedDemand > currentDemand) {
+      insights.push(`Demand is expected to peak next period with ${nextMonthProj.predictedDemand} projected transactions.`);
+    }
+
+    res.json({
+      mae,
+      rmse,
+      accuracy,
+      confidence,
+      predictedSales: nextMonthProj.predictedRevenue,
+      predictedInventoryUsage: nextMonthProj.predictedInventory,
+      predictedDemand: nextMonthProj.predictedDemand,
+      growthPercentage: growthPercent,
+      trends: preparedData,
+      projections,
+      tableData,
+      branchRankings: branchForecasts,
+      accuracyComparison,
+      insights
+    });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const getPrescriptiveAnalytics = async (req, res) => {
+  try {
+    const branchId = req.query.branchId;
+    const branchFilter = branchId ? { branch_id: branchId } : {};
+
+    const { Inventory, Product, Branch } = require('../models');
+
+    const lowStockItems = await Inventory.findAll({
+      where: {
+        ...branchFilter,
+        stock: { [Op.lte]: sequelize.col('low_stock_threshold') }
+      },
+      include: [Product, Branch],
+      limit: 10
+    });
+
+    const overstockItems = await Inventory.findAll({
+      where: {
+        ...branchFilter,
+        stock: { [Op.gt]: sequelize.literal('low_stock_threshold * 4') }
+      },
+      include: [Product, Branch],
+      limit: 10
+    });
+
+    const actionsTable = [];
+
+    lowStockItems.forEach(item => {
+      actionsTable.push({
+        issue: `Low Stock: ${item.Product?.name || 'Product'} (${item.stock} units left) at ${item.Branch?.name || 'Branch'}`,
+        recommendation: `Increase stock buffer for ${item.Product?.name || 'product'} by submitting restock request for ${Math.max(20, item.low_stock_threshold * 3)} units.`,
+        expectedImpact: 'Prevent sales stockouts and satisfy immediate demand.',
+        priority: 'High',
+        why: 'Replenishment threshold reached with sales activity ongoing.',
+        metrics: `Current: ${item.stock} | Threshold: ${item.low_stock_threshold}`,
+        confidence: 90
+      });
+    });
+
+    overstockItems.forEach(item => {
+      actionsTable.push({
+        issue: `Overstock: ${item.Product?.name || 'Product'} (${item.stock} units) at ${item.Branch?.name || 'Branch'}`,
+        recommendation: 'Reduce purchasing frequency, run promotions or bundle with high-performing items.',
+        expectedImpact: 'Reduce inventory holding fees and release tied capital.',
+        priority: 'Medium',
+        why: 'Available units are 4 times higher than standard safety stock thresholds.',
+        metrics: `Current: ${item.stock} | Buffer: ${item.low_stock_threshold}`,
+        confidence: 85
+      });
+    });
+
+    // Evaluate Forecasting Model Benchmark Reliability
+    const { runModelBenchmark } = require('../services/forecastBenchmarkService');
+    let forecastReliability = {
+      score: 85,
+      rating: 'Good',
+      recommendedModel: 'Linear Regression (Trend Model)'
+    };
+
+    try {
+      const benchmarkResult = await runModelBenchmark({
+        branchId: branchId || 'all',
+        groupBy: 'monthly',
+        minTrainingPoints: 2
+      });
+
+      if (benchmarkResult.hasSufficientData && benchmarkResult.overallMetrics) {
+        forecastReliability = {
+          score: benchmarkResult.overallMetrics.accuracy,
+          rating: benchmarkResult.overallMetrics.performance,
+          mae: benchmarkResult.overallMetrics.mae,
+          rmse: benchmarkResult.overallMetrics.rmse,
+          mape: benchmarkResult.overallMetrics.mape,
+          recommendedModel: benchmarkResult.bestModel?.name || 'Linear Regression'
+        };
+
+        // If benchmark accuracy is high, add high confidence planning action
+        if (benchmarkResult.overallMetrics.accuracy >= 80) {
+          actionsTable.unshift({
+            issue: `High Forecast Reliability (${benchmarkResult.overallMetrics.accuracy}% Accuracy)`,
+            recommendation: `Forecasting model '${forecastReliability.recommendedModel}' demonstrates strong predictive performance (MAE: ₱${forecastReliability.mae.toLocaleString()}). Use projections with high confidence for proactive procurement.`,
+            expectedImpact: 'Optimize inventory capital allocation and streamline replenishment cycles.',
+            priority: 'Low',
+            why: `Historical backtesting validated ${benchmarkResult.evaluatedPeriodsCount} chronological periods with low residual error.`,
+            metrics: `Accuracy: ${benchmarkResult.overallMetrics.accuracy}% | MAPE: ${benchmarkResult.overallMetrics.mape}%`,
+            confidence: Math.round(benchmarkResult.overallMetrics.accuracy)
+          });
+        } else if (benchmarkResult.overallMetrics.accuracy < 60) {
+          // Low accuracy warning
+          actionsTable.unshift({
+            issue: `Forecast Reliability Advisory (${benchmarkResult.overallMetrics.accuracy}% Accuracy)`,
+            recommendation: `Recent historical sales exhibit higher volatility. Maintain a 25% safety stock buffer on replenishment requests rather than strictly relying on automated demand projections.`,
+            expectedImpact: 'Buffer against sudden demand spikes during fluctuating sales periods.',
+            priority: 'Medium',
+            why: `Model backtesting detected elevated prediction variance (MAE: ₱${forecastReliability.mae.toLocaleString()}).`,
+            metrics: `Accuracy: ${benchmarkResult.overallMetrics.accuracy}% | Performance: ${forecastReliability.rating}`
+          });
+        }
+      }
+    } catch (benchErr) {
+      console.warn('[PRESCRIPTIVE_BENCHMARK_INTEGRATION_WARN]', benchErr.message);
+    }
+
+    // ── Product-Service Co-occurrence & Bundle Prescriptive Intelligence ──
+    try {
+      const mixedSales = await Sale.findAll({
+        where: {
+          ...branchFilter,
+          sale_type: 'mixed',
+          status: 'completed'
+        },
+        include: [{ model: SaleItem }],
+        limit: 50
+      });
+
+      if (mixedSales.length > 0) {
+        actionsTable.push({
+          issue: `Cross-Sell Synergy: Detected ${mixedSales.length} mixed hardware & service transactions`,
+          recommendation: 'Package hardware components (e.g. SSDs, Motherboards, GPUs) with installation/optimization services as discounted POS bundles.',
+          expectedImpact: 'Increase average transaction value by up to 15% and improve customer technical satisfaction.',
+          priority: 'Medium',
+          why: 'Customers frequently require professional installation and configuration alongside major component purchases.',
+          metrics: `Mixed Orders: ${mixedSales.length} | Service Conversion: Active`,
+          confidence: 88
+        });
+      } else {
+        // Feature default PC service bundle recommendation
+        actionsTable.push({
+          issue: 'Service Merchandising: Technical service attach rate opportunity',
+          recommendation: 'Prompt cashiers to offer PC Diagnostic or OS setup on storage drive and custom PC component checkouts.',
+          expectedImpact: 'Unlock higher margin service revenue without physical inventory holding costs.',
+          priority: 'Low',
+          why: 'Technical services yield 100% gross product margin since they utilize labor capacity.',
+          metrics: 'High Margin Category | Zero Inventory Risk',
+          confidence: 82
+        });
+      }
+    } catch (bundleErr) {
+      console.warn('[PRESCRIPTIVE_BUNDLE_ANALYSIS_WARN]', bundleErr.message);
+    }
+
+    res.json({
+      actions: actionsTable,
+      forecastReliability,
+      summary: {
+        lowStockCount: lowStockItems.length,
+        overstockCount: overstockItems.length,
+        totalRecommendations: actionsTable.length
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const getForecastingBenchmark = async (req, res) => {
+  try {
+    const { runModelBenchmark } = require('../services/forecastBenchmarkService');
+    const branchId = req.user.role !== 'super_admin' ? req.user.branch_id : req.query.branchId;
+    const { startDate, endDate, productId, groupBy, minTrainingPoints } = req.query;
+
+    const result = await runModelBenchmark({
+      startDate,
+      endDate,
+      branchId,
+      productId,
+      groupBy: groupBy || 'monthly',
+      minTrainingPoints: minTrainingPoints ? parseInt(minTrainingPoints) : 3
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('[FORECAST_BENCHMARK_ERROR]', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const getBrandAnalytics = async (req, res) => {
+  try {
+    const branchId = req.user.role !== 'super_admin' ? req.user.branch_id : req.query.branchId;
+    const { days, startDate, endDate } = req.query;
+
+    const brands = await Brand.findAll({ raw: true });
+    const brandMap = {};
+    brands.forEach(b => {
+      brandMap[b.id] = b.name;
+    });
+
+    let saleWhereClause = "WHERE s.status = 'completed'";
+    const saleReplacements = [];
+
+    if (branchId) {
+      saleWhereClause += " AND s.branchId = ?";
+      saleReplacements.push(branchId);
+    }
+
+    if (startDate && endDate) {
+      saleWhereClause += " AND s.createdAt BETWEEN ? AND ?";
+      saleReplacements.push(new Date(startDate), new Date(new Date(endDate).setHours(23, 59, 59, 999)));
+    } else if (days) {
+      const limitDate = new Date();
+      limitDate.setDate(limitDate.getDate() - parseInt(days));
+      saleWhereClause += " AND s.createdAt >= ?";
+      saleReplacements.push(limitDate);
+    }
+
+    const salesByBrand = await sequelize.query(`
+      SELECT 
+        p.brand_id AS brandId,
+        COALESCE(SUM(si.quantity), 0) AS unitsSold,
+        COALESCE(SUM(si.quantity * si.unitPrice), 0) AS revenue
+      FROM saleitems si
+      INNER JOIN sales s ON si.saleId = s.id
+      LEFT JOIN products p ON si.productId = p.id
+      ${saleWhereClause}
+      GROUP BY p.brand_id
+    `, {
+      replacements: saleReplacements,
+      type: sequelize.QueryTypes.SELECT
+    });
+
+    let invWhereClause = "WHERE p.deleted_at IS NULL";
+    const invReplacements = [];
+
+    if (branchId) {
+      invWhereClause += " AND bp.branch_id = ?";
+      invReplacements.push(branchId);
+    }
+
+    const inventoryByBrand = await sequelize.query(`
+      SELECT 
+        p.brand_id AS brandId,
+        COALESCE(SUM(bp.stock), 0) AS totalStock,
+        COALESCE(SUM(bp.stock * p.price), 0) AS stockValue,
+        COUNT(DISTINCT p.id) AS productCount
+      FROM branch_products bp
+      INNER JOIN products p ON bp.product_id = p.id
+      ${invWhereClause}
+      GROUP BY p.brand_id
+    `, {
+      replacements: invReplacements,
+      type: sequelize.QueryTypes.SELECT
+    });
+
+    const reportData = {};
+
+    brands.forEach(b => {
+      reportData[b.id] = {
+        brandId: b.id,
+        brandName: b.name,
+        logo: b.logo,
+        unitsSold: 0,
+        revenue: 0.0,
+        totalStock: 0,
+        stockValue: 0.0,
+        productCount: 0
+      };
+    });
+
+    reportData['null'] = {
+      brandId: null,
+      brandName: 'No Brand / Generic',
+      logo: null,
+      unitsSold: 0,
+      revenue: 0.0,
+      totalStock: 0,
+      stockValue: 0.0,
+      productCount: 0
+    };
+
+    salesByBrand.forEach(s => {
+      const bId = s.brandId || 'null';
+      if (!reportData[bId]) {
+        reportData[bId] = {
+          brandId: s.brandId,
+          brandName: brandMap[s.brandId] || 'Unknown Brand',
+          logo: null,
+          unitsSold: 0,
+          revenue: 0.0,
+          totalStock: 0,
+          stockValue: 0.0,
+          productCount: 0
+        };
+      }
+      reportData[bId].unitsSold = parseInt(s.unitsSold || 0);
+      reportData[bId].revenue = parseFloat(s.revenue || 0);
+    });
+
+    inventoryByBrand.forEach(i => {
+      const bId = i.brandId || 'null';
+      if (!reportData[bId]) {
+        reportData[bId] = {
+          brandId: i.brandId,
+          brandName: brandMap[i.brandId] || 'Unknown Brand',
+          logo: null,
+          unitsSold: 0,
+          revenue: 0.0,
+          totalStock: 0,
+          stockValue: 0.0,
+          productCount: 0
+        };
+      }
+      reportData[bId].totalStock = parseInt(i.totalStock || 0);
+      reportData[bId].stockValue = parseFloat(i.stockValue || 0);
+      reportData[bId].productCount = parseInt(i.productCount || 0);
+    });
+
+    const results = Object.values(reportData).filter(item => {
+      return item.brandId !== null || item.unitsSold > 0 || item.totalStock > 0;
+    });
+
+    res.json(results);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   getDashboardMetrics,
   getBranchPerformance,
@@ -339,5 +1356,9 @@ module.exports = {
   getBestSellers,
   getDeadStock,
   getCrossSellInsights,
-  getCustomerAnalytics
+  getCustomerAnalytics,
+  getForecastingAnalytics,
+  getPrescriptiveAnalytics,
+  getForecastingBenchmark,
+  getBrandAnalytics
 };

@@ -1,7 +1,8 @@
-const { Branch, Inventory, Product, Category, Supplier, StockMovement } = require('../models');
+const { Branch, Inventory, BranchProduct, Product, Category, Supplier, Brand, StockMovement } = require('../models');
 const { Op } = require('sequelize');
 const sequelize = require('../db');
 const imageService = require('../services/imageService');
+const { generateUniqueSku } = require('../utils/skuGenerator');
 
 // Product Management
 const getAllProducts = async (req, res) => {
@@ -15,37 +16,69 @@ const getAllProducts = async (req, res) => {
 
 const createProduct = async (req, res) => {
   try {
-    const { name, sku, description, category_id, price } = req.body;
+    const { name, sku: bodySku, description, category_id, price, branch_id, initial_stock } = req.body;
     let image_url = null;
-    let product_image = null;
 
     if (req.file) {
       try {
-        product_image = await imageService.processProductImage(req.file.buffer);
-        image_url = product_image;
+        image_url = await imageService.processProductImage(req.file.buffer);
       } catch (imgError) {
         console.error('[IMAGE PROCESS ERROR]', imgError);
         return res.status(400).json({ error: 'Image processing failed: ' + imgError.message });
       }
     }
 
-    const product = await Product.create({ 
-      name, 
-      sku, 
-      description, 
-      category_id: category_id || null, 
-      price, 
-      last_purchase_price: price, // Default cost to selling price if not specified
-      image_url,
-      product_image
-    });
+    let product;
+    let retries = 10;
+    let sku = bodySku;
+
+    while (retries > 0) {
+      try {
+        if (!sku) {
+          sku = await generateUniqueSku(category_id);
+        }
+        product = await Product.create({ 
+          name, 
+          sku, 
+          description, 
+          category_id: category_id || null, 
+          price, 
+          last_purchase_price: price,
+          image_url
+        });
+        break; // success!
+      } catch (err) {
+        const isSkuConflict = err.name === 'SequelizeUniqueConstraintError' && 
+                             err.errors && 
+                             err.errors.some(e => e.path === 'sku');
+        if (isSkuConflict && !bodySku) {
+          retries--;
+          sku = null; // force regeneration
+          if (retries === 0) {
+            throw new Error('Failed to generate a unique SKU after 10 attempts.');
+          }
+          await new Promise(resolve => setTimeout(resolve, Math.random() * 50));
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    // Handle role checks for branch assignment
+    const userRole = req.user?.role;
+    const userBranchId = req.user?.branch_id;
+    let targetBranchId = branch_id;
+    if (userRole === 'branch_admin') {
+      targetBranchId = userBranchId;
+    }
     
-    // Automatically initialize inventory for all branches with 0 quantity
+    // Automatically initialize inventory for all branches
     const branches = await Branch.findAll();
     const inventoryData = branches.map(branch => ({
       product_id: product.id,
       branch_id: branch.id,
-      quantity: 0
+      stock: (targetBranchId && String(branch.id) === String(targetBranchId)) ? parseInt(initial_stock || 0) : 0,
+      enabled: true
     }));
     await Inventory.bulkCreate(inventoryData);
 
@@ -57,7 +90,7 @@ const createProduct = async (req, res) => {
 
 const updateStock = async (req, res) => {
   try {
-    const { product_id, branch_id, quantity, low_stock_threshold } = req.body;
+    const { product_id, branch_id, quantity, low_stock_threshold, price, enabled } = req.body;
     
     // Security Enforcement
     if (req.user.role === 'branch_admin' && parseInt(branch_id) !== req.user.branch_id) {
@@ -69,6 +102,8 @@ const updateStock = async (req, res) => {
 
     if (quantity !== undefined) inventory.quantity = quantity;
     if (low_stock_threshold !== undefined) inventory.low_stock_threshold = low_stock_threshold;
+    if (price !== undefined) inventory.price = price === null || price === "" ? null : parseFloat(price);
+    if (enabled !== undefined) inventory.enabled = enabled;
     
     await inventory.save();
 
@@ -81,7 +116,8 @@ const updateStock = async (req, res) => {
       const product = await Product.findByPk(inventory.product_id, { attributes: ['name'] });
       if (branchAdmins.length > 0 && product) {
         const alerts = branchAdmins.map(admin => ({
-          user_id: admin.id,
+          userId: admin.id,
+          branchId: inventory.branch_id,
           title: 'Low Stock Alert',
           message: `${product.name} is running low (${inventory.quantity} units left). Consider submitting a restock request.`,
           type: 'low_stock',
@@ -106,6 +142,10 @@ const getInventory = async (req, res) => {
 
     if (req.user.role === 'branch_admin' || req.user.role === 'employee') {
       where.branch_id = req.user.branch_id;
+      // Employees only see enabled products
+      if (req.user.role === 'employee') {
+        where.enabled = true;
+      }
     } else if (branch_id) {
       where.branch_id = branch_id;
     }
@@ -132,18 +172,27 @@ const getInventory = async (req, res) => {
         { 
           model: Product,
           where: productWhere,
-          attributes: ['id', 'name', 'sku', 'price', 'last_purchase_price', 'description', 'category_id', 'supplier_id', 'product_image', 'image_url'],
-          include: [{ model: Category }, { model: Supplier }]
+          attributes: ['id', 'name', 'sku', 'price', 'last_purchase_price', 'description', 'category_id', 'brand_id', 'barcode', 'specifications', 'status', 'supplier_id', 'product_image', 'image_url'],
+          include: [{ model: Category }, { model: Supplier }, { model: Brand }]
         },
         { model: Branch }
       ]
+    });
+
+    // Overlay branch-specific price onto Product.price if set
+    const data = rows.map(row => {
+      const json = row.toJSON();
+      if (json.price !== null && json.price !== undefined) {
+        json.Product = { ...json.Product, price: json.price };
+      }
+      return json;
     });
 
     res.json({
       totalItems: count,
       totalPages: Math.ceil(count / limit),
       currentPage: parseInt(page),
-      data: rows
+      data
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -223,7 +272,7 @@ const getLowStock = async (req, res) => {
     const inventory = await Inventory.findAll({
       where: {
         ...where,
-        quantity: { [Op.lte]: sequelize.col('low_stock_threshold') }
+        stock: { [Op.lte]: sequelize.col('low_stock_threshold') }
       },
       include: [
         { 
@@ -243,27 +292,39 @@ const getLowStock = async (req, res) => {
 const getGlobalInventoryStatus = async (req, res) => {
   try {
     const isSuperAdmin = req.user.role === 'super_admin';
-    const branches = await Branch.findAll(isSuperAdmin ? {} : { where: { id: req.user.branch_id } });
+    const branchWhere = isSuperAdmin ? {} : (req.user.branch_id ? { id: req.user.branch_id } : {});
+    const branches = await Branch.findAll({
+      where: branchWhere,
+      attributes: ['id', 'name']
+    });
     const products = await Product.findAll({
-      attributes: ['id', 'name', 'sku']
+      attributes: ['id', 'name', 'sku'],
+      order: [['id', 'ASC']]
     });
 
-    const status = [];
-    for (const product of products) {
+    const inventoryWhere = isSuperAdmin ? {} : (req.user.branch_id ? { branch_id: req.user.branch_id } : {});
+    const inventories = await Inventory.findAll({
+      where: inventoryWhere,
+      attributes: ['product_id', 'branch_id', 'stock']
+    });
+
+    const stockMap = {};
+    for (const inv of inventories) {
+      stockMap[`${inv.product_id}_${inv.branch_id}`] = inv.stock;
+    }
+
+    const status = products.map(product => {
       const stockPerBranch = {};
       for (const branch of branches) {
-        const inv = await Inventory.findOne({
-          where: { product_id: product.id, branch_id: branch.id }
-        });
-        stockPerBranch[branch.name] = inv ? inv.quantity : 0;
+        stockPerBranch[branch.name] = stockMap[`${product.id}_${branch.id}`] ?? 0;
       }
-      status.push({
+      return {
         id: product.id,
         name: product.name,
         sku: product.sku,
         stock: stockPerBranch
-      });
-    }
+      };
+    });
 
     res.json({
       branches: branches.map(b => b.name),
@@ -277,6 +338,7 @@ const getGlobalInventoryStatus = async (req, res) => {
 const getProductRestockAnalytics = async (req, res) => {
   try {
     const { product_id, branch_id } = req.query;
+    const resolvedBranchId = req.user.role !== 'super_admin' ? req.user.branch_id : branch_id;
     const { Order, OrderItem } = require('../models');
     const { Op } = require('sequelize');
 
@@ -293,7 +355,7 @@ const getProductRestockAnalytics = async (req, res) => {
         model: Order,
         attributes: [],
         where: {
-          branch_id,
+          branch_id: resolvedBranchId,
           createdAt: { [Op.gte]: dateLimit }
         }
       }],
@@ -317,6 +379,11 @@ const adjustStock = async (req, res) => {
   try {
     const { product_id, branch_id, quantity, note } = req.body;
     
+    // Security Enforcement
+    if (req.user.role === 'employee' || (req.user.role === 'branch_admin' && parseInt(branch_id) !== req.user.branch_id)) {
+      return res.status(403).json({ message: 'Forbidden: You cannot perform stock adjustments for this sector.' });
+    }
+
     const inventory = await Inventory.findOne({ where: { product_id, branch_id } });
     if (!inventory) return res.status(404).json({ message: 'Inventory record not found.' });
 
@@ -352,28 +419,140 @@ const deleteProduct = async (req, res) => {
     const product = await Product.findByPk(id);
     if (!product) return res.status(404).json({ message: 'Product not found.' });
 
-    // Note: We clear dependencies to avoid foreign key constraints
-    await Inventory.destroy({ where: { product_id: id } });
-    await StockMovement.destroy({ where: { product_id: id } });
+    // Verify transaction history to prevent DB constraint crashes
+    const { SaleItem, PurchaseOrderItem, StockTransferItem, OrderItem, RestockRequest, ProductRequest } = require('../models');
     
-    // Check for sales (OrderItem)
-    const { OrderItem } = require('../models');
-    const hasSales = await OrderItem.findOne({ where: { product_id: id } });
-    if (hasSales) {
-      return res.status(400).json({ error: 'Cannot delete product with existing sales history. Purge sales records first or deactivate the product.' });
+    const [hasSales, hasPurchase, hasTransfer, hasLegacySales, hasRestock, hasProductReq] = await Promise.all([
+      SaleItem.findOne({ where: { productId: id } }),
+      PurchaseOrderItem.findOne({ where: { productId: id } }),
+      StockTransferItem.findOne({ where: { productId: id } }),
+      OrderItem.findOne({ where: { product_id: id } }),
+      RestockRequest.findOne({ where: { product_id: id } }),
+      ProductRequest.findOne({ where: { product_id: id } })
+    ]);
+
+    const isSoftDelete = !!(hasSales || hasPurchase || hasTransfer || hasLegacySales || hasRestock || hasProductReq);
+
+    if (isSoftDelete) {
+      // Soft-delete using standard destroy
+      await product.destroy();
+      return res.json({ message: 'Product contains transaction history. It has been safely archived (soft-deleted) to maintain data integrity.' });
     }
 
+    // Safely clear assets now that we know there's no transaction history dependency
+    await Inventory.destroy({ where: { product_id: id } });
+    await StockMovement.destroy({ where: { product_id: id } });
+
     // Delete image files from disk if they exist
-    if (product.product_image) {
-      imageService.deleteProductImageFiles(product.product_image);
-    } else if (product.image_url && product.image_url.startsWith('/uploads/products/')) {
+    if (product.image_url && product.image_url.startsWith('/uploads/products/')) {
       imageService.deleteProductImageFiles(product.image_url);
     }
 
-    await product.destroy();
+    await product.destroy({ force: true }); // Force: true bypasses paranoid and hard-deletes
     res.json({ message: 'Product and associated inventory assets have been purged from the system.' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete product: ' + error.message });
+  }
+};
+
+// Resync: Find products that are missing branch_products records and create them
+const resyncProductsToBranches = async (req, res) => {
+  try {
+    const branches = await Branch.findAll();
+    const products = await Product.findAll({ where: { deleted_at: null }, attributes: ['id'] });
+    let created = 0;
+
+    for (const product of products) {
+      for (const branch of branches) {
+        const [record, wasCreated] = await Inventory.findOrCreate({
+          where: { product_id: product.id, branch_id: branch.id },
+          defaults: { stock: 0, enabled: true }
+        });
+        if (wasCreated) created++;
+      }
+    }
+
+    res.json({
+      message: `Resync complete. ${created} missing branch-product records created.`,
+      created,
+      totalProducts: products.length,
+      totalBranches: branches.length
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Repair: Fix imported products missing categories, brands, branch mappings, or enabled states
+const repairImportedProducts = async (req, res) => {
+  try {
+    // 1. Ensure default lookup entities exist
+    const [uncategorizedCategory] = await Category.findOrCreate({
+      where: { name: 'Uncategorized' },
+      defaults: { slug: 'uncategorized' }
+    });
+
+    const [unassignedBrand] = await Brand.findOrCreate({
+      where: { name: 'Unassigned' },
+      defaults: { slug: 'unassigned', status: 'active' }
+    });
+
+    // 2. Repair products missing category_id
+    const [categoryFixCount] = await Product.update(
+      { category_id: uncategorizedCategory.id },
+      { where: { category_id: null, deleted_at: null } }
+    );
+
+    // 3. Repair products missing brand_id
+    const [brandFixCount] = await Product.update(
+      { brand_id: unassignedBrand.id },
+      { where: { brand_id: null, deleted_at: null } }
+    );
+
+    // 4. Repair products with null or empty status
+    const [statusFixCount] = await Product.update(
+      { status: 'active' },
+      { where: { status: { [Op.or]: [null, ''] }, deleted_at: null } }
+    );
+
+    // 5. Populate missing branch_products records
+    const branches = await Branch.findAll();
+    const products = await Product.findAll({ where: { deleted_at: null }, attributes: ['id', 'price'] });
+    let missingBranchProductsCreated = 0;
+
+    for (const product of products) {
+      for (const branch of branches) {
+        const [bp, created] = await Inventory.findOrCreate({
+          where: { product_id: product.id, branch_id: branch.id },
+          defaults: {
+            stock: 0,
+            price: null,
+            enabled: true,
+            low_stock_threshold: 10
+          }
+        });
+        if (created) missingBranchProductsCreated++;
+      }
+    }
+
+    // 6. Force enabled = true on branch_products with null enabled
+    const [enabledFixCount] = await Inventory.update(
+      { enabled: true },
+      { where: { enabled: null } }
+    );
+
+    res.json({
+      message: 'Catalog repair completed successfully.',
+      details: {
+        categoryFixes: categoryFixCount,
+        brandFixes: brandFixCount,
+        statusFixes: statusFixCount,
+        branchMappingsCreated: missingBranchProductsCreated,
+        enabledFixes: enabledFixCount
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 };
 
@@ -387,5 +566,7 @@ module.exports = {
   getGlobalInventoryStatus,
   getProductRestockAnalytics,
   adjustStock,
-  deleteProduct
+  deleteProduct,
+  resyncProductsToBranches,
+  repairImportedProducts
 };

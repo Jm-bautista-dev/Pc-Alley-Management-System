@@ -15,9 +15,25 @@ const register = async (req, res) => {
   try {
     const { password, role, branch_id } = req.body;
     const username = String(req.body.username || '').trim().toLowerCase();
+    const firstName = String(req.body.first_name || '').trim();
+    const lastName = String(req.body.last_name || '').trim();
 
     if (!username) {
       return res.status(400).json({ message: 'Username or internal ID is required' });
+    }
+
+    if (!firstName) {
+      return res.status(400).json({ message: 'First name is required' });
+    }
+    if (/\d/.test(firstName) || !/^[A-Za-z\s.\'-]+$/.test(firstName) || firstName.length < 2 || firstName.length > 50) {
+      return res.status(400).json({ message: 'First name can only contain letters, spaces, hyphens, apostrophes, and dots (2-50 chars, no numbers)' });
+    }
+
+    if (!lastName) {
+      return res.status(400).json({ message: 'Last name is required' });
+    }
+    if (/\d/.test(lastName) || !/^[A-Za-z\s.\'-]+$/.test(lastName) || lastName.length < 2 || lastName.length > 50) {
+      return res.status(400).json({ message: 'Last name can only contain letters, spaces, hyphens, apostrophes, and dots (2-50 chars, no numbers)' });
     }
 
     const allowedRolesByCreator = {
@@ -59,13 +75,10 @@ const register = async (req, res) => {
       return res.status(404).json({ message: 'Assigned branch does not exist' });
     }
 
-    const existingUser = await User.findOne({ where: { username } });
-    if (existingUser) {
-      return res.status(409).json({ message: 'Username already exists' });
-    }
-
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await User.create({
+      first_name: firstName,
+      last_name: lastName,
       username,
       password: hashedPassword,
       role,
@@ -74,7 +87,7 @@ const register = async (req, res) => {
     res.status(201).json({ message: 'User provisioned successfully', userId: user.id });
   } catch (error) {
     if (error.name === 'SequelizeUniqueConstraintError') {
-      return res.status(409).json({ message: 'Username already exists' });
+      return res.status(409).json({ message: 'A duplicate database value blocked this registration. Please restart the backend so account migrations can run, then try again.' });
     }
 
     res.status(500).json({ error: error.message });
@@ -85,18 +98,27 @@ const login = async (req, res) => {
   try {
     const { password } = req.body;
     const username = String(req.body.username || '').trim().toLowerCase();
-    const user = await User.findOne({ 
+    const matchingUsers = await User.findAll({
       where: { username },
-      include: [Branch]
+      include: [Branch],
+      order: [['id', 'ASC']]
     });
-    
-    if (!user) {
+
+    if (!matchingUsers.length) {
       console.warn(`[AUTH] Login failed: User not found for username: ${username}`);
       return res.status(401).json({ message: 'Incorrect Username or Password' });
     }
 
-    const passwordMatch = await bcrypt.compare(password, user.password);
-    if (!passwordMatch) {
+    let user = null;
+    for (const candidate of matchingUsers) {
+      const passwordMatch = await bcrypt.compare(password, candidate.password);
+      if (passwordMatch) {
+        user = candidate;
+        break;
+      }
+    }
+
+    if (!user) {
       console.warn(`[AUTH] Login failed: Password mismatch for user: ${username}`);
       return res.status(401).json({ message: 'Incorrect Username or Password' });
     }
@@ -109,11 +131,13 @@ const login = async (req, res) => {
     }
 
     const token = jwt.sign(
-      { 
-        id: user.id, 
-        username: user.username, 
-        role: user.role, 
-        branch_id: user.branch_id 
+      {
+        id: user.id,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        username: user.username,
+        role: user.role,
+        branch_id: user.branch_id
       },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
@@ -123,6 +147,8 @@ const login = async (req, res) => {
       token,
       user: {
         id: user.id,
+        first_name: user.first_name || 'Admin',
+        last_name: user.last_name || 'User',
         username: user.username,
         role: user.role,
         branch_id: user.branch_id,
@@ -130,22 +156,29 @@ const login = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error(`[AUTH] Critical server error during login: ${error.message}`, error);
-    res.status(500).json({ 
-      error: error.message,
-      message: `System Error: ${error.message}` 
+    const errMsg = error.original?.message || error.message || error.name || 'Database query error';
+    console.error(`[AUTH] Critical server error during login: ${errMsg}`, error);
+    res.status(500).json({
+      error: errMsg,
+      message: `System Error: ${errMsg}`
     });
   }
 };
 
 const getUsers = async (req, res) => {
   try {
-    const { page = 1, limit = 20, search = '' } = req.query;
+    const { page = 1, limit = 20, search = '', branch_id } = req.query;
     const pagination = require('../utils/pagination');
-    const { offset, where, order } = pagination({ page, limit, search, searchableFields: ['username'] });
+    const { offset, where, order } = pagination({ page, limit, search, searchableFields: ['username', 'first_name', 'last_name'] });
     // Apply role‑based branch filter
     if (req.user.role === 'branch_admin') {
       where.branch_id = req.user.branch_id;
+    } else if (branch_id) {
+      const normalizedBranchId = normalizeBranchId(branch_id);
+      if (normalizedBranchId === null || Number.isNaN(normalizedBranchId)) {
+        return res.status(400).json({ message: 'Invalid branch filter' });
+      }
+      where.branch_id = normalizedBranchId;
     }
     const { count, rows } = await User.findAndCountAll({
       where,
@@ -168,4 +201,67 @@ const getUsers = async (req, res) => {
   }
 };
 
-module.exports = { register, login, getUsers };
+const updateProfile = async (req, res) => {
+  try {
+    const { first_name, last_name } = req.body;
+    const user = await User.findByPk(req.user.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    if (first_name !== undefined) {
+      const fn = String(first_name).trim();
+      if (!fn || /\d/.test(fn) || !/^[A-Za-z\s.\'-]+$/.test(fn) || fn.length < 2 || fn.length > 50) {
+        return res.status(400).json({ message: 'First name can only contain letters, spaces, hyphens, apostrophes, and dots (2-50 chars, no numbers)' });
+      }
+      user.first_name = fn;
+    }
+    if (last_name !== undefined) {
+      const ln = String(last_name).trim();
+      if (!ln || /\d/.test(ln) || !/^[A-Za-z\s.\'-]+$/.test(ln) || ln.length < 2 || ln.length > 50) {
+        return res.status(400).json({ message: 'Last name can only contain letters, spaces, hyphens, apostrophes, and dots (2-50 chars, no numbers)' });
+      }
+      user.last_name = ln;
+    }
+    await user.save();
+
+    res.json({
+      message: 'Profile updated successfully',
+      user: {
+        id: user.id,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        username: user.username,
+        role: user.role,
+        branch_id: user.branch_id
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const user = await User.findByPk(req.user.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: 'Incorrect current password' });
+    }
+
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({ message: 'New password must be at least 6 characters long' });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword;
+    await user.save();
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+module.exports = { register, login, getUsers, updateProfile, changePassword };

@@ -1,8 +1,9 @@
 const Branch = require('./Branch');
+const ProductRequest = require('./ProductRequest');
 const User = require('./User');
 const Category = require('./Category');
 const Product = require('./Product');
-const Inventory = require('./Inventory');
+const BranchProduct = require('./BranchProduct');
 const Order = require('./Order');
 const OrderItem = require('./OrderItem');
 const Supplier = require('./Supplier');
@@ -11,6 +12,7 @@ const ProductBundle = require('./ProductBundle');
 const RestockRequest = require('./RestockRequest');
 const Notification = require('./Notification');
 const AuditLog = require('./AuditLog');
+const Brand = require('./Brand');
 
 // New models
 const Customer = require('./Customer');
@@ -23,19 +25,28 @@ const StockTransferItem = require('./StockTransferItem');
 const Expense = require('./Expense');
 const Payroll = require('./Payroll');
 const Attendance = require('./Attendance');
+const Warranty = require('./Warranty');
+const Service = require('./Service');
+const ServiceJob = require('./ServiceJob');
 
 // ── Existing Associations ──
 Branch.hasMany(User, { foreignKey: 'branch_id' });
 User.belongsTo(Branch, { foreignKey: 'branch_id' });
 
+Branch.hasMany(Product, { foreignKey: 'branch_id' });
+Product.belongsTo(Branch, { foreignKey: 'branch_id' });
+
 Category.hasMany(Product, { foreignKey: 'category_id' });
 Product.belongsTo(Category, { foreignKey: 'category_id' });
 
-Product.hasMany(Inventory, { foreignKey: 'product_id' });
-Inventory.belongsTo(Product, { foreignKey: 'product_id' });
+Brand.hasMany(Product, { foreignKey: 'brand_id' });
+Product.belongsTo(Brand, { foreignKey: 'brand_id' });
 
-Branch.hasMany(Inventory, { foreignKey: 'branch_id' });
-Inventory.belongsTo(Branch, { foreignKey: 'branch_id' });
+Product.hasMany(BranchProduct, { foreignKey: 'product_id' });
+BranchProduct.belongsTo(Product, { foreignKey: 'product_id' });
+
+Branch.hasMany(BranchProduct, { foreignKey: 'branch_id' });
+BranchProduct.belongsTo(Branch, { foreignKey: 'branch_id' });
 
 Branch.hasMany(Order, { foreignKey: 'branch_id' });
 Order.belongsTo(Branch, { foreignKey: 'branch_id' });
@@ -66,7 +77,15 @@ RestockRequest.belongsTo(Branch, { foreignKey: 'branch_id' });
 RestockRequest.belongsTo(User, { as: 'Manager', foreignKey: 'manager_id' });
 RestockRequest.belongsTo(User, { as: 'Admin', foreignKey: 'admin_id' });
 
+// ProductRequest associations
+ProductRequest.belongsTo(Product, { foreignKey: 'product_id' });
+ProductRequest.belongsTo(Branch, { foreignKey: 'branch_id' });
+ProductRequest.belongsTo(User, { as: 'Requester', foreignKey: 'requested_by' });
+ProductRequest.belongsTo(User, { as: 'Approver', foreignKey: 'approved_by' });
+
 Notification.belongsTo(User, { foreignKey: 'userId' });
+Notification.belongsTo(Branch, { foreignKey: 'branchId' });
+Branch.hasMany(Notification, { foreignKey: 'branchId' });
 
 User.hasMany(AuditLog, { foreignKey: 'user_id' });
 AuditLog.belongsTo(User, { foreignKey: 'user_id' });
@@ -139,13 +158,37 @@ Attendance.belongsTo(User, { foreignKey: 'userId' });
 Branch.hasMany(Attendance, { foreignKey: 'branchId' });
 Attendance.belongsTo(Branch, { foreignKey: 'branchId' });
 
+// Service associations
+Service.hasMany(SaleItem, { foreignKey: 'serviceId' });
+SaleItem.belongsTo(Service, { foreignKey: 'serviceId' });
+
+Service.hasMany(ServiceJob, { foreignKey: 'service_id' });
+ServiceJob.belongsTo(Service, { foreignKey: 'service_id' });
+
+Customer.hasMany(ServiceJob, { foreignKey: 'customer_id' });
+ServiceJob.belongsTo(Customer, { foreignKey: 'customer_id' });
+
+Branch.hasMany(ServiceJob, { foreignKey: 'branch_id' });
+ServiceJob.belongsTo(Branch, { foreignKey: 'branch_id' });
+
+User.hasMany(ServiceJob, { as: 'AssignedJobs', foreignKey: 'technician_id' });
+ServiceJob.belongsTo(User, { as: 'Technician', foreignKey: 'technician_id' });
+
+Sale.hasMany(ServiceJob, { foreignKey: 'sale_id' });
+ServiceJob.belongsTo(Sale, { foreignKey: 'sale_id' });
+
+ServiceJob.hasMany(SaleItem, { foreignKey: 'serviceJobId' });
+SaleItem.belongsTo(ServiceJob, { foreignKey: 'serviceJobId' });
+
 module.exports = {
   Branch,
   User,
   Category,
+  Brand,
   Product,
   ProductBundle,
-  Inventory,
+  BranchProduct,
+  Inventory: BranchProduct,
   Order,
   OrderItem,
   Supplier,
@@ -153,6 +196,7 @@ module.exports = {
   RestockRequest,
   Notification,
   AuditLog,
+  ProductRequest,
   
   // Export new models
   Customer,
@@ -164,5 +208,8 @@ module.exports = {
   StockTransferItem,
   Expense,
   Payroll,
-  Attendance
+  Attendance,
+  Warranty,
+  Service,
+  ServiceJob
 };

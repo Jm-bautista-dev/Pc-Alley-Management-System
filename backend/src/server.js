@@ -41,18 +41,22 @@ app.use('/api/inventory', require('./routes/inventoryRoutes'));
 app.use('/api/sales', require('./routes/salesRoutes'));
 app.use('/api/branches', require('./routes/branchRoutes'));
 app.use('/api/products', require('./routes/productRoutes'));
+app.use('/api/brands', require('./routes/brandRoutes'));
 app.use('/api/suppliers', require('./routes/supplierRoutes'));
 app.use('/api/categories', require('./routes/categoryRoutes'));
 app.use('/api/restock-requests', require('./routes/restockRoutes'));
+app.use('/api/product-requests', require('./routes/productRequestRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
 app.use('/api/audit', require('./routes/auditRoutes'));
 
-// New Routes
+// Extended Routes
 app.use('/api/customers', require('./routes/customerRoutes'));
 app.use('/api/expenses', require('./routes/expenseRoutes'));
 app.use('/api/purchase-orders', require('./routes/purchaseRoutes'));
 app.use('/api/stock-transfers', require('./routes/transferRoutes'));
 app.use('/api/analytics', require('./routes/analyticsRoutes'));
+app.use('/api/services', require('./routes/serviceRoutes'));
+app.use('/api/warranties', require('./routes/warrantyRoutes'));
 
 app.get('/', (req, res) => {
   res.send('PC Alley API is running...');

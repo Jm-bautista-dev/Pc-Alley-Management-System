@@ -3,14 +3,15 @@ const sequelize = require('../db');
 
 const Notification = sequelize.define('Notification', {
   id: {
-    type: DataTypes.UUID,
-    defaultValue: DataTypes.UUIDV4,
-    primaryKey: true
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
   },
   userId: { 
     type: DataTypes.INTEGER, 
     allowNull: false, 
-    references: { model: 'Users', key: 'id' } 
+    references: { model: 'users', key: 'id' },
+    field: 'user_id'
   },
   title: { 
     type: DataTypes.STRING, 
@@ -29,8 +30,17 @@ const Notification = sequelize.define('Notification', {
   },
   isRead: { 
     type: DataTypes.BOOLEAN, 
-    defaultValue: false 
+    defaultValue: false,
+    field: 'is_read'
+  },
+  branchId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: { model: 'branches', key: 'id' },
+    field: 'branch_id'
   }
+}, {
+  tableName: 'notifications'
 });
 
 module.exports = Notification;

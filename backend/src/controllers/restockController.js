@@ -25,14 +25,23 @@ const createRequest = async (req, res) => {
       status: 'Pending'
     });
 
-    // Notify all Super Admins
-    const admins = await User.findAll({ where: { role: 'super_admin' } });
+    // Notify all Super Admins and the branch admins for this branch
+    const { Op } = require('sequelize');
+    const admins = await User.findAll({
+      where: {
+        [Op.or]: [
+          { role: 'super_admin' },
+          { role: 'branch_admin', branch_id }
+        ]
+      }
+    });
     const product = await Product.findByPk(product_id);
     const branch = await Branch.findByPk(branch_id);
 
     if (admins.length > 0 && product && branch) {
       const notifications = admins.map(admin => ({
         userId: admin.id,
+        branchId: branch_id,
         title: 'New Restock Request',
         message: `${req.user.username} requested ${quantity} units of ${product.name} for ${branch.name}.`,
         type: 'restock_request',
@@ -105,6 +114,11 @@ const approveRequest = async (req, res) => {
     if (!request) return res.status(404).json({ message: 'Request not found.' });
     if (request.status !== 'Pending') return res.status(400).json({ message: 'Request already processed.' });
 
+    // Security check for branch admins (Managers)
+    if (req.user.role === 'branch_admin' && request.branch_id !== req.user.branch_id) {
+      return res.status(403).json({ message: 'Forbidden: You can only approve restock requests for your assigned branch.' });
+    }
+
     // Update inventory
     const inventory = await Inventory.findOne({ 
       where: { product_id: request.product_id, branch_id: request.branch_id } 
@@ -137,8 +151,9 @@ const approveRequest = async (req, res) => {
     // Notify Manager
     await Notification.create({
       userId: request.manager_id,
+      branchId: request.branch_id,
       title: 'Restock Request Approved',
-      message: `Your request for ${request.quantity} units of ${request.Product.name} has been approved.`,
+      message: `Your restock request for ${request.Product.name} has been approved.`,
       type: 'success',
       link: '/inventory'
     });
@@ -146,7 +161,11 @@ const approveRequest = async (req, res) => {
     // Remove the original request notification
     await Notification.destroy({ where: { link: `/admin?tab=restock&id=${request.id}` } });
 
-    res.json({ message: 'Request approved and inventory updated.', request });
+    if (req.app.get('io')) {
+      req.app.get('io').emit('dashboard_update', { type: 'RESTOCK_APPROVED' });
+    }
+
+    res.json({ message: 'Restock request approved and inventory updated', request });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -157,11 +176,16 @@ const rejectRequest = async (req, res) => {
     const { id } = req.params;
     const { reason } = req.body;
     const request = await RestockRequest.findByPk(id, {
-      include: [Product]
+      include: [Product, Branch]
     });
 
     if (!request) return res.status(404).json({ message: 'Request not found.' });
     if (request.status !== 'Pending') return res.status(400).json({ message: 'Request already processed.' });
+
+    // Security check for branch admins (Managers)
+    if (req.user.role === 'branch_admin' && request.branch_id !== req.user.branch_id) {
+      return res.status(403).json({ message: 'Forbidden: You can only reject restock requests for your assigned branch.' });
+    }
 
     request.status = 'Rejected';
     request.admin_id = req.user.id;
@@ -172,6 +196,7 @@ const rejectRequest = async (req, res) => {
     // Notify Manager
     await Notification.create({
       userId: request.manager_id,
+      branchId: request.branch_id,
       title: 'Restock Request Rejected',
       message: `Your request for ${request.Product.name} was rejected. Reason: ${reason || 'No reason provided.'}`,
       type: 'error',

@@ -16,7 +16,7 @@ const PurchaseOrder = sequelize.define('PurchaseOrder', {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
-      model: 'Suppliers',
+      model: 'suppliers',
       key: 'id'
     }
   },
@@ -24,7 +24,7 @@ const PurchaseOrder = sequelize.define('PurchaseOrder', {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
-      model: 'Branches',
+      model: 'branches',
       key: 'id'
     }
   },

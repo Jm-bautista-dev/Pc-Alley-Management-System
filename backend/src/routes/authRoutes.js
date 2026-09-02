@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
-const { register, login, getUsers } = require('../controllers/authController');
+const { register, login, getUsers, updateProfile, changePassword } = require('../controllers/authController');
 const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
 
 router.post('/register', [
@@ -12,6 +12,18 @@ router.post('/register', [
     .trim()
     .notEmpty()
     .withMessage('Username or internal ID is required'),
+  body('first_name')
+    .trim()
+    .notEmpty().withMessage('First name is required')
+    .isLength({ min: 2, max: 50 }).withMessage('First name must be between 2 and 50 characters')
+    .custom(val => !/\d/.test(val)).withMessage('First name cannot contain numbers')
+    .matches(/^[A-Za-z\s.\'-]+$/).withMessage('First name can only contain letters, spaces, hyphens, apostrophes, and dots'),
+  body('last_name')
+    .trim()
+    .notEmpty().withMessage('Last name is required')
+    .isLength({ min: 2, max: 50 }).withMessage('Last name must be between 2 and 50 characters')
+    .custom(val => !/\d/.test(val)).withMessage('Last name cannot contain numbers')
+    .matches(/^[A-Za-z\s.\'-]+$/).withMessage('Last name can only contain letters, spaces, hyphens, apostrophes, and dots'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
   body('role').isIn(['branch_admin', 'employee']).withMessage('Invalid role designation'),
   body('branch_id')
@@ -56,5 +68,29 @@ router.delete('/users/:id', authenticateToken, authorizeRoles('super_admin', 'br
     res.status(500).json({ error: error.message });
   }
 });
+
+router.put('/profile', authenticateToken, [
+  body('first_name')
+    .optional()
+    .trim()
+    .notEmpty().withMessage('First name cannot be empty')
+    .isLength({ min: 2, max: 50 }).withMessage('First name must be between 2 and 50 characters')
+    .custom(val => !/\d/.test(val)).withMessage('First name cannot contain numbers')
+    .matches(/^[A-Za-z\s.\'-]+$/).withMessage('First name can only contain letters, spaces, hyphens, apostrophes, and dots'),
+  body('last_name')
+    .optional()
+    .trim()
+    .notEmpty().withMessage('Last name cannot be empty')
+    .isLength({ min: 2, max: 50 }).withMessage('Last name must be between 2 and 50 characters')
+    .custom(val => !/\d/.test(val)).withMessage('Last name cannot contain numbers')
+    .matches(/^[A-Za-z\s.\'-]+$/).withMessage('Last name can only contain letters, spaces, hyphens, apostrophes, and dots'),
+  validate
+], updateProfile);
+
+router.put('/change-password', authenticateToken, [
+  body('currentPassword').notEmpty().withMessage('Current password is required'),
+  body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters'),
+  validate
+], changePassword);
 
 module.exports = router;

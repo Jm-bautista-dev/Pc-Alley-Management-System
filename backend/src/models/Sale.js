@@ -27,7 +27,7 @@ const Sale = sequelize.define('Sale', {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
-      model: 'Branches',
+      model: 'branches',
       key: 'id'
     }
   },
@@ -35,7 +35,7 @@ const Sale = sequelize.define('Sale', {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
-      model: 'Users',
+      model: 'users',
       key: 'id'
     }
   },
@@ -57,6 +57,31 @@ const Sale = sequelize.define('Sale', {
   },
   notes: {
     type: DataTypes.TEXT
+  },
+  sale_type: {
+    type: DataTypes.ENUM('product', 'service', 'mixed'),
+    allowNull: false,
+    defaultValue: 'product'
+  },
+  product_amount: {
+    type: DataTypes.DECIMAL(12, 2),
+    allowNull: false,
+    defaultValue: 0.00
+  },
+  service_amount: {
+    type: DataTypes.DECIMAL(12, 2),
+    allowNull: false,
+    defaultValue: 0.00
+  },
+  amountPaid: {
+    type: DataTypes.DECIMAL(12, 2),
+    allowNull: true,
+    defaultValue: 0.00
+  },
+  changeAmount: {
+    type: DataTypes.DECIMAL(12, 2),
+    allowNull: true,
+    defaultValue: 0.00
   }
 }, {
   tableName: 'sales'

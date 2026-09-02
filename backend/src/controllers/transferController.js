@@ -41,6 +41,12 @@ const getTransferById = async (req, res) => {
       ]
     });
     if (!transfer) return res.status(404).json({ message: 'Stock Transfer not found.' });
+
+    // Validate branch authorization
+    if (req.user.role !== 'super_admin' && transfer.fromBranchId !== req.user.branch_id && transfer.toBranchId !== req.user.branch_id) {
+      return res.status(403).json({ message: 'Forbidden: You cannot access stock transfers outside your branch.' });
+    }
+
     res.json(transfer);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -52,7 +58,7 @@ const createTransfer = async (req, res) => {
     const { fromBranchId, toBranchId, items, notes } = req.body;
     
     // Validate sector authorization
-    if (req.user.role === 'branch_admin' && parseInt(fromBranchId) !== req.user.branch_id) {
+    if (req.user.role !== 'super_admin' && parseInt(fromBranchId) !== req.user.branch_id) {
       return res.status(403).json({ message: 'Forbidden: You cannot transfer stock out of another branch.' });
     }
 
@@ -79,12 +85,20 @@ const createTransfer = async (req, res) => {
 
 const completeTransferRoute = async (req, res) => {
   try {
-    const transfer = await completeStockTransfer(
+    const transfer = await StockTransfer.findByPk(req.params.id);
+    if (!transfer) return res.status(404).json({ message: 'Stock Transfer not found.' });
+
+    // Validate branch authorization: only the destination branch can accept the transfer (or super admin)
+    if (req.user.role !== 'super_admin' && transfer.toBranchId !== req.user.branch_id) {
+      return res.status(403).json({ message: 'Forbidden: Only the destination branch can complete this stock transfer.' });
+    }
+
+    const completedTransfer = await completeStockTransfer(
       req.params.id,
       req.user.id,
       req.ip || req.connection.remoteAddress
     );
-    res.json({ message: 'Stock Transfer completed successfully.', transfer });
+    res.json({ message: 'Stock Transfer completed successfully.', transfer: completedTransfer });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

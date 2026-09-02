@@ -34,6 +34,12 @@ const getPurchaseOrderById = async (req, res) => {
       ]
     });
     if (!po) return res.status(404).json({ message: 'Purchase Order not found.' });
+
+    // Validate branch authorization
+    if (req.user.role !== 'super_admin' && po.branchId !== req.user.branch_id) {
+      return res.status(403).json({ message: 'Forbidden: You cannot access purchase orders outside your branch.' });
+    }
+
     res.json(po);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -89,12 +95,20 @@ const createPurchaseOrder = async (req, res) => {
 
 const receivePurchaseOrderRoute = async (req, res) => {
   try {
-    const po = await receivePurchaseOrder(
+    const po = await PurchaseOrder.findByPk(req.params.id);
+    if (!po) return res.status(404).json({ message: 'Purchase Order not found.' });
+
+    // Validate branch authorization
+    if (req.user.role !== 'super_admin' && po.branchId !== req.user.branch_id) {
+      return res.status(403).json({ message: 'Forbidden: You cannot modify purchase orders outside your branch.' });
+    }
+
+    const updatedPo = await receivePurchaseOrder(
       req.params.id,
       req.user.id,
       req.ip || req.connection.remoteAddress
     );
-    res.json({ message: 'Purchase Order completed successfully.', po });
+    res.json({ message: 'Purchase Order completed successfully.', po: updatedPo });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

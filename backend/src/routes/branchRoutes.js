@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const { body, param } = require('express-validator');
+const validate = require('../middleware/validate');
 const { Branch } = require('../models');
 const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
 
@@ -12,10 +14,16 @@ router.get('/', authenticateToken, authorizeRoles('super_admin', 'branch_admin',
   }
 });
 
-router.post('/', authenticateToken, authorizeRoles('super_admin'), async (req, res) => {
+router.post('/', [
+  authenticateToken, 
+  authorizeRoles('super_admin'),
+  body('name').trim().notEmpty().withMessage('Branch name is required').isLength({ min: 2, max: 100 }).withMessage('Branch name must be between 2 and 100 characters'),
+  body('location').optional({ checkFalsy: true }).isString().trim().isLength({ max: 255 }).withMessage('Location cannot exceed 255 characters'),
+  body('phone').optional({ checkFalsy: true }).trim().matches(/^[0-9+()-\s]{7,20}$/).withMessage('Please enter a valid branch phone number (7-20 digits/symbols)'),
+  validate
+], async (req, res) => {
   try {
     const { name, location, phone } = req.body;
-    if (!name) return res.status(400).json({ message: 'Branch name is required' });
 
     const branch = await Branch.create({ name, location, phone });
 
@@ -38,7 +46,15 @@ router.post('/', authenticateToken, authorizeRoles('super_admin'), async (req, r
   }
 });
 
-router.put('/:id', authenticateToken, authorizeRoles('super_admin'), async (req, res) => {
+router.put('/:id', [
+  authenticateToken, 
+  authorizeRoles('super_admin'),
+  param('id').isInt().withMessage('Invalid branch ID'),
+  body('name').optional().trim().notEmpty().withMessage('Branch name cannot be empty').isLength({ min: 2, max: 100 }).withMessage('Branch name must be between 2 and 100 characters'),
+  body('location').optional({ checkFalsy: true }).isString().trim().isLength({ max: 255 }).withMessage('Location cannot exceed 255 characters'),
+  body('phone').optional({ checkFalsy: true }).trim().matches(/^[0-9+()-\s]{7,20}$/).withMessage('Please enter a valid branch phone number (7-20 digits/symbols)'),
+  validate
+], async (req, res) => {
   try {
     const { name, location, phone } = req.body;
     const branch = await Branch.findByPk(req.params.id);
@@ -52,7 +68,12 @@ router.put('/:id', authenticateToken, authorizeRoles('super_admin'), async (req,
   }
 });
 
-router.delete('/:id', authenticateToken, authorizeRoles('super_admin'), async (req, res) => {
+router.delete('/:id', [
+  authenticateToken, 
+  authorizeRoles('super_admin'),
+  param('id').isInt().withMessage('Invalid branch ID'),
+  validate
+], async (req, res) => {
   try {
     const branch = await Branch.findByPk(req.params.id);
     if (!branch) return res.status(404).json({ message: 'Branch not found' });

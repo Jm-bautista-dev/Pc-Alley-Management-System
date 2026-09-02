@@ -7,6 +7,8 @@ const Supplier = sequelize.define('Supplier', {
   phone: { type: DataTypes.STRING },
   email: { type: DataTypes.STRING },
   address: { type: DataTypes.TEXT }
+}, {
+  tableName: 'suppliers'
 });
 
 module.exports = Supplier;

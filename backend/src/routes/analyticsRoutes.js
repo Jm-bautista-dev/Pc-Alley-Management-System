@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../middleware/authMiddleware');
+const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
 const {
   getDashboardMetrics,
   getBranchPerformance,
@@ -8,7 +8,11 @@ const {
   getBestSellers,
   getDeadStock,
   getCrossSellInsights,
-  getCustomerAnalytics
+  getCustomerAnalytics,
+  getForecastingAnalytics,
+  getPrescriptiveAnalytics,
+  getForecastingBenchmark,
+  getBrandAnalytics
 } = require('../controllers/analyticsController');
 
 router.use(authenticateToken);
@@ -20,5 +24,11 @@ router.get('/best-sellers', getBestSellers);
 router.get('/dead-stock', getDeadStock);
 router.get('/cross-sell', getCrossSellInsights);
 router.get('/customers', getCustomerAnalytics);
+router.get('/brands', getBrandAnalytics);
+
+// Refactored Super Admin & Branch Admin restricted analytics routes
+router.get('/forecasting', authorizeRoles('super_admin'), getForecastingAnalytics);
+router.get('/prescriptive', authorizeRoles('super_admin'), getPrescriptiveAnalytics);
+router.get('/benchmark', authorizeRoles('super_admin', 'branch_admin'), getForecastingBenchmark);
 
 module.exports = router;
