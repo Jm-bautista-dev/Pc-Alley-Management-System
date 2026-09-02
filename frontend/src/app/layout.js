@@ -3,7 +3,11 @@ import { Inter, DM_Sans, Rajdhani, Bebas_Neue } from 'next/font/google';
 import { LayoutProvider } from '../context/LayoutContext';
 import { NotificationProvider } from '../context/NotificationContext';
 import { ModalProvider } from '../context/ModalContext';
+import { ThemeProvider } from '../context/ThemeContext';
 import { Toaster } from 'react-hot-toast';
+
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
 
 const dmSans = DM_Sans({ 
   subsets: ['latin'],
@@ -27,8 +31,6 @@ export const metadata = {
   description: 'Enterprise ERP for IT resource management',
   viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
 };
-
-import { ThemeProvider } from '../context/ThemeContext';
 
 export default function RootLayout({ children }) {
   return (
@@ -55,33 +57,33 @@ export default function RootLayout({ children }) {
               <LayoutProvider>
                 {children}
                 <Toaster 
-                position="bottom-right"
-                toastOptions={{
-                  style: {
-                    background: 'var(--brand-navy)',
-                    color: 'var(--text-main)',
-                    border: '1px solid var(--border)',
-                    fontFamily: 'var(--font-dm-sans)',
-                    fontSize: '12px',
-                    fontWeight: 'bold',
-                    textTransform: 'uppercase',
-                    letterSpacing: '1px',
-                    borderRadius: '16px',
-                  },
-                  success: {
-                    iconTheme: {
-                      primary: '#22c55e',
-                      secondary: 'var(--brand-bgbase)',
+                  position="bottom-right"
+                  toastOptions={{
+                    style: {
+                      background: 'var(--brand-navy)',
+                      color: 'var(--text-main)',
+                      border: '1px solid var(--border)',
+                      fontFamily: 'var(--font-dm-sans)',
+                      fontSize: '12px',
+                      fontWeight: 'bold',
+                      textTransform: 'uppercase',
+                      letterSpacing: '1px',
+                      borderRadius: '16px',
                     },
-                  },
-                  error: {
-                    iconTheme: {
-                      primary: 'var(--brand-crimson)',
-                      secondary: 'var(--brand-bgbase)',
+                    success: {
+                      iconTheme: {
+                        primary: '#22c55e',
+                        secondary: 'var(--brand-bgbase)',
+                      },
                     },
-                  },
-                }}
-              />
+                    error: {
+                      iconTheme: {
+                        primary: 'var(--brand-crimson)',
+                        secondary: 'var(--brand-bgbase)',
+                      },
+                    },
+                  }}
+                />
               </LayoutProvider>
             </ModalProvider>
           </NotificationProvider>
