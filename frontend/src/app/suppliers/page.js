@@ -44,7 +44,11 @@ export default function SuppliersPage() {
     if (!silent) setLoading(true);
     else setRefreshing(true);
     setError(null);
-    const token = localStorage.getItem("token");
+    const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
+    if (!token) {
+      window.location.href = "/";
+      return;
+    }
     try {
       const res = await fetch(apiUrl("/api/suppliers"), {
         headers: { Authorization: `Bearer ${token}` }
@@ -52,16 +56,18 @@ export default function SuppliersPage() {
       if (res.ok) {
         const data = await res.json();
         setSuppliers(Array.isArray(data) ? data : []);
+      } else if (res.status === 401) {
+        localStorage.removeItem("token");
+        window.location.href = "/";
+        return;
       } else {
         const errData = await res.json().catch(() => ({}));
         const msg = errData.message || errData.error || `Server error ${res.status}`;
         setError(msg);
-        showError(msg);
       }
     } catch (e) {
       const msg = "Network error — could not reach server";
       setError(msg);
-      showError(msg);
     } finally {
       setLoading(false);
       setRefreshing(false);
