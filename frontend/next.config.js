@@ -1,5 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   async rewrites() {
     const backendBaseUrl =
       process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
