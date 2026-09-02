@@ -2,6 +2,7 @@ import './globals.css';
 import { Inter, DM_Sans, Rajdhani, Bebas_Neue } from 'next/font/google';
 import { LayoutProvider } from '../context/LayoutContext';
 import { NotificationProvider } from '../context/NotificationContext';
+import { ModalProvider } from '../context/ModalContext';
 import { Toaster } from 'react-hot-toast';
 
 const dmSans = DM_Sans({ 
@@ -50,9 +51,10 @@ export default function RootLayout({ children }) {
       <body className={`${dmSans.variable} ${rajdhani.variable} ${bebasNeue.variable} font-sans antialiased transition-colors duration-300`}>
         <ThemeProvider>
           <NotificationProvider>
-            <LayoutProvider>
-              {children}
-              <Toaster 
+            <ModalProvider>
+              <LayoutProvider>
+                {children}
+                <Toaster 
                 position="bottom-right"
                 toastOptions={{
                   style: {
@@ -80,7 +82,8 @@ export default function RootLayout({ children }) {
                   },
                 }}
               />
-            </LayoutProvider>
+              </LayoutProvider>
+            </ModalProvider>
           </NotificationProvider>
         </ThemeProvider>
       </body>
