@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 5000;
 const allowedOrigins = (
   process.env.FRONTEND_URLS ||
   process.env.FRONTEND_URL ||
-  'http://localhost:3000,http://localhost:3001'
+  'https://pcalley.shop,http://localhost:3000,http://localhost:3001,http://localhost:3002'
 )
   .split(',')
   .map((origin) => origin.trim())
@@ -18,13 +18,14 @@ const allowedOrigins = (
 
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
       return callback(null, true);
     }
-
-    return callback(new Error(`CORS blocked for origin: ${origin}`));
-  }
+    return callback(null, true);
+  },
+  credentials: true
 }));
+
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use((req, res, next) => {
@@ -57,34 +58,27 @@ app.get('/', (req, res) => {
   res.send('PC Alley API is running...');
 });
 
+// START SERVER IMMEDIATELY (LiteSpeed requirement: must call listen within 3s)
+const server = app.listen(PORT, () => {
+  console.log(`SERVER: Running on http://localhost:${PORT}`);
+  console.log(`ENV: JWT_SECRET loaded: ${process.env.JWT_SECRET ? 'YES (' + process.env.JWT_SECRET.substring(0, 4) + '...)' : 'NO'}`);
+  console.log('--------------------------------------------------');
+});
+
+server.on('error', (err) => {
+  console.error('SERVER ERROR:', err.message);
+});
+
+// Authenticate and sync DB asynchronously
 sequelize
-  .sync({ force: false })
+  .authenticate()
   .then(() => {
-    console.log('--------------------------------------------------');
-    console.log('DATABASE: Synced successfully.');
-
-    const server = app.listen(PORT, () => {
-      console.log(`SERVER: Running on http://localhost:${PORT}`);
-      console.log(`ENV: JWT_SECRET loaded: ${process.env.JWT_SECRET ? 'YES (' + process.env.JWT_SECRET.substring(0, 4) + '...)' : 'NO'}`);
-      console.log('--------------------------------------------------');
-    });
-
-    server.on('error', (err) => {
-      console.log('--------------------------------------------------');
-      if (err.code === 'EADDRINUSE') {
-        console.log(`SERVER ERROR: Port ${PORT} is already in use.`);
-      } else {
-        console.log('SERVER ERROR: Failed to start the API server.');
-      }
-      console.log('--------------------------------------------------');
-      console.error('Technical Details:', err.message);
-      process.exit(1);
-    });
+    console.log('DATABASE: Connected to MySQL successfully.');
+    return sequelize.sync({ force: false });
+  })
+  .then(() => {
+    console.log('DATABASE: Schema synced.');
   })
   .catch((err) => {
-    console.log('--------------------------------------------------');
-    console.log('DATABASE ERROR: Could not connect to MySQL.');
-    console.log('Tip: Please ensure XAMPP is open and MySQL is STARTED.');
-    console.log('--------------------------------------------------');
-    console.error('Technical Details:', err.message);
+    console.error('DATABASE ERROR:', err.message);
   });
