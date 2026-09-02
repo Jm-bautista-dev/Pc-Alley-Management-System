@@ -13,7 +13,10 @@ router.post('/', [
   authenticateToken, 
   authorizeRoles('super_admin'), 
   upload.single('image'),
-  body('name').notEmpty().trim().isLength({ min: 2, max: 200 }).withMessage('Product name must be between 2 and 200 characters.'),
+  body('name')
+    .notEmpty().trim()
+    .isLength({ min: 2, max: 200 }).withMessage('Product name must be between 2 and 200 characters.')
+    .matches(/[A-Za-z]/).withMessage('Product name must contain letters or a valid model designation (cannot be numbers only).'),
   body('price').isFloat({ min: 0.01, max: 99999999.99 }).withMessage('Price must be a positive number between ₱0.01 and ₱99,999,999.99.'),
   body('description').optional({ checkFalsy: true }).isString().trim().isLength({ max: 2000 }).withMessage('Description cannot exceed 2000 characters.'),
   body('category_id').optional({ checkFalsy: true }).isInt().withMessage('Category ID must be an integer.'),

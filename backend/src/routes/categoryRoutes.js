@@ -17,10 +17,20 @@ router.get('/', authenticateToken, async (req, res) => {
 router.post('/', [authenticateToken, authorizeRoles('super_admin')], async (req, res) => {
   try {
     const { name } = req.body;
-    if (!name) {
+    const trimmed = (name || '').trim();
+    if (!trimmed) {
       return res.status(400).json({ error: 'Category name is required.' });
     }
-    const category = await Category.create({ name });
+    if (/\d/.test(trimmed)) {
+      return res.status(400).json({ error: 'Category name cannot contain numbers.' });
+    }
+    if (!/^[A-Za-z\s.\'-]+$/.test(trimmed)) {
+      return res.status(400).json({ error: 'Category name can only contain letters, spaces, and hyphens.' });
+    }
+    if (trimmed.length < 2 || trimmed.length > 50) {
+      return res.status(400).json({ error: 'Category name must be between 2 and 50 characters.' });
+    }
+    const category = await Category.create({ name: trimmed });
     res.status(201).json(category);
   } catch (error) {
     if (error.name === 'SequelizeUniqueConstraintError') {

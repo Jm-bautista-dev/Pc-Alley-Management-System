@@ -95,19 +95,23 @@ export default function SuppliersPage() {
   const validateForm = () => {
     const errors = {};
 
-    // 1. Company Name validation (Required, 2-100 characters)
+    // 1. Company Name validation (Required, 2-100 characters, must contain letters)
     if (!companyName.trim()) {
       errors.companyName = "Company Name is required.";
     } else if (companyName.trim().length < 2 || companyName.trim().length > 100) {
       errors.companyName = "Company Name must be between 2 and 100 characters.";
+    } else if (!/[A-Za-z]/.test(companyName.trim())) {
+      errors.companyName = "Company Name must contain at least one letter (cannot be numbers only).";
     }
 
-    // 2. Supplier Name validation (Required, letters, spaces, dots, 2-100 chars)
+    // 2. Supplier Name validation (Required, letters, spaces, dots, 2-100 chars, NO numbers)
     if (!supplierName.trim()) {
       errors.supplierName = "Supplier Name is required.";
     } else if (supplierName.trim().length < 2 || supplierName.trim().length > 100) {
       errors.supplierName = "Supplier Name must be between 2 and 100 characters.";
-    } else if (!/^[A-Za-z\s.]+$/.test(supplierName.trim())) {
+    } else if (/\d/.test(supplierName.trim())) {
+      errors.supplierName = "Supplier Name cannot contain numbers.";
+    } else if (!/^[A-Za-z\s.\'-]+$/.test(supplierName.trim())) {
       errors.supplierName = "Supplier Name can only contain letters, spaces, and dots.";
     }
 

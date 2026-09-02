@@ -6,6 +6,7 @@ import TopBar from "@/components/TopBar";
 import { apiUrl } from "@/lib/api";
 import toast, { Toaster } from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
+import { validatePersonName, validatePhoneNumber, validateEmail } from "@/utils/validators";
 import {
   Users,
   Search,
@@ -102,10 +103,19 @@ export default function CustomersPage() {
 
   const handleAddCustomer = async (e) => {
     e.preventDefault();
-    if (!formData.name.trim()) {
-      toast.error("Name is required");
-      return;
+    const nameErr = validatePersonName(formData.name, "Customer Name");
+    if (nameErr) return toast.error(nameErr);
+
+    if (formData.email?.trim()) {
+      const emailErr = validateEmail(formData.email, false);
+      if (emailErr) return toast.error(emailErr);
     }
+
+    if (formData.phone?.trim()) {
+      const phoneErr = validatePhoneNumber(formData.phone, false);
+      if (phoneErr) return toast.error(phoneErr);
+    }
+
     setSubmitting(true);
     const token = localStorage.getItem("token");
     try {

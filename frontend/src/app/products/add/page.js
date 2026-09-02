@@ -10,6 +10,7 @@ import toast, { Toaster } from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useTheme } from "@/context/ThemeContext";
+import { validateProductName } from "@/utils/validators";
 
 export default function AddPage() {
   const router = useRouter();
@@ -116,7 +117,12 @@ export default function AddPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.name || !formData.sku || !formData.price) {
+    const productErr = validateProductName(formData.name, "Product Name");
+    if (productErr) {
+      toast.error(productErr);
+      return;
+    }
+    if (!formData.sku?.trim() || !formData.price) {
       toast.error("Please fill all required fields");
       return;
     }

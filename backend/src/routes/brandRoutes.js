@@ -70,13 +70,20 @@ router.get('/active', authenticateToken, async (req, res) => {
 router.post('/', [authenticateToken, authorizeRoles('super_admin'), upload.single('logo')], async (req, res) => {
   try {
     const { name, description, status } = req.body;
-    if (!name) {
+    const trimmedName = (name || '').trim();
+    if (!trimmedName) {
       return res.status(400).json({ error: 'Brand name is required.' });
     }
+    if (!/[A-Za-z]/.test(trimmedName)) {
+      return res.status(400).json({ error: 'Brand name must contain at least one letter (cannot be numbers only).' });
+    }
+    if (trimmedName.length < 2 || trimmedName.length > 100) {
+      return res.status(400).json({ error: 'Brand name must be between 2 and 100 characters.' });
+    }
 
-    const slug = slugify(name);
+    const slug = slugify(trimmedName);
     // Check duplicate
-    const existing = await Brand.findOne({ where: { [Op.or]: [{ name }, { slug }] } });
+    const existing = await Brand.findOne({ where: { [Op.or]: [{ name: trimmedName }, { slug }] } });
     if (existing) {
       return res.status(400).json({ error: 'Brand name or slug already exists.' });
     }

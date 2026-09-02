@@ -19,6 +19,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { apiUrl } from "@/lib/api";
 import toast, { Toaster } from "react-hot-toast";
 import { useTheme } from "@/context/ThemeContext";
+import { validatePersonName } from "@/utils/validators";
 
 export default function QuotationsPage() {
   const { theme } = useTheme();
@@ -85,11 +86,13 @@ export default function QuotationsPage() {
 
   const handleCreate = (e) => {
     e.preventDefault();
-    if (!form.customer_name) return toast.error("Please enter a customer name");
+    const customerErr = validatePersonName(form.customer_name, "Customer Name");
+    if (customerErr) return toast.error(customerErr);
     if (form.items.some(i => !i.product_id && !i.product_name)) return toast.error("Please fill in all items");
     const newQuote = {
       id: Date.now(),
       ...form,
+      customer_name: form.customer_name.trim(),
       subtotal,
       status: "Draft",
       createdAt: new Date().toISOString()

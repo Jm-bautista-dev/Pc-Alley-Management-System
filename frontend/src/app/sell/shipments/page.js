@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import toast, { Toaster } from "react-hot-toast";
+import { validatePersonName } from "@/utils/validators";
 
 const COURIERS = ["LBC Express", "J&T Express", "Ninja Van", "GrabExpress", "Lalamove", "2GO Express", "Flash Express", "In-House Delivery"];
 
@@ -68,10 +69,16 @@ export default function ShipmentsPage() {
 
   const handleCreate = (e) => {
     e.preventDefault();
-    if (!form.order_id || !form.customer_name || !form.address) return toast.error("Fill in all required fields");
+    if (!form.order_id?.trim()) return toast.error("Order ID is required");
+    const customerErr = validatePersonName(form.customer_name, "Customer Name");
+    if (customerErr) return toast.error(customerErr);
+    if (!form.address?.trim()) return toast.error("Shipping address is required");
+
     const newShipment = {
       id: Date.now(),
       ...form,
+      customer_name: form.customer_name.trim(),
+      address: form.address.trim(),
       status: "Preparing",
       createdAt: new Date().toISOString()
     };
