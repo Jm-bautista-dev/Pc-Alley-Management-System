@@ -38,12 +38,7 @@ const STATUS_CONFIG = {
 };
 
 export default function ReturnsPage() {
-  const [returns, setReturns] = useState(() => {
-    if (typeof window !== "undefined") {
-      try { return JSON.parse(localStorage.getItem("pc_alley_returns") || "[]"); } catch { return []; }
-    }
-    return [];
-  });
+  const [returns, setReturns] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -62,8 +57,14 @@ export default function ReturnsPage() {
   });
 
   useEffect(() => {
-    const userData = localStorage.getItem("user");
-    if (userData) setCurrentUser(JSON.parse(userData));
+    try {
+      const userData = localStorage.getItem("user");
+      if (userData) setCurrentUser(JSON.parse(userData));
+      const saved = localStorage.getItem("pc_alley_returns");
+      if (saved) setReturns(JSON.parse(saved));
+    } catch (e) {
+      console.error("Error reading localStorage:", e);
+    }
   }, []);
 
   const saveReturns = (updated) => {

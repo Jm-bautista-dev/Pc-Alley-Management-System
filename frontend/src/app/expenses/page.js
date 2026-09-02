@@ -24,16 +24,20 @@ const CATEGORIES = ["Rent", "Utilities", "Salaries", "Maintenance", "Marketing",
 
 export default function ExpensesPage() {
   const { theme } = useTheme();
-  const [expenses, setExpenses] = useState(() => {
-    if (typeof window !== "undefined") {
-      try { return JSON.parse(localStorage.getItem("pc_alley_expenses") || "[]"); } catch { return []; }
-    }
-    return [];
-  });
+  const [expenses, setExpenses] = useState([]);
   const [search, setSearch] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("pc_alley_expenses");
+      if (saved) setExpenses(JSON.parse(saved));
+    } catch (e) {
+      console.error("Error reading localStorage:", e);
+    }
+  }, []);
 
   const [form, setForm] = useState({
     description: "",

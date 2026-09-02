@@ -59,16 +59,16 @@ export default function ImportPage() {
   const [validationReport, setValidationReport] = useState(null);
   const [ingestionLogs, setIngestionLogs] = useState([]);
   const [currentLogStep, setCurrentLogStep] = useState(0);
-  const [history, setHistory] = useState(() => {
-    if (typeof window !== "undefined") {
-      try {
-        return JSON.parse(localStorage.getItem("pc_alley_import_history") || "[]");
-      } catch {
-        return [];
-      }
+  const [history, setHistory] = useState([]);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("pc_alley_import_history");
+      if (saved) setHistory(JSON.parse(saved));
+    } catch (e) {
+      console.error("Error reading localStorage:", e);
     }
-    return [];
-  });
+  }, []);
 
   const saveHistory = (updated) => {
     setHistory(updated);

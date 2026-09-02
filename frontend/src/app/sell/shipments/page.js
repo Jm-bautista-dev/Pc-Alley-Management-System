@@ -30,18 +30,22 @@ const STATUS_CONFIG = {
 };
 
 export default function ShipmentsPage() {
-  const [shipments, setShipments] = useState(() => {
-    if (typeof window !== "undefined") {
-      try { return JSON.parse(localStorage.getItem("pc_alley_shipments") || "[]"); } catch { return []; }
-    }
-    return [];
-  });
+  const [shipments, setShipments] = useState([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewShipment, setViewShipment] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [limit, setLimit] = useState(10);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("pc_alley_shipments");
+      if (saved) setShipments(JSON.parse(saved));
+    } catch (e) {
+      console.error("Error reading localStorage:", e);
+    }
+  }, []);
 
   useEffect(() => {
     setCurrentPage(1);

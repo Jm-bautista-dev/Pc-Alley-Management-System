@@ -22,12 +22,7 @@ import { useTheme } from "@/context/ThemeContext";
 
 export default function QuotationsPage() {
   const { theme } = useTheme();
-  const [quotations, setQuotations] = useState(() => {
-    if (typeof window !== "undefined") {
-      try { return JSON.parse(localStorage.getItem("pc_alley_quotations") || "[]"); } catch { return []; }
-    }
-    return [];
-  });
+  const [quotations, setQuotations] = useState([]);
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [search, setSearch] = useState("");
@@ -35,6 +30,15 @@ export default function QuotationsPage() {
   const [viewQuote, setViewQuote] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("pc_alley_quotations");
+      if (saved) setQuotations(JSON.parse(saved));
+    } catch (e) {
+      console.error("Error reading localStorage:", e);
+    }
+  }, []);
 
   const [form, setForm] = useState({
     customer_name: "",

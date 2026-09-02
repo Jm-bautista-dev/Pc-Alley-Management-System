@@ -24,16 +24,20 @@ import toast, { Toaster } from "react-hot-toast";
 const DISCOUNT_TYPES = ["Percentage (%)", "Fixed Amount (₱)"];
 
 export default function DiscountsPage() {
-  const [discounts, setDiscounts] = useState(() => {
-    if (typeof window !== "undefined") {
-      try { return JSON.parse(localStorage.getItem("pc_alley_discounts") || "[]"); } catch { return []; }
-    }
-    return [];
-  });
+  const [discounts, setDiscounts] = useState([]);
   const [search, setSearch] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("pc_alley_discounts");
+      if (saved) setDiscounts(JSON.parse(saved));
+    } catch (e) {
+      console.error("Error reading localStorage:", e);
+    }
+  }, []);
 
   const [form, setForm] = useState({
     name: "",
