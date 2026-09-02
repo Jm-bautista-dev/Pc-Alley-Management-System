@@ -9,7 +9,6 @@ import { apiUrl } from "@/lib/api";
 import { LogoIcon } from "@/components/Logo";
 import { useTheme } from "@/context/ThemeContext";
 import { showSuccess, showError, showInfo, showWarning, showConfirm, showModal } from "@/context/ModalContext";
-import { usePreventBack } from "@/lib/usePreventBack";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -20,9 +19,6 @@ export default function LoginPage() {
     username: "",
     password: ""
   });
-
-  // Prevent authenticated users from pressing Back to reach this page
-  usePreventBack(false);
 
   useEffect(() => {
     // If user is already logged in, redirect them away from the login page
