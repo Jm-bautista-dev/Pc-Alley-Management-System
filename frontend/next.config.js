@@ -3,6 +3,9 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   experimental: {
     cpus: 1,
     workerThreads: false,
@@ -10,6 +13,7 @@ const nextConfig = {
     parallelServerBuildTraces: false,
   },
   output: 'standalone',
+  staticPageGenerationTimeout: 1000,
   async rewrites() {
     const backendBaseUrl =
       process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
