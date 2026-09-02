@@ -8,11 +8,13 @@ import {
   Search,
   MoreVertical,
   Building2,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiUrl } from "@/lib/api";
 import { useNotifications } from "@/context/NotificationContext";
-import toast from "react-hot-toast";
+import { showSuccess, showError, showInfo, showWarning, showConfirm, showModal } from "@/context/ModalContext";
 
 export default function StaffPage() {
   const { addNotification } = useNotifications();
@@ -21,21 +23,27 @@ export default function StaffPage() {
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedBranch, setSelectedBranch] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [provisionData, setProvisionData] = useState({
+    first_name: "",
+    last_name: "",
     username: "",
     password: "",
+    confirmPassword: "",
     role: "employee",
     branch_id: ""
   });
   const availableRoles = currentUser?.role === "super_admin"
     ? [
-        { value: "employee", label: "Staff" },
-        { value: "branch_admin", label: "Manager" }
-      ]
+      { value: "employee", label: "Staff" },
+      { value: "branch_admin", label: "Manager" }
+    ]
     : [
-        { value: "employee", label: "Staff" }
-      ];
+      { value: "employee", label: "Staff" }
+    ];
   const isSuperAdmin = currentUser?.role === "super_admin";
   const pageTitle = isSuperAdmin ? "PERSONNEL REGISTRY" : "STAFF REGISTRY";
   const createLabel = isSuperAdmin ? "Register Personnel" : "Register Staff";
@@ -56,6 +64,12 @@ export default function StaffPage() {
   }, []);
 
   useEffect(() => {
+    if (currentUser?.role === "super_admin") {
+      fetchData();
+    }
+  }, [selectedBranch]);
+
+  useEffect(() => {
     if (!currentUser) return;
 
     setProvisionData((prev) => ({
@@ -69,16 +83,20 @@ export default function StaffPage() {
 
   const fetchData = async () => {
     const token = localStorage.getItem("token");
+    const usersUrl = selectedBranch
+      ? `/api/auth/users?branch_id=${selectedBranch}`
+      : "/api/auth/users";
+    setLoading(true);
     try {
       const [uRes, bRes] = await Promise.all([
-        fetch(apiUrl("/api/auth/users"), { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(apiUrl(usersUrl), { headers: { Authorization: `Bearer ${token}` } }),
         fetch(apiUrl("/api/branches"), { headers: { Authorization: `Bearer ${token}` } })
       ]);
 
       const uData = await uRes.json();
       const bData = await bRes.json();
 
-      if (uRes.ok) setUsers(Array.isArray(uData) ? uData : []);
+      if (uRes.ok) setUsers(Array.isArray(uData) ? uData : (uData.data || []));
       if (bRes.ok) setBranches(bData);
     } catch (err) {
       console.error("Staff registry fetch failed:", err);
@@ -89,13 +107,18 @@ export default function StaffPage() {
 
   const resetProvisionForm = () => {
     setProvisionData({
+      first_name: "",
+      last_name: "",
       username: "",
       password: "",
+      confirmPassword: "",
       role: availableRoles[0]?.value || "employee",
       branch_id: currentUser?.role === "branch_admin"
         ? String(currentUser.branch_id)
         : (branches[0] ? String(branches[0].id) : "")
     });
+    setShowPassword(false);
+    setShowConfirmPassword(false);
   };
 
   const openProvisionModal = () => {
@@ -113,16 +136,41 @@ export default function StaffPage() {
     }
 
     const payload = {
-      ...provisionData,
+      first_name: provisionData.first_name.trim(),
+      last_name: provisionData.last_name.trim(),
       role: isSuperAdmin ? provisionData.role : "employee",
       username: provisionData.username.trim().toLowerCase(),
+      password: provisionData.password,
       branch_id: currentUser?.role === "branch_admin"
         ? Number(currentUser.branch_id)
         : Number(provisionData.branch_id)
     };
 
+    if (!payload.first_name) {
+      alert("Please enter the staff member's first name.");
+      return;
+    }
+    if (/\d/.test(payload.first_name) || !/^[A-Za-z\s.\'-]+$/.test(payload.first_name) || payload.first_name.length < 2 || payload.first_name.length > 50) {
+      alert("First name can only contain letters, spaces, hyphens, apostrophes, and dots (2-50 chars, no numbers).");
+      return;
+    }
+
+    if (!payload.last_name) {
+      alert("Please enter the staff member's last name.");
+      return;
+    }
+    if (/\d/.test(payload.last_name) || !/^[A-Za-z\s.\'-]+$/.test(payload.last_name) || payload.last_name.length < 2 || payload.last_name.length > 50) {
+      alert("Last name can only contain letters, spaces, hyphens, apostrophes, and dots (2-50 chars, no numbers).");
+      return;
+    }
+
     if (!payload.username) {
       alert("Please enter a username for the staff account.");
+      return;
+    }
+
+    if (provisionData.password !== provisionData.confirmPassword) {
+      alert("Passwords do not match.");
       return;
     }
 
@@ -151,12 +199,13 @@ export default function StaffPage() {
       if (res.ok) {
         setIsModalOpen(false);
         resetProvisionForm();
+        const staffDisplayName = `${payload.first_name} ${payload.last_name}`;
         addNotification({
           type: "success",
           title: payload.role === "branch_admin" ? "Manager Registered" : "Staff Registered",
-          message: `${payload.username} was created for ${branches.find((branch) => branch.id === payload.branch_id)?.name || "the selected branch"}.`,
+          message: `${staffDisplayName} was created for ${branches.find((branch) => branch.id === payload.branch_id)?.name || "the selected branch"}.`,
         });
-        toast.success(`${payload.role === "branch_admin" ? "Manager" : "Staff"} account created`);
+        showSuccess(`${payload.role === "branch_admin" ? "Manager" : "Staff"} account created`);
         fetchData();
       } else if (data.errors && Array.isArray(data.errors)) {
         const msgs = data.errors.map((entry) => Object.values(entry)[0]).join("\n");
@@ -165,14 +214,14 @@ export default function StaffPage() {
           title: "Registration Validation Failed",
           message: msgs,
         });
-        toast.error("Validation failed");
+        showError("Validation failed");
       } else {
         addNotification({
           type: "alert",
           title: "Registration Failed",
           message: data.message || "Failed to register staff account.",
         });
-        toast.error(data.message || "Failed to register staff account.");
+        showError(data.message || "Failed to register staff account.");
       }
     } catch (err) {
       console.error("Staff registration failed:", err);
@@ -181,7 +230,7 @@ export default function StaffPage() {
         title: "Network Connection Error",
         message: "Could not reach the backend while registering personnel.",
       });
-      toast.error("Network connection error");
+      showError("Network connection error");
     }
   };
 
@@ -194,10 +243,10 @@ export default function StaffPage() {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
-        toast.success("Account terminated successfully");
+        showSuccess("Account terminated successfully");
         fetchData();
       } else {
-        toast.error("Failed to terminate account");
+        showError("Failed to terminate account");
       }
     } catch (err) {
       console.error(err);
@@ -210,6 +259,8 @@ export default function StaffPage() {
 
     return (
       user.username.toLowerCase().includes(query) ||
+      user.first_name?.toLowerCase().includes(query) ||
+      user.last_name?.toLowerCase().includes(query) ||
       user.Branch?.name?.toLowerCase().includes(query) ||
       user.role.toLowerCase().includes(query)
     );
@@ -256,10 +307,25 @@ export default function StaffPage() {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={isSuperAdmin ? "Search personnel username, role, or branch..." : "Search staff username or branch..."}
+                  placeholder={isSuperAdmin ? "Search personnel name, username, role, or branch..." : "Search staff name, username, or branch..."}
                   className="w-full bg-brand-bgbase border border-border rounded-xl py-2.5 pl-11 pr-4 text-xs text-main focus:outline-none focus:border-brand-neonblue/30 transition-all font-bold"
                 />
               </div>
+
+              {isSuperAdmin && (
+                <select
+                  value={selectedBranch}
+                  onChange={(e) => setSelectedBranch(e.target.value)}
+                  className="w-full md:w-56 bg-brand-bgbase border border-border rounded-xl py-2.5 px-4 text-xs text-main focus:outline-none focus:border-brand-neonblue/30 transition-all font-bold"
+                >
+                  <option value="" className="bg-brand-surface">All Branches</option>
+                  {branches.map((branch) => (
+                    <option key={branch.id} value={branch.id} className="bg-brand-surface">
+                      {branch.name}
+                    </option>
+                  ))}
+                </select>
+              )}
 
               <button
                 type="button"
@@ -275,6 +341,7 @@ export default function StaffPage() {
                 <thead>
                   <tr className="text-[10px] font-black uppercase tracking-widest text-main/40 border-b border-border">
                     <th className="pb-4 pr-4">{isSuperAdmin ? "Personnel ID" : "Staff ID"}</th>
+                    <th className="pb-4 px-4">Full Name</th>
                     <th className="pb-4 px-4">Username</th>
                     <th className="pb-4 px-4">Role</th>
                     <th className="pb-4 px-4">Branch</th>
@@ -284,41 +351,43 @@ export default function StaffPage() {
                 <tbody className="text-sm">
                   {loading ? (
                     <tr>
-                      <td colSpan="5" className="py-24 text-center text-[10px] font-black uppercase tracking-[4px] text-main/20 animate-pulse">
+                      <td colSpan="6" className="py-24 text-center text-[10px] font-black uppercase tracking-[4px] text-main/20 animate-pulse">
                         Syncing Staff Registry...
                       </td>
                     </tr>
                   ) : filteredUsers.length === 0 ? (
                     <tr>
-                      <td colSpan="5" className="py-24 text-center text-[10px] font-bold uppercase tracking-[4px] text-muted">
+                      <td colSpan="6" className="py-24 text-center text-[10px] font-bold uppercase tracking-[4px] text-muted">
                         No Staff Accounts Found
                       </td>
                     </tr>
                   ) : (
                     filteredUsers.map((staff) => (
                       <tr key={staff.id} className="border-b border-border hover:bg-brand-muted/5 transition-colors">
-                        <td className="py-4 pr-4 font-mono text-[10px] text-muted-40 uppercase">
+                        <td className="py-4 pr-4 font-mono text-[10px] text-muted/40 uppercase">
                           STF-{staff.id.toString().padStart(4, "0")}
                         </td>
                         <td className="py-4 px-4">
                           <div className="flex items-center gap-3">
                             <div className="w-9 h-9 rounded-lg bg-brand-surface border border-border flex items-center justify-center text-[10px] font-bold text-muted uppercase">
-                              {staff.username.substring(0, 2)}
+                              {(staff.first_name ? `${staff.first_name} ${staff.last_name}` : staff.username).substring(0, 2)}
                             </div>
                             <div>
-                              <p className="text-[13px] font-bold text-main">{staff.username}</p>
+                              <p className="text-[13px] font-bold text-main">{staff.first_name ? `${staff.first_name} ${staff.last_name}` : "No name"}</p>
                               <p className="text-[10px] text-main/30 font-black uppercase tracking-widest">
                                 {staff.role === "branch_admin" ? "Branch Manager" : "Branch Staff"}
                               </p>
                             </div>
                           </div>
                         </td>
+                        <td className="py-4 px-4 font-mono text-[11px] text-muted">
+                          {staff.username}
+                        </td>
                         <td className="py-4 px-4">
-                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border ${
-                            staff.role === "branch_admin"
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border ${staff.role === "branch_admin"
                               ? "bg-brand-neonblue/10 border-brand-neonblue/20 text-brand-neonblue"
                               : "bg-orange-400/10 border-orange-400/20 text-orange-400"
-                          }`}>
+                            }`}>
                             {staff.role === "branch_admin" ? "Manager" : "Staff"}
                           </span>
                         </td>
@@ -375,6 +444,31 @@ export default function StaffPage() {
               </div>
 
               <form onSubmit={handleProvision} className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black uppercase tracking-[3px] text-muted ml-2">First Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={provisionData.first_name}
+                      onChange={(e) => setProvisionData({ ...provisionData, first_name: e.target.value })}
+                      className="w-full bg-brand-bgbase border border-border rounded-2xl py-4 px-6 text-sm text-main focus:outline-none focus:border-brand-neonblue transition-all"
+                      placeholder="First name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black uppercase tracking-[3px] text-muted ml-2">Last Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={provisionData.last_name}
+                      onChange={(e) => setProvisionData({ ...provisionData, last_name: e.target.value })}
+                      className="w-full bg-brand-bgbase border border-border rounded-2xl py-4 px-6 text-sm text-main focus:outline-none focus:border-brand-neonblue transition-all"
+                      placeholder="Last name"
+                    />
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <label className="text-[9px] font-black uppercase tracking-[3px] text-muted ml-2">Username</label>
                   <input
@@ -389,14 +483,44 @@ export default function StaffPage() {
 
                 <div className="space-y-2">
                   <label className="text-[9px] font-black uppercase tracking-[3px] text-muted ml-2">Password</label>
-                  <input
-                    type="password"
-                    required
-                    value={provisionData.password}
-                    onChange={(e) => setProvisionData({ ...provisionData, password: e.target.value })}
-                    className="w-full bg-brand-bgbase border border-border rounded-2xl py-4 px-6 text-sm text-main focus:outline-none focus:border-brand-crimson transition-all"
-                    placeholder="At least 6 characters"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      required
+                      value={provisionData.password}
+                      onChange={(e) => setProvisionData({ ...provisionData, password: e.target.value })}
+                      className="w-full bg-brand-bgbase border border-border rounded-2xl py-4 pl-6 pr-12 text-sm text-main focus:outline-none focus:border-brand-crimson transition-all"
+                      placeholder="At least 6 characters"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-muted hover:text-main transition-colors"
+                    >
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase tracking-[3px] text-muted ml-2">Confirm Password</label>
+                  <div className="relative">
+                    <input
+                      type={showConfirmPassword ? "text" : "password"}
+                      required
+                      value={provisionData.confirmPassword || ""}
+                      onChange={(e) => setProvisionData({ ...provisionData, confirmPassword: e.target.value })}
+                      className="w-full bg-brand-bgbase border border-border rounded-2xl py-4 pl-6 pr-12 text-sm text-main focus:outline-none focus:border-brand-crimson transition-all"
+                      placeholder="Repeat password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-muted hover:text-main transition-colors"
+                    >
+                      {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -436,7 +560,7 @@ export default function StaffPage() {
                 </div>
 
                 <div className="pt-6 flex gap-4">
-                   <button
+                  <button
                     type="button"
                     onClick={() => {
                       setIsModalOpen(false);
