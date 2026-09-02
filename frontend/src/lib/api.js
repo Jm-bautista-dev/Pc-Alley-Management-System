@@ -1,11 +1,20 @@
-const rawBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
-const API_BASE_URL = rawBaseUrl
-  ? rawBaseUrl.replace(/\/$/, "")
-  : "";
+const getApiBaseUrl = () => {
+  const envUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
+  if (envUrl) {
+    return envUrl.replace(/\/$/, "");
+  }
+  if (typeof window !== "undefined") {
+    if (window.location.hostname.includes("pcalley.shop")) {
+      return "https://api.pcalley.shop";
+    }
+  }
+  return "";
+};
 
 const apiUrl = (path) => {
+  const base = getApiBaseUrl();
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  return `${API_BASE_URL}${normalizedPath}`;
+  return `${base}${normalizedPath}`;
 };
 
 const getApiErrorMessage = (error, fallbackMessage) => {

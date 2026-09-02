@@ -17,7 +17,7 @@ const nextConfig = {
   async rewrites() {
     const backendBaseUrl =
       process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
-      "http://localhost:5000";
+      "https://api.pcalley.shop";
 
     return [
       {
