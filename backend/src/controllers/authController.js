@@ -25,9 +25,15 @@ const register = async (req, res) => {
     if (!firstName) {
       return res.status(400).json({ message: 'First name is required' });
     }
+    if (/\d/.test(firstName) || !/^[A-Za-z\s.\'-]+$/.test(firstName) || firstName.length < 2 || firstName.length > 50) {
+      return res.status(400).json({ message: 'First name can only contain letters, spaces, hyphens, apostrophes, and dots (2-50 chars, no numbers)' });
+    }
 
     if (!lastName) {
       return res.status(400).json({ message: 'Last name is required' });
+    }
+    if (/\d/.test(lastName) || !/^[A-Za-z\s.\'-]+$/.test(lastName) || lastName.length < 2 || lastName.length > 50) {
+      return res.status(400).json({ message: 'Last name can only contain letters, spaces, hyphens, apostrophes, and dots (2-50 chars, no numbers)' });
     }
 
     const allowedRolesByCreator = {
@@ -202,10 +208,18 @@ const updateProfile = async (req, res) => {
     if (!user) return res.status(404).json({ message: 'User not found' });
 
     if (first_name !== undefined) {
-      user.first_name = first_name.trim();
+      const fn = String(first_name).trim();
+      if (!fn || /\d/.test(fn) || !/^[A-Za-z\s.\'-]+$/.test(fn) || fn.length < 2 || fn.length > 50) {
+        return res.status(400).json({ message: 'First name can only contain letters, spaces, hyphens, apostrophes, and dots (2-50 chars, no numbers)' });
+      }
+      user.first_name = fn;
     }
     if (last_name !== undefined) {
-      user.last_name = last_name.trim();
+      const ln = String(last_name).trim();
+      if (!ln || /\d/.test(ln) || !/^[A-Za-z\s.\'-]+$/.test(ln) || ln.length < 2 || ln.length > 50) {
+        return res.status(400).json({ message: 'Last name can only contain letters, spaces, hyphens, apostrophes, and dots (2-50 chars, no numbers)' });
+      }
+      user.last_name = ln;
     }
     await user.save();
 

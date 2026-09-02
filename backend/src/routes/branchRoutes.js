@@ -17,9 +17,9 @@ router.get('/', authenticateToken, authorizeRoles('super_admin', 'branch_admin',
 router.post('/', [
   authenticateToken, 
   authorizeRoles('super_admin'),
-  body('name').notEmpty().trim().withMessage('Branch name is required'),
-  body('location').optional({ checkFalsy: true }).isString().trim(),
-  body('phone').optional({ checkFalsy: true }).isString().trim(),
+  body('name').trim().notEmpty().withMessage('Branch name is required').isLength({ min: 2, max: 100 }).withMessage('Branch name must be between 2 and 100 characters'),
+  body('location').optional({ checkFalsy: true }).isString().trim().isLength({ max: 255 }).withMessage('Location cannot exceed 255 characters'),
+  body('phone').optional({ checkFalsy: true }).trim().matches(/^[0-9+()-\s]{7,20}$/).withMessage('Please enter a valid branch phone number (7-20 digits/symbols)'),
   validate
 ], async (req, res) => {
   try {
@@ -50,9 +50,9 @@ router.put('/:id', [
   authenticateToken, 
   authorizeRoles('super_admin'),
   param('id').isInt().withMessage('Invalid branch ID'),
-  body('name').optional().notEmpty().trim().withMessage('Branch name cannot be empty'),
-  body('location').optional({ checkFalsy: true }).isString().trim(),
-  body('phone').optional({ checkFalsy: true }).isString().trim(),
+  body('name').optional().trim().notEmpty().withMessage('Branch name cannot be empty').isLength({ min: 2, max: 100 }).withMessage('Branch name must be between 2 and 100 characters'),
+  body('location').optional({ checkFalsy: true }).isString().trim().isLength({ max: 255 }).withMessage('Location cannot exceed 255 characters'),
+  body('phone').optional({ checkFalsy: true }).trim().matches(/^[0-9+()-\s]{7,20}$/).withMessage('Please enter a valid branch phone number (7-20 digits/symbols)'),
   validate
 ], async (req, res) => {
   try {

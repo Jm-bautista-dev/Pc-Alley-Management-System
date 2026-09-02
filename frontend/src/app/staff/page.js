@@ -150,9 +150,17 @@ export default function StaffPage() {
       alert("Please enter the staff member's first name.");
       return;
     }
+    if (/\d/.test(payload.first_name) || !/^[A-Za-z\s.\'-]+$/.test(payload.first_name) || payload.first_name.length < 2 || payload.first_name.length > 50) {
+      alert("First name can only contain letters, spaces, hyphens, apostrophes, and dots (2-50 chars, no numbers).");
+      return;
+    }
 
     if (!payload.last_name) {
       alert("Please enter the staff member's last name.");
+      return;
+    }
+    if (/\d/.test(payload.last_name) || !/^[A-Za-z\s.\'-]+$/.test(payload.last_name) || payload.last_name.length < 2 || payload.last_name.length > 50) {
+      alert("Last name can only contain letters, spaces, hyphens, apostrophes, and dots (2-50 chars, no numbers).");
       return;
     }
 

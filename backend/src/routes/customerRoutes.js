@@ -33,21 +33,58 @@ router.get('/:id/history', [
 ], getCustomerHistory);
 
 router.post('/', [
-  body('name').notEmpty().trim().withMessage('Name is required.'),
-  body('email').optional({ checkFalsy: true }).isEmail().withMessage('Valid email is required.'),
-  body('phone').optional({ checkFalsy: true }).isString().trim(),
-  body('address').optional({ checkFalsy: true }).isString().trim(),
-  body('branchId').optional({ checkFalsy: true }).isInt().withMessage('Branch ID must be an integer.'),
+  body('name')
+    .trim()
+    .notEmpty().withMessage('Customer name is required.')
+    .isLength({ min: 2, max: 100 }).withMessage('Customer name must be between 2 and 100 characters.')
+    .custom(val => !/\d/.test(val)).withMessage('Customer name cannot contain numbers.')
+    .matches(/^[A-Za-z\s.\'-]+$/).withMessage('Customer name can only contain letters, spaces, hyphens, apostrophes, and dots.'),
+  body('email')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isEmail().withMessage('Valid email is required.')
+    .isLength({ max: 100 }).withMessage('Email cannot exceed 100 characters.'),
+  body('phone')
+    .optional({ checkFalsy: true })
+    .trim()
+    .matches(/^09\d{9}$/).withMessage('Phone number must start with 09 and contain exactly 11 digits.')
+    .custom(val => !/^(.)\1+$/.test(val)).withMessage('Phone number cannot consist of only repeating identical digits.'),
+  body('address')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isLength({ max: 255 }).withMessage('Address cannot exceed 255 characters.'),
+  body('branchId')
+    .optional({ checkFalsy: true })
+    .isInt({ min: 1 }).withMessage('Branch ID must be an integer.'),
   validate
 ], createCustomer);
 
 router.put('/:id', [
   param('id').isUUID().withMessage('Invalid customer ID.'),
-  body('name').optional().notEmpty().trim().withMessage('Name cannot be empty.'),
-  body('email').optional({ checkFalsy: true }).isEmail().withMessage('Valid email is required.'),
-  body('phone').optional({ checkFalsy: true }).isString().trim(),
-  body('address').optional({ checkFalsy: true }).isString().trim(),
-  body('branchId').optional({ checkFalsy: true }).isInt().withMessage('Branch ID must be an integer.'),
+  body('name')
+    .optional()
+    .trim()
+    .notEmpty().withMessage('Customer name cannot be empty.')
+    .isLength({ min: 2, max: 100 }).withMessage('Customer name must be between 2 and 100 characters.')
+    .custom(val => !/\d/.test(val)).withMessage('Customer name cannot contain numbers.')
+    .matches(/^[A-Za-z\s.\'-]+$/).withMessage('Customer name can only contain letters, spaces, hyphens, apostrophes, and dots.'),
+  body('email')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isEmail().withMessage('Valid email is required.')
+    .isLength({ max: 100 }).withMessage('Email cannot exceed 100 characters.'),
+  body('phone')
+    .optional({ checkFalsy: true })
+    .trim()
+    .matches(/^09\d{9}$/).withMessage('Phone number must start with 09 and contain exactly 11 digits.')
+    .custom(val => !/^(.)\1+$/.test(val)).withMessage('Phone number cannot consist of only repeating identical digits.'),
+  body('address')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isLength({ max: 255 }).withMessage('Address cannot exceed 255 characters.'),
+  body('branchId')
+    .optional({ checkFalsy: true })
+    .isInt({ min: 1 }).withMessage('Branch ID must be an integer.'),
   validate
 ], updateCustomer);
 

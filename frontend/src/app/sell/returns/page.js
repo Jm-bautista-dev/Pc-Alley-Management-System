@@ -73,12 +73,18 @@ export default function ReturnsPage() {
 
   const handleSubmitReturn = (e) => {
     e.preventDefault();
-    if (!form.order_id || !form.product_name || !form.customer_name) {
+    const custName = (form.customer_name || '').trim();
+    if (!form.order_id || !form.product_name || !custName) {
       return showError("Please fill in all required fields");
     }
+    if (/\d/.test(custName)) return showError("Customer name cannot contain numbers.");
+    if (!/^[A-Za-z\s.\'-]+$/.test(custName)) return showError("Customer name can only contain letters, spaces, hyphens, and dots.");
+    if (custName.length < 2 || custName.length > 100) return showError("Customer name must be between 2 and 100 characters.");
+
     const newReturn = {
       id: Date.now(),
       ...form,
+      customer_name: custName,
       status: "Pending",
       createdAt: new Date().toISOString(),
       submittedBy: currentUser?.username || "Unknown"

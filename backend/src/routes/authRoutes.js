@@ -14,12 +14,16 @@ router.post('/register', [
     .withMessage('Username or internal ID is required'),
   body('first_name')
     .trim()
-    .notEmpty()
-    .withMessage('First name is required'),
+    .notEmpty().withMessage('First name is required')
+    .isLength({ min: 2, max: 50 }).withMessage('First name must be between 2 and 50 characters')
+    .custom(val => !/\d/.test(val)).withMessage('First name cannot contain numbers')
+    .matches(/^[A-Za-z\s.\'-]+$/).withMessage('First name can only contain letters, spaces, hyphens, apostrophes, and dots'),
   body('last_name')
     .trim()
-    .notEmpty()
-    .withMessage('Last name is required'),
+    .notEmpty().withMessage('Last name is required')
+    .isLength({ min: 2, max: 50 }).withMessage('Last name must be between 2 and 50 characters')
+    .custom(val => !/\d/.test(val)).withMessage('Last name cannot contain numbers')
+    .matches(/^[A-Za-z\s.\'-]+$/).withMessage('Last name can only contain letters, spaces, hyphens, apostrophes, and dots'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
   body('role').isIn(['branch_admin', 'employee']).withMessage('Invalid role designation'),
   body('branch_id')
@@ -66,8 +70,20 @@ router.delete('/users/:id', authenticateToken, authorizeRoles('super_admin', 'br
 });
 
 router.put('/profile', authenticateToken, [
-  body('first_name').optional().trim().notEmpty().withMessage('First name cannot be empty'),
-  body('last_name').optional().trim().notEmpty().withMessage('Last name cannot be empty'),
+  body('first_name')
+    .optional()
+    .trim()
+    .notEmpty().withMessage('First name cannot be empty')
+    .isLength({ min: 2, max: 50 }).withMessage('First name must be between 2 and 50 characters')
+    .custom(val => !/\d/.test(val)).withMessage('First name cannot contain numbers')
+    .matches(/^[A-Za-z\s.\'-]+$/).withMessage('First name can only contain letters, spaces, hyphens, apostrophes, and dots'),
+  body('last_name')
+    .optional()
+    .trim()
+    .notEmpty().withMessage('Last name cannot be empty')
+    .isLength({ min: 2, max: 50 }).withMessage('Last name must be between 2 and 50 characters')
+    .custom(val => !/\d/.test(val)).withMessage('Last name cannot contain numbers')
+    .matches(/^[A-Za-z\s.\'-]+$/).withMessage('Last name can only contain letters, spaces, hyphens, apostrophes, and dots'),
   validate
 ], updateProfile);
 

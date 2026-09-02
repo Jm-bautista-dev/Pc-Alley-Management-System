@@ -141,14 +141,14 @@ export default function CategoriesPage() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Create Category Column */}
-              <div className="space-y-6">
-                <div className="bg-brand-surface border border-border/50 rounded-2xl p-6 md:p-8 shadow-sm">
-                  <h3 className="text-sm font-black uppercase tracking-widest text-main mb-6 flex items-center gap-2 border-b border-border/50 pb-4">
-                    <Plus size={16} className="text-brand-neonblue" /> Create Category
-                  </h3>
-                  
-                  {isSuperAdmin ? (
+              {/* Create Category Column (Only visible to Super Admin) */}
+              {isSuperAdmin && (
+                <div className="space-y-6">
+                  <div className="bg-brand-surface border border-border/50 rounded-2xl p-6 md:p-8 shadow-sm">
+                    <h3 className="text-sm font-black uppercase tracking-widest text-main mb-6 flex items-center gap-2 border-b border-border/50 pb-4">
+                      <Plus size={16} className="text-brand-neonblue" /> Create Category
+                    </h3>
+                    
                     <form onSubmit={handleCreateCategory} className="space-y-4">
                       <div>
                         <label className="block text-[10px] font-black text-muted uppercase tracking-[2px] mb-2">Category Name *</label>
@@ -172,18 +172,12 @@ export default function CategoriesPage() {
                         {createLoading ? "Creating..." : "Add Category"}
                       </button>
                     </form>
-                  ) : (
-                    <div className="text-center p-4 border border-border/30 rounded-xl bg-brand-bgbase/50">
-                      <AlertCircle size={24} className="text-brand-crimson mx-auto mb-2 opacity-80" />
-                      <p className="text-xs font-bold text-main uppercase">Access Restricted</p>
-                      <p className="text-[10px] text-muted uppercase tracking-wider mt-1">Only super administrators can create new categories.</p>
-                    </div>
-                  )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Categories List Column */}
-              <div className="lg:col-span-2">
+              <div className={isSuperAdmin ? "lg:col-span-2" : "lg:col-span-3"}>
                 <div className="bg-brand-surface border border-border/50 rounded-2xl p-6 md:p-8 shadow-sm">
                   <h3 className="text-sm font-black uppercase tracking-widest text-main mb-6 flex items-center gap-2 border-b border-border/50 pb-4">
                     <Layers size={16} className="text-brand-neonblue" /> Category Directory ({categories.length})

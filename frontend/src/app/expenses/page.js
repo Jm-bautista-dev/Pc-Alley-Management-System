@@ -50,11 +50,14 @@ export default function ExpensesPage() {
 
   const handleAdd = (e) => {
     e.preventDefault();
-    if (!form.description || !form.amount) return showError("Fill in all required fields");
+    if (!form.description.trim() || !form.amount) return showError("Fill in all required fields");
+    const amt = parseFloat(form.amount);
+    if (isNaN(amt) || amt <= 0 || amt > 10000000) return showError("Amount must be between ₱0.01 and ₱10,000,000.00");
     const newEntry = {
       id: Date.now(),
       ...form,
-      amount: parseFloat(form.amount),
+      description: form.description.trim(),
+      amount: amt,
       createdAt: new Date().toISOString()
     };
     saveExpenses([newEntry, ...expenses]);

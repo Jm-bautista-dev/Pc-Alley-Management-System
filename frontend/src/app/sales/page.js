@@ -712,8 +712,21 @@ export default function SalesPage() {
 
   const handleAddCustomer = async (e) => {
     e.preventDefault();
-    if (!customerFormData.name.trim()) {
+    const custName = customerFormData.name.trim();
+    if (!custName) {
       showError("Name is required");
+      return;
+    }
+    if (/\d/.test(custName)) {
+      showError("Customer name cannot contain numbers.");
+      return;
+    }
+    if (!/^[A-Za-z\s.\'-]+$/.test(custName)) {
+      showError("Customer name can only contain letters, spaces, hyphens, apostrophes, and dots.");
+      return;
+    }
+    if (custName.length < 2 || custName.length > 100) {
+      showError("Customer name must be between 2 and 100 characters.");
       return;
     }
     if (customerFormData.email.trim()) {

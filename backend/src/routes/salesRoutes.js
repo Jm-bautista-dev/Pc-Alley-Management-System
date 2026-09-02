@@ -17,7 +17,12 @@ const upload = require('../middleware/uploadMiddleware');
 router.post('/', [
   authenticateToken,
   upload.single('proof_of_payment'),
-  body('customer_name').optional().trim(),
+  body('customer_name')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isLength({ min: 2, max: 100 }).withMessage('Customer name must be between 2 and 100 characters.')
+    .custom(val => !/\d/.test(val)).withMessage('Customer name cannot contain numbers.')
+    .matches(/^[A-Za-z\s.\'-]+$/).withMessage('Customer name can only contain letters, spaces, hyphens, apostrophes, and dots.'),
   body('customer_id').optional({ checkFalsy: true }).isUUID().withMessage('Invalid customer ID'),
   body('items')
     .customSanitizer(value => {
@@ -28,7 +33,7 @@ router.post('/', [
     })
     .isArray({ min: 1 }).withMessage('At least one item is required'),
   body('items.*.product_id').notEmpty().withMessage('product_id is required'),
-  body('items.*.quantity').isInt({ min: 1 }).withMessage('quantity must be at least 1'),
+  body('items.*.quantity').isInt({ min: 1, max: 100000 }).withMessage('quantity must be between 1 and 100,000'),
   body('payment_method')
     .isIn(['cash', 'card', 'transfer', 'gcash', 'bank_transfer', 'mixed'])
     .withMessage('Invalid payment method'),

@@ -29,8 +29,18 @@ const Warranty = sequelize.define('Warranty', {
     defaultValue: 0
   },
   status: {
-    type: DataTypes.ENUM('Draft', 'Sent', 'Accepted', 'Expired'),
+    type: DataTypes.ENUM('Draft', 'Sent', 'Accepted', 'Expired', 'Void'),
     defaultValue: 'Draft'
+  },
+  void_reason: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    defaultValue: null
+  },
+  voided_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    defaultValue: null
   },
   archived: {
     type: DataTypes.BOOLEAN,

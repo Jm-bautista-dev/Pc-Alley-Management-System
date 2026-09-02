@@ -72,7 +72,11 @@ const getCustomerHistory = async (req, res) => {
 const createCustomer = async (req, res) => {
   try {
     const { name, email, phone, address, branchId } = req.body;
-    if (!name || !name.trim()) return res.status(400).json({ message: 'Name is required.' });
+    const trimmedName = (name || '').trim();
+    if (!trimmedName) return res.status(400).json({ message: 'Customer name is required.' });
+    if (/\d/.test(trimmedName)) return res.status(400).json({ message: 'Customer name cannot contain numbers.' });
+    if (!/^[A-Za-z\s.\'-]+$/.test(trimmedName)) return res.status(400).json({ message: 'Customer name can only contain letters, spaces, hyphens, apostrophes, and dots.' });
+    if (trimmedName.length < 2 || trimmedName.length > 100) return res.status(400).json({ message: 'Customer name must be between 2 and 100 characters.' });
 
     if (email && email.trim()) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -81,6 +85,7 @@ const createCustomer = async (req, res) => {
       }
     }
 
+    let cleanPhone = null;
     if (phone && phone.trim()) {
       const digits = phone.replace(/[^0-9]/g, '');
       if (digits.length !== 11) {
@@ -92,15 +97,16 @@ const createCustomer = async (req, res) => {
       if (/^(.)\1+$/.test(digits)) {
         return res.status(400).json({ message: 'Phone number cannot consist of only repeating identical digits.' });
       }
+      cleanPhone = digits;
     }
 
     const targetBranchId = req.user.role !== 'super_admin' ? req.user.branch_id : (branchId || null);
 
     const customer = await Customer.create({
-      name: name.trim(),
+      name: trimmedName,
       email: (email && email.trim()) || null,
-      phone: (phone && phone.trim()) || null,
-      address: address || null,
+      phone: cleanPhone,
+      address: address ? address.trim().slice(0, 255) : null,
       branchId: targetBranchId
     });
     res.status(201).json(customer);
@@ -121,8 +127,12 @@ const updateCustomer = async (req, res) => {
 
     const { name, email, phone, address, branchId } = req.body;
     if (name !== undefined) {
-      if (!name || !name.trim()) return res.status(400).json({ message: 'Name is required.' });
-      customer.name = name.trim();
+      const trimmedUpdateName = (name || '').trim();
+      if (!trimmedUpdateName) return res.status(400).json({ message: 'Customer name is required.' });
+      if (/\d/.test(trimmedUpdateName)) return res.status(400).json({ message: 'Customer name cannot contain numbers.' });
+      if (!/^[A-Za-z\s.\'-]+$/.test(trimmedUpdateName)) return res.status(400).json({ message: 'Customer name can only contain letters, spaces, hyphens, apostrophes, and dots.' });
+      if (trimmedUpdateName.length < 2 || trimmedUpdateName.length > 100) return res.status(400).json({ message: 'Customer name must be between 2 and 100 characters.' });
+      customer.name = trimmedUpdateName;
     }
     if (email !== undefined) {
       if (email && email.trim()) {

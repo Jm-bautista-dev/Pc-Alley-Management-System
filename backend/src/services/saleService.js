@@ -11,11 +11,22 @@ const createSale = async ({ customerId, customerName, branchId, staffId, staffNa
     // Generate Invoice Number (e.g. INV-1780601955000)
     const invoiceNumber = `INV-${Date.now()}`;
 
+    let validatedCustomerName = 'Walk-in Customer';
+    if (customerName && customerName.trim()) {
+      const trimmed = customerName.trim();
+      if (trimmed !== 'Walk-in Customer') {
+        if (/\d/.test(trimmed) || !/^[A-Za-z\s.\'-]+$/.test(trimmed)) {
+          throw new Error('Customer name can only contain letters, spaces, hyphens, apostrophes, and dots (no numbers).');
+        }
+      }
+      validatedCustomerName = trimmed;
+    }
+
     // 1. Create the Sale record
     const sale = await Sale.create({
       invoiceNumber,
       customerId: customerId || null,
-      customerName: customerName || 'Walk-in Customer',
+      customerName: validatedCustomerName,
       branchId,
       staffId,
       staffName,

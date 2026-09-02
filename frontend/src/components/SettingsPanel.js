@@ -65,6 +65,18 @@ const SettingsPanel = ({ isOpen, onClose }) => {
         showError("Display name cannot be empty");
         return;
       }
+      if (/\d/.test(formData.name)) {
+        showError("Display name cannot contain numbers");
+        return;
+      }
+      if (!/^[A-Za-z\s.\'-]+$/.test(formData.name.trim())) {
+        showError("Display name can only contain letters, spaces, hyphens, and dots");
+        return;
+      }
+      if (formData.name.trim().length < 2 || formData.name.trim().length > 100) {
+        showError("Display name must be between 2 and 100 characters");
+        return;
+      }
       showInfo("Updating profile...", { id: 'settings-save' });
       try {
         const parts = formData.name.trim().split(/\s+/);
@@ -147,6 +159,16 @@ const SettingsPanel = ({ isOpen, onClose }) => {
     showSuccess("Region localized to South-East Asia Core");
   };
 
+  useEffect(() => {
+    if (!isOpen) {
+      setActiveTab("profile");
+      setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      setShowCurrentPassword(false);
+      setShowNewPassword(false);
+      setShowConfirmPassword(false);
+    }
+  }, [isOpen]);
+
   const tabs = [
     { id: "profile", icon: User, label: "Account Profile" },
     { id: "security", icon: Shield, label: "Security" },
@@ -155,23 +177,23 @@ const SettingsPanel = ({ isOpen, onClose }) => {
   return (
     <AnimatePresence>
       {isOpen && (
-        <motion.div
-          key="settings-backdrop"
-          initial={{ opacity: 0 }}
+        <>
+          <motion.div
+            key="settings-backdrop"
+            initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
             onClick={onClose}
             className="fixed inset-0 bg-brand-navy/60 backdrop-blur-sm z-[100]"
           />
-      )}
 
-      {isOpen && (
           <motion.div
             key="settings-panel"
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
-            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            transition={{ type: "tween", ease: "easeOut", duration: 0.25 }}
             className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-brand-bgbase border-l border-border shadow-2xl z-[101] flex flex-col font-dm-sans"
           >
             {/* Header */}
@@ -210,7 +232,7 @@ const SettingsPanel = ({ isOpen, onClose }) => {
                   >
                     <tab.icon size={20} />
                     {activeTab === tab.id && (
-                      <motion.div layoutId="tab-indicator" className="absolute -right-[1px] w-[3px] h-6 bg-brand-crimson rounded-l-full" />
+                      <div className="absolute -right-[1px] w-[3px] h-6 bg-brand-crimson rounded-l-full" />
                     )}
                   </motion.button>
                 ))}
@@ -218,17 +240,10 @@ const SettingsPanel = ({ isOpen, onClose }) => {
 
               {/* Content Area */}
               <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={activeTab}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="space-y-8"
-                  >
-                    {activeTab === "profile" && (
-                      <div className="space-y-6">
-                        <h3 className="text-sm font-bold uppercase tracking-[2px] text-main">Account Details</h3>
+                <div className="space-y-8">
+                  {activeTab === "profile" && (
+                    <div className="space-y-6">
+                      <h3 className="text-sm font-bold uppercase tracking-[2px] text-main">Account Details</h3>
                         
                         <div className="flex flex-col items-center gap-4 p-6 glass-card rounded-2xl border-border">
                            <div className="relative group">
@@ -347,8 +362,7 @@ const SettingsPanel = ({ isOpen, onClose }) => {
                         </div>
                       </div>
                     )}
-                  </motion.div>
-                </AnimatePresence>
+                </div>
               </div>
             </div>
 
@@ -378,6 +392,7 @@ const SettingsPanel = ({ isOpen, onClose }) => {
               </motion.button>
             </div>
           </motion.div>
+        </>
       )}
     </AnimatePresence>
   );

@@ -64,10 +64,16 @@ export default function ShipmentsPage() {
 
   const handleCreate = (e) => {
     e.preventDefault();
-    if (!form.order_id || !form.customer_name || !form.address) return showError("Fill in all required fields");
+    const custName = (form.customer_name || '').trim();
+    if (!form.order_id || !custName || !form.address) return showError("Fill in all required fields");
+    if (/\d/.test(custName)) return showError("Customer name cannot contain numbers.");
+    if (!/^[A-Za-z\s.\'-]+$/.test(custName)) return showError("Customer name can only contain letters, spaces, hyphens, and dots.");
+    if (custName.length < 2 || custName.length > 100) return showError("Customer name must be between 2 and 100 characters.");
+
     const newShipment = {
       id: Date.now(),
       ...form,
+      customer_name: custName,
       status: "Preparing",
       createdAt: new Date().toISOString()
     };

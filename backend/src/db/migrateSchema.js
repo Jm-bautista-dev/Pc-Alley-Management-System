@@ -417,6 +417,20 @@ const migrateSchema = async () => {
     } catch (sErr) {
       console.warn('DATABASE: Service tables migration warning:', sErr.message);
     }
+
+    // 6. Warranties void_reason and voided_at columns
+    try {
+      await addColumnIfMissing(queryInterface, 'warranties', 'void_reason', {
+        type: DataTypes.TEXT,
+        allowNull: true
+      });
+      await addColumnIfMissing(queryInterface, 'warranties', 'voided_at', {
+        type: DataTypes.DATE,
+        allowNull: true
+      });
+    } catch (wErr) {
+      console.warn('DATABASE: Warranties table migration warning:', wErr.message);
+    }
   } catch (error) {
     console.warn(`DATABASE: Schema migration skipped or failed: ${error.message}`);
   }

@@ -27,6 +27,16 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const fn = (formData.first_name || '').trim();
+    const ln = (formData.last_name || '').trim();
+    if (!fn) return showError("First name is required.");
+    if (/\d/.test(fn) || !/^[A-Za-z\s.\'-]+$/.test(fn) || fn.length < 2 || fn.length > 50) {
+      return showError("First name can only contain letters, spaces, hyphens, and dots (2-50 chars, no numbers).");
+    }
+    if (!ln) return showError("Last name is required.");
+    if (/\d/.test(ln) || !/^[A-Za-z\s.\'-]+$/.test(ln) || ln.length < 2 || ln.length > 50) {
+      return showError("Last name can only contain letters, spaces, hyphens, and dots (2-50 chars, no numbers).");
+    }
     if (formData.password !== formData.confirmPassword) return showError("Passwords do not match.");
     if (!formData.branch_id) return showError("Please select a logical sector (branch)");
     

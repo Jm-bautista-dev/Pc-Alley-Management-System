@@ -16,7 +16,8 @@ import {
   Printer,
   X,
   AlertCircle,
-  Archive
+  Archive,
+  Ban
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiUrl } from "@/lib/api";
@@ -38,6 +39,9 @@ export default function QuotationsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewQuote, setViewQuote] = useState(null);
   const [editingQuote, setEditingQuote] = useState(null);
+  const [voidQuote, setVoidQuote] = useState(null);
+  const [voidReason, setVoidReason] = useState("");
+  const [voidError, setVoidError] = useState("");
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showArchived, setShowArchived] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -104,8 +108,12 @@ export default function QuotationsPage() {
     const errs = {};
     if (!form.customer_name || !form.customer_name.trim())
       errs.customer_name = "Customer name is required";
-    else if (form.customer_name.trim().length < 2)
-      errs.customer_name = "Name must be at least 2 characters";
+    else if (/\d/.test(form.customer_name))
+      errs.customer_name = "Customer name cannot contain numbers";
+    else if (!/^[A-Za-z\s.\'-]+$/.test(form.customer_name.trim()))
+      errs.customer_name = "Customer name can only contain letters, spaces, hyphens, and dots";
+    else if (form.customer_name.trim().length < 2 || form.customer_name.trim().length > 100)
+      errs.customer_name = "Name must be between 2 and 100 characters";
     if (!form.valid_until)
       errs.valid_until = "Valid until date is required";
     else if (new Date(form.valid_until) <= new Date(new Date().toDateString()))
@@ -208,17 +216,52 @@ export default function QuotationsPage() {
   }, []);
 
   const handleStatusChange = (id, status) => {
+    if (status === 'Void') {
+      const q = quotations.find(x => x.id === id);
+      if (q) {
+        setVoidQuote(q);
+        setVoidReason("");
+        setVoidError("");
+      }
+      return;
+    }
     const isAdmin = user?.role === 'super_admin';
     if (isAdmin && status === 'Accepted') {
       saveQuotations(quotations.map(x => x.id === id ? { ...x, status: 'Accepted' } : x));
       showSuccess('Warranty accepted');
-    } else if (!isAdmin && status === 'Sent') {
+    } else if (status === 'Sent') {
       saveQuotations(quotations.map(x => x.id === id ? { ...x, status: 'Sent' } : x));
       showSuccess('Warranty marked as Sent');
+    } else if (isAdmin && status === 'Draft') {
+      saveQuotations(quotations.map(x => x.id === id ? { ...x, status: 'Draft' } : x));
+      showSuccess('Warranty set to Draft');
     }
   };
 
-  const canArchive = (q) => (q.status === 'Accepted' || q.status === 'Expired') && !q.archived;
+  const confirmVoidWarranty = () => {
+    if (!voidReason.trim()) {
+      setVoidError("Please provide a reason for voiding/canceling this warranty.");
+      return;
+    }
+    if (voidReason.trim().length < 3) {
+      setVoidError("Cancellation reason must be at least 3 characters.");
+      return;
+    }
+    const updated = quotations.map(x => x.id === voidQuote.id ? {
+      ...x,
+      status: 'Void',
+      void_reason: voidReason.trim(),
+      voided_at: new Date().toISOString(),
+      voided_by: user?.first_name ? `${user.first_name} ${user.last_name}` : (user?.username || 'Admin')
+    } : x);
+    saveQuotations(updated);
+    showSuccess(`Warranty WR-${String(voidQuote.id).slice(-5)} marked as Void`);
+    setVoidQuote(null);
+    setVoidReason("");
+    setVoidError("");
+  };
+
+  const canArchive = (q) => (q.status === 'Accepted' || q.status === 'Expired' || q.status === 'Void') && !q.archived;
 
   const toggleSelect = (id) => {
     const q = quotations.find(x => x.id === id);
@@ -250,14 +293,14 @@ export default function QuotationsPage() {
   };
 
   const canChangeStatus = (q) => {
-    if (q.status === 'Expired' || q.archived) return false;
-    if (user?.role === 'super_admin') return q.status !== 'Accepted';
-    return q.status === 'Draft';
+    if (q.status === 'Expired' || q.status === 'Void' || q.archived) return false;
+    return true;
   };
 
   const statusOptions = (q) => {
-    if (user?.role === 'super_admin') return ['Sent', 'Accepted'];
-    return Object.keys(STATUS_STYLE);
+    if (q.status === 'Void') return ['Void'];
+    if (user?.role === 'super_admin') return ['Draft', 'Sent', 'Accepted', 'Void'];
+    return ['Draft', 'Sent', 'Void'];
   };
 
   const filtered = quotations.filter(q =>
@@ -271,8 +314,8 @@ export default function QuotationsPage() {
     Draft:    "text-muted bg-border/30 border-border",
     Sent:     "text-brand-neonblue bg-brand-neonblue/10 border-brand-neonblue/30",
     Accepted: "text-green-500 bg-green-500/10 border-green-500/30",
-
-    Expired:  "text-brand-crimson bg-brand-crimson/10 border-brand-crimson/30",
+    Expired:  "text-orange-500 bg-orange-500/10 border-orange-500/30",
+    Void:     "text-brand-crimson bg-brand-crimson/10 border-brand-crimson/30",
   };
 
   return (
@@ -426,9 +469,18 @@ export default function QuotationsPage() {
                             <Edit3 size={13} />
                           </button>
                           <button onClick={() => setViewQuote(q)}
-                            className="p-2 rounded-lg border border-border text-muted hover:text-main hover:border-brand-neonblue/40 transition-all" title="View">
+                            className="p-2 rounded-lg border border-border text-muted hover:text-main hover:border-brand-neonblue/40 transition-all cursor-pointer" title="View">
                             <Eye size={13} />
                           </button>
+                          {q.status !== 'Void' && (
+                            <button
+                              onClick={() => { setVoidQuote(q); setVoidReason(""); setVoidError(""); }}
+                              className="p-2 rounded-lg border border-border text-muted hover:text-brand-crimson hover:border-brand-crimson/40 transition-all cursor-pointer"
+                              title="Void / Cancel Warranty"
+                            >
+                              <Ban size={13} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </motion.tr>
@@ -570,11 +622,40 @@ export default function QuotationsPage() {
               className="w-full max-w-lg bg-brand-surface border border-border rounded-[32px] p-8 relative z-10 shadow-2xl">
               <div className="flex justify-between items-start mb-6">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[3px] text-brand-neonblue mb-1">Warranty</p>
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-[10px] font-black uppercase tracking-[3px] text-brand-neonblue">Warranty</p>
+                    <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border ${STATUS_STYLE[viewQuote.status] || STATUS_STYLE.Draft}`}>
+                      {viewQuote.status}
+                    </span>
+                  </div>
                   <h3 className="text-xl font-rajdhani font-black uppercase">{viewQuote.customer_name}</h3>
                 </div>
                 <button onClick={() => setViewQuote(null)} className="p-2 text-muted hover:text-main transition-colors"><X size={18} /></button>
               </div>
+
+              {viewQuote.status === 'Void' && (
+                <div className="mb-6 p-4 rounded-2xl bg-brand-crimson/10 border border-brand-crimson/30 text-brand-crimson">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <Ban size={16} className="shrink-0" />
+                    <span className="text-xs font-black uppercase tracking-wider">Warranty Voided</span>
+                    {viewQuote.voided_at && (
+                      <span className="text-[10px] text-muted ml-auto font-medium">
+                        {new Date(viewQuote.voided_at).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}
+                      </span>
+                    )}
+                  </div>
+                  <div className="pl-6 space-y-1">
+                    <p className="text-[9px] text-muted uppercase tracking-wider font-bold">Reason for Cancellation:</p>
+                    <p className="text-xs text-main font-medium leading-relaxed bg-brand-bgbase/60 p-2.5 rounded-xl border border-border/40">
+                      {viewQuote.void_reason || "No cancellation reason provided."}
+                    </p>
+                    {viewQuote.voided_by && (
+                      <p className="text-[10px] text-muted mt-1">Processed by: <span className="font-bold text-main">{viewQuote.voided_by}</span></p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-3 mb-6">
                 {viewQuote.items.map((item, i) => (
                   <div key={i} className="flex justify-between items-center p-3 rounded-xl bg-brand-bgbase/50 border border-border/30">
@@ -596,6 +677,78 @@ export default function QuotationsPage() {
               <button onClick={() => window.print()} className="mt-6 w-full py-3 bg-brand-bgbase border border-border rounded-full text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 text-muted hover:text-main transition-all">
                 <Printer size={14} /> Print Warranty Details
               </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Void Reason Modal */}
+      <AnimatePresence>
+        {voidQuote && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setVoidQuote(null)}
+              className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md bg-brand-surface border border-brand-crimson/30 rounded-[32px] p-8 relative z-10 shadow-2xl">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-brand-crimson/10 border border-brand-crimson/20 text-brand-crimson text-[9px] font-black uppercase tracking-widest mb-2">
+                    <Ban size={12} /> Void Warranty
+                  </div>
+                  <h3 className="text-xl font-rajdhani font-black uppercase text-main">
+                    Cancel Warranty WR-{String(voidQuote.id).slice(-5)}
+                  </h3>
+                  <p className="text-xs text-muted mt-1">Customer: <span className="font-bold text-main">{voidQuote.customer_name}</span></p>
+                </div>
+                <button onClick={() => setVoidQuote(null)} className="p-2 text-muted hover:text-main transition-colors"><X size={18} /></button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[9px] font-black uppercase tracking-[3px] text-muted block mb-1.5">
+                    Reason for Canceling Warranty *
+                  </label>
+                  <textarea
+                    value={voidReason}
+                    onChange={e => { setVoidReason(e.target.value); if (voidError) setVoidError(""); }}
+                    rows={3}
+                    placeholder="e.g. Customer returned product for refund, physical damage/tampered seal, client cancellation request..."
+                    className={`w-full bg-brand-bgbase border rounded-2xl py-3 px-4 text-xs text-main focus:outline-none transition-all resize-none ${
+                      voidError ? 'border-brand-crimson' : 'border-border focus:border-brand-crimson/50'
+                    }`}
+                  />
+                  {voidError && (
+                    <p className="text-[10px] font-bold text-brand-crimson mt-1 flex items-center gap-1">
+                      <AlertCircle size={12} /> {voidError}
+                    </p>
+                  )}
+                </div>
+
+                <div className="p-3 bg-brand-crimson/5 border border-brand-crimson/20 rounded-xl">
+                  <p className="text-[10px] text-muted leading-relaxed">
+                    <strong className="text-brand-crimson uppercase">Warning:</strong> Marking this warranty as <span className="text-brand-crimson font-bold">Void</span> cancels all warranty coverage for the associated items. This action will be permanently recorded.
+                  </p>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setVoidQuote(null)}
+                    className="flex-1 py-3 rounded-full border border-border text-[10px] font-black uppercase tracking-[2px] text-muted hover:text-main transition-all cursor-pointer"
+                  >
+                    Keep Active
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmVoidWarranty}
+                    className="flex-1 py-3 bg-brand-crimson hover:bg-brand-crimson/90 text-white rounded-full text-[10px] font-black uppercase tracking-[2px] transition-all active:scale-[0.98] shadow-lg shadow-brand-crimson/20 cursor-pointer"
+                  >
+                    Confirm Void
+                  </button>
+                </div>
+              </div>
             </motion.div>
           </div>
         )}

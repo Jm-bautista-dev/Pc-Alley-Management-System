@@ -123,12 +123,18 @@ export default function ServicesPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.name.trim()) {
+    const name = formData.name.trim();
+    if (!name) {
       showError("Service name is required");
       return;
     }
-    if (isNaN(parseFloat(formData.base_price)) || parseFloat(formData.base_price) < 0) {
-      showError("Please enter a valid base price (≥ 0)");
+    if (name.length < 2 || name.length > 150) {
+      showError("Service name must be between 2 and 150 characters");
+      return;
+    }
+    const price = parseFloat(formData.base_price);
+    if (isNaN(price) || price < 0 || price > 1000000) {
+      showError("Please enter a valid base price between ₱0.00 and ₱1,000,000.00");
       return;
     }
 

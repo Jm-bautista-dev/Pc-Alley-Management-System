@@ -79,10 +79,15 @@ export default function DiscountsPage() {
     saveDiscounts(discounts.map(d => d.id === id ? { ...d, active: !d.active } : d));
   };
 
-  const handleDelete = (id) => {
-    if (!confirm("Delete this discount?")) return;
+  const handleDelete = async (id) => {
+    const item = discounts.find(d => d.id === id);
+    const confirmed = await showConfirm(
+      "Delete Discount?",
+      `Are you sure you want to delete discount "${item?.name || item?.code || 'this promotion'}"? This action cannot be undone.`
+    );
+    if (!confirmed) return;
     saveDiscounts(discounts.filter(d => d.id !== id));
-    showSuccess("Discount removed");
+    showSuccess("Discount removed successfully");
   };
 
   const isExpired = (date) => new Date(date) < new Date();

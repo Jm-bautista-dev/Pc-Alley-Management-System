@@ -193,45 +193,46 @@ export default function ImportPage() {
         <TopBar title="IMPORT DATA" />
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-10 custom-scrollbar relative z-10 bg-brand-bgbase text-main">
-          {/* Header */}
-          <div className="mb-8">
-            <motion.h2 initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="text-[10px] font-black tracking-[4px] uppercase text-main/40 mb-1">
-              LEDGER INTEGRATION
-            </motion.h2>
-            <h1 className="text-2xl font-rajdhani font-black uppercase">
-              IMPORT <span className="text-brand-neonblue">SALES</span>
-            </h1>
-          </div>
+          <div className="max-w-5xl mx-auto w-full">
+            {/* Header */}
+            <div className="mb-8">
+              <motion.h2 initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="text-[10px] font-black tracking-[4px] uppercase text-main/40 mb-1">
+                LEDGER INTEGRATION
+              </motion.h2>
+              <h1 className="text-2xl font-rajdhani font-black uppercase">
+                IMPORT <span className="text-brand-neonblue">SALES</span>
+              </h1>
+            </div>
 
-          {/* Stepper Header */}
-          <div className="grid grid-cols-5 gap-2 mb-8 bg-brand-surface border border-border rounded-2xl p-4 max-w-4xl">
-            {[
-              { num: 1, label: "Upload File" },
-              { num: 2, label: "Map Columns" },
-              { num: 3, label: "Validate Data" },
-              { num: 4, label: "Ingest Ledger" },
-              { num: 5, label: "Complete" }
-            ].map((s) => {
-              const active = step === s.num;
-              const completed = step > s.num;
-              return (
-                <div key={s.num} className="flex flex-col items-center text-center">
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold transition-all ${
-                    active ? "bg-brand-neonblue text-white shadow-lg shadow-brand-neonblue/20" :
-                    completed ? "bg-green-500/20 text-green-500 border border-green-500/30" :
-                    "bg-brand-bgbase border border-border text-muted"
-                  }`}>
-                    {completed ? "✓" : s.num}
+            {/* Stepper Header */}
+            <div className="grid grid-cols-5 gap-2 mb-8 bg-brand-surface border border-border rounded-2xl p-4 w-full">
+              {[
+                { num: 1, label: "Upload File" },
+                { num: 2, label: "Map Columns" },
+                { num: 3, label: "Validate Data" },
+                { num: 4, label: "Ingest Ledger" },
+                { num: 5, label: "Complete" }
+              ].map((s) => {
+                const active = step === s.num;
+                const completed = step > s.num;
+                return (
+                  <div key={s.num} className="flex flex-col items-center text-center">
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold transition-all ${
+                      active ? "bg-brand-neonblue text-white shadow-lg shadow-brand-neonblue/20" :
+                      completed ? "bg-green-500/20 text-green-500 border border-green-500/30" :
+                      "bg-brand-bgbase border border-border text-muted"
+                    }`}>
+                      {completed ? "✓" : s.num}
+                    </div>
+                    <span className={`text-[9px] font-black uppercase tracking-wider mt-2 hidden sm:inline ${
+                      active ? "text-brand-neonblue" : completed ? "text-green-500" : "text-muted"
+                    }`}>{s.label}</span>
                   </div>
-                  <span className={`text-[9px] font-black uppercase tracking-wider mt-2 hidden sm:inline ${
-                    active ? "text-brand-neonblue" : completed ? "text-green-500" : "text-muted"
-                  }`}>{s.label}</span>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
 
-          <div className="max-w-4xl space-y-8">
+            <div className="w-full space-y-8">
             {/* Step 1: Upload File */}
             {step === 1 && (
               <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}
@@ -489,8 +490,10 @@ export default function ImportPage() {
               </div>
             )}
           </div>
+          </div>
         </div>
       </main>
     </div>
   );
 }
+

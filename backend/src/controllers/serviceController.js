@@ -285,27 +285,48 @@ const createServiceJob = async (req, res) => {
     const service = await Service.findByPk(service_id);
     if (!service) return res.status(404).json({ error: 'Selected service does not exist' });
 
+    const trimmedName = (customer_name || '').trim();
+    if (!trimmedName) return res.status(400).json({ error: 'Customer name is required' });
+    if (/\d/.test(trimmedName)) return res.status(400).json({ error: 'Customer name cannot contain numbers' });
+    if (!/^[A-Za-z\s.\'-]+$/.test(trimmedName)) return res.status(400).json({ error: 'Customer name can only contain letters, spaces, hyphens, and dots' });
+    if (trimmedName.length < 2 || trimmedName.length > 100) return res.status(400).json({ error: 'Customer name must be between 2 and 100 characters' });
+
+    let cleanPhone = null;
+    if (customer_phone && customer_phone.trim()) {
+      cleanPhone = customer_phone.trim();
+      if (!/^09\d{9}$/.test(cleanPhone)) {
+        return res.status(400).json({ error: 'Customer phone must be exactly 11 digits starting with 09' });
+      }
+      if (/^(.)\1+$/.test(cleanPhone)) {
+        return res.status(400).json({ error: 'Customer phone cannot consist of only repeating identical digits' });
+      }
+    }
+
     let techName = null;
     if (technician_id) {
       const tech = await User.findByPk(technician_id);
       if (tech) techName = tech.username || `${tech.first_name || ''} ${tech.last_name || ''}`.trim();
     }
 
+    const estPrice = estimated_price !== undefined && estimated_price !== '' ? parseFloat(estimated_price) : parseFloat(service.base_price || 0);
+    if (isNaN(estPrice) || estPrice < 0 || estPrice > 1000000) {
+      return res.status(400).json({ error: 'Estimated price must be between ₱0.00 and ₱1,000,000.00' });
+    }
+
     const jobNumber = generateJobNumber();
-    const estPrice = estimated_price ? parseFloat(estimated_price) : parseFloat(service.base_price || 0);
 
     const job = await ServiceJob.create({
       job_number: jobNumber,
       customer_id: customer_id || null,
-      customer_name: customer_name || 'Walk-in Customer',
-      customer_phone: customer_phone || null,
+      customer_name: trimmedName,
+      customer_phone: cleanPhone,
       service_id: service.id,
       service_name: service.name,
       branch_id: userBranch,
-      device_type: device_type || 'Desktop PC',
-      device_specs: device_specs || null,
-      serial_number: serial_number || null,
-      reported_issue: reported_issue || null,
+      device_type: (device_type || 'Desktop PC').trim().slice(0, 100),
+      device_specs: device_specs ? device_specs.trim().slice(0, 500) : null,
+      serial_number: serial_number ? serial_number.trim().slice(0, 100) : null,
+      reported_issue: reported_issue ? reported_issue.trim().slice(0, 1000) : null,
       status: 'received',
       estimated_price: estPrice,
       final_price: estPrice,
@@ -340,11 +361,18 @@ const updateServiceJobStatus = async (req, res) => {
       return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
     }
 
+    if (final_price !== undefined && final_price !== '') {
+      const fp = parseFloat(final_price);
+      if (isNaN(fp) || fp < 0 || fp > 1000000) {
+        return res.status(400).json({ error: 'Final price must be between ₱0.00 and ₱1,000,000.00' });
+      }
+      job.final_price = fp;
+    }
+
     const prevStatus = job.status;
     if (status) job.status = status;
-    if (diagnosis !== undefined) job.diagnosis = diagnosis;
-    if (final_price !== undefined) job.final_price = parseFloat(final_price);
-    if (price_override_reason !== undefined) job.price_override_reason = price_override_reason;
+    if (diagnosis !== undefined) job.diagnosis = diagnosis ? diagnosis.trim().slice(0, 1000) : null;
+    if (price_override_reason !== undefined) job.price_override_reason = price_override_reason ? price_override_reason.trim().slice(0, 500) : null;
     if (customer_approved !== undefined) {
       job.customer_approved = !!customer_approved;
       if (job.customer_approved && !job.approved_at) job.approved_at = new Date();

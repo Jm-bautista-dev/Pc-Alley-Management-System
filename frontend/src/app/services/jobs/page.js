@@ -133,12 +133,44 @@ export default function ServiceJobsPage() {
 
   const handleCreateJob = async (e) => {
     e.preventDefault();
-    if (!createForm.customer_name.trim()) {
+    const name = createForm.customer_name.trim();
+    if (!name) {
       showError("Customer name is required");
       return;
     }
+    if (/\d/.test(name)) {
+      showError("Customer name cannot contain numbers.");
+      return;
+    }
+    if (!/^[A-Za-z\s.\'-]+$/.test(name)) {
+      showError("Customer name can only contain letters, spaces, hyphens, apostrophes, and dots.");
+      return;
+    }
+    if (name.length < 2 || name.length > 100) {
+      showError("Customer name must be between 2 and 100 characters.");
+      return;
+    }
+
+    if (createForm.customer_phone.trim()) {
+      const phoneDigits = createForm.customer_phone.replace(/[^0-9]/g, '');
+      if (phoneDigits.length !== 11 || !phoneDigits.startsWith("09")) {
+        showError("Phone number must be exactly 11 digits starting with 09 (e.g. 09171234567).");
+        return;
+      }
+      if (/^(.)\1+$/.test(phoneDigits)) {
+        showError("Phone number cannot consist of only repeating identical digits.");
+        return;
+      }
+    }
+
     if (!createForm.service_id) {
       showError("Please select a technical service");
+      return;
+    }
+
+    const est = parseFloat(createForm.estimated_price);
+    if (isNaN(est) || est < 0 || est > 1000000) {
+      showError("Estimated fee must be between ₱0.00 and ₱1,000,000.00.");
       return;
     }
 
@@ -151,7 +183,12 @@ export default function ServiceJobsPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify(createForm)
+        body: JSON.stringify({
+          ...createForm,
+          customer_name: name,
+          customer_phone: createForm.customer_phone.trim() || null,
+          estimated_price: est
+        })
       });
       if (res.ok) {
         showSuccess("Service Work Order created");
@@ -159,7 +196,8 @@ export default function ServiceJobsPage() {
         fetchJobs();
       } else {
         const err = await res.json();
-        showError(err.error || "Failed to create work order");
+        const msg = err.errors ? err.errors.map(e => Object.values(e)[0]).join(', ') : (err.error || err.message || "Failed to create work order");
+        showError(msg);
       }
     } catch {
       showError("Network error");
@@ -183,6 +221,14 @@ export default function ServiceJobsPage() {
     e.preventDefault();
     if (!selectedJob) return;
 
+    if (statusForm.final_price !== "" && statusForm.final_price !== undefined) {
+      const fp = parseFloat(statusForm.final_price);
+      if (isNaN(fp) || fp < 0 || fp > 1000000) {
+        showError("Final service fee must be between ₱0.00 and ₱1,000,000.00.");
+        return;
+      }
+    }
+
     setStatusUpdating(true);
     const token = localStorage.getItem("token");
     try {
@@ -200,7 +246,8 @@ export default function ServiceJobsPage() {
         fetchJobs();
       } else {
         const err = await res.json();
-        showError(err.error || "Failed to update work order");
+        const msg = err.errors ? err.errors.map(e => Object.values(e)[0]).join(', ') : (err.error || err.message || "Failed to update work order");
+        showError(msg);
       }
     } catch {
       showError("Network error");
@@ -428,7 +475,8 @@ export default function ServiceJobsPage() {
                       <input
                         type="text"
                         required
-                        placeholder="Juan Dela Cruz"
+                        maxLength={100}
+                        placeholder="Juan Dela Cruz (letters only)"
                         value={createForm.customer_name}
                         onChange={e => setCreateForm({ ...createForm, customer_name: e.target.value })}
                         className="w-full px-4 py-2 bg-brand-panel border border-brand-border rounded-xl text-xs font-bold text-main focus:outline-none"
@@ -441,10 +489,11 @@ export default function ServiceJobsPage() {
                       </label>
                       <input
                         type="text"
-                        placeholder="0917XXXXXXX"
+                        maxLength={11}
+                        placeholder="09XXXXXXXXX"
                         value={createForm.customer_phone}
                         onChange={e => setCreateForm({ ...createForm, customer_phone: e.target.value })}
-                        className="w-full px-4 py-2 bg-brand-panel border border-brand-border rounded-xl text-xs font-bold text-main focus:outline-none"
+                        className="w-full px-4 py-2 bg-brand-panel border border-brand-border rounded-xl text-xs font-bold text-main focus:outline-none font-mono"
                       />
                     </div>
                   </div>
@@ -473,6 +522,7 @@ export default function ServiceJobsPage() {
                       </label>
                       <input
                         type="text"
+                        maxLength={100}
                         placeholder="e.g. Gaming PC / Laptop"
                         value={createForm.device_type}
                         onChange={e => setCreateForm({ ...createForm, device_type: e.target.value })}
@@ -487,9 +537,11 @@ export default function ServiceJobsPage() {
                       <input
                         type="number"
                         step="0.01"
+                        min="0"
+                        max="1000000"
                         value={createForm.estimated_price}
                         onChange={e => setCreateForm({ ...createForm, estimated_price: e.target.value })}
-                        className="w-full px-4 py-2 bg-brand-panel border border-brand-border rounded-xl text-xs font-bold text-main focus:outline-none"
+                        className="w-full px-4 py-2 bg-brand-panel border border-brand-border rounded-xl text-xs font-bold text-main focus:outline-none font-mono"
                       />
                     </div>
                   </div>
@@ -605,9 +657,10 @@ export default function ServiceJobsPage() {
                         type="number"
                         step="0.01"
                         min="0"
+                        max="1000000"
                         value={statusForm.final_price}
                         onChange={e => setStatusForm({ ...statusForm, final_price: e.target.value })}
-                        className="w-full px-4 py-2 bg-brand-panel border border-brand-border rounded-xl text-xs font-bold text-main focus:outline-none"
+                        className="w-full px-4 py-2 bg-brand-panel border border-brand-border rounded-xl text-xs font-bold text-main focus:outline-none font-mono"
                       />
                     </div>
 
