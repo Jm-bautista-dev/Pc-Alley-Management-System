@@ -21,8 +21,9 @@ const getApiErrorMessage = (error, fallbackMessage) => {
   if (error?.name === "TypeError") {
     return "Backend server is offline. Start the backend server, then refresh this page.";
   }
-
   return fallbackMessage;
 };
 
-export { API_BASE_URL, apiUrl, getApiErrorMessage };
+const API_BASE_URL = getApiBaseUrl();
+
+export { API_BASE_URL, apiUrl, getApiErrorMessage, getApiBaseUrl };
