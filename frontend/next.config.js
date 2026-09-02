@@ -6,7 +6,10 @@ const nextConfig = {
   experimental: {
     cpus: 1,
     workerThreads: false,
+    parallelServerCompiles: false,
+    parallelServerBuildTraces: false,
   },
+  output: 'standalone',
   async rewrites() {
     const backendBaseUrl =
       process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
