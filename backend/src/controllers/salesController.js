@@ -1,5 +1,6 @@
 const sequelize = require('../db');
 const { Op } = require('sequelize');
+const pagination = require('../utils/pagination');
 const {
   Sale, SaleItem, Customer,
   Order, OrderItem,
@@ -25,7 +26,27 @@ const createSale = async (req, res) => {
   const transaction = await sequelize.transaction();
   try {
     let { customer_name, customer_id, items, payment_method, notes, amount_paid, change_amount } = req.body;
-    const branch_id = req.user.role !== 'super_admin' ? req.user.branch_id : (req.body.branch_id || req.user.branch_id || 1);
+    let resolvedBranchId;
+    if (req.user.role === 'super_admin') {
+      const rawBranchId = req.body.branch_id;
+      if (!rawBranchId) {
+        await transaction.rollback();
+        return res.status(400).json({ error: 'Branch selection is required for checkout' });
+      }
+      const branch = await Branch.findByPk(rawBranchId, { transaction });
+      if (!branch) {
+        await transaction.rollback();
+        return res.status(400).json({ error: 'Invalid branch selected' });
+      }
+      resolvedBranchId = branch.id;
+    } else {
+      if (!req.user.branch_id) {
+        await transaction.rollback();
+        return res.status(400).json({ error: 'User is not assigned to a branch' });
+      }
+      resolvedBranchId = req.user.branch_id;
+    }
+    const branch_id = resolvedBranchId;
     const user_id   = req.user.id;
 
     if (typeof items === 'string') {
@@ -142,8 +163,12 @@ const createSale = async (req, res) => {
           where: { product_id: product.id, branch_id },
           transaction
         });
-        if (!inventory || inventory.quantity < qty) {
-          throw new Error(`Insufficient stock for "${product.name}" (available: ${inventory?.quantity ?? 0})`);
+        const currentStock = inventory 
+          ? (inventory.stock !== undefined && inventory.stock !== null ? Number(inventory.stock) : Number(inventory.quantity || 0))
+          : 0;
+
+        if (!inventory || currentStock < qty) {
+          throw new Error(`Insufficient stock for "${product.name}" (available: ${currentStock})`);
         }
 
         const unitPrice = parseFloat(product.price);
@@ -162,8 +187,14 @@ const createSale = async (req, res) => {
         }, { transaction });
 
         // Decrement physical inventory
-        const prevStock = inventory.quantity;
-        inventory.quantity -= qty;
+        const prevStock = currentStock;
+        const newStock = prevStock - qty;
+        if (inventory.stock !== undefined) {
+          inventory.stock = newStock;
+        }
+        if (inventory.quantity !== undefined) {
+          inventory.quantity = newStock;
+        }
         await inventory.save({ transaction });
 
         // Log StockMovement
@@ -172,7 +203,7 @@ const createSale = async (req, res) => {
           type:           'SALE',
           quantity:       -qty,
           previous_stock: prevStock,
-          new_stock:      inventory.quantity,
+          new_stock:      newStock,
           user_id,
           note: `Sale ${invoiceNumber}`
         }, { transaction });
@@ -200,7 +231,7 @@ const createSale = async (req, res) => {
     sale.sale_type      = saleType;
     
     // Set fallback payment summary for non-cash if not specified by frontend
-    const grandTotal = parseFloat((totalAmount * 1.12).toFixed(2));
+    const grandTotal = totalAmount; // Shelf prices are VAT-inclusive (Philippine retail standard)
     if (payment_method !== 'cash' || !amount_paid) {
       sale.amountPaid = grandTotal;
       sale.changeAmount = 0.00;
@@ -255,9 +286,13 @@ const createSale = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────
 const getSalesHistory = async (req, res) => {
   try {
-    const { days, startDate, endDate, saleType, page = 1, limit = 20, search = '' } = req.query;
-    const pagination = require('../utils/pagination');
-    const { offset, where, order } = pagination({ page, limit, search, searchableFields: ['customerName', 'invoiceNumber'] });
+    const { days, startDate, endDate, saleType } = req.query;
+    const { offset, where, order, page: pageNum, limit: limitNum } = pagination({
+      page: req.query.page,
+      limit: req.query.limit,
+      search: req.query.search,
+      searchableFields: ['customerName', 'invoiceNumber']
+    });
     const branchId = req.user.role === 'super_admin' ? req.query.branch_id : req.user.branch_id;
     if (branchId) where.branchId = branchId;
 
@@ -272,9 +307,9 @@ const getSalesHistory = async (req, res) => {
           new Date(new Date(endDate).setHours(23, 59, 59, 999))
         ]
       };
-    } else if (days) {
+    } else if (days && !isNaN(parseInt(days, 10))) {
       const limitDate = new Date();
-      limitDate.setDate(limitDate.getDate() - parseInt(days));
+      limitDate.setDate(limitDate.getDate() - parseInt(days, 10));
       where.createdAt = { [Op.gte]: limitDate };
     }
     const sales = await Sale.findAll({
@@ -286,12 +321,12 @@ const getSalesHistory = async (req, res) => {
       ],
       order,
       offset,
-      limit: Number(limit)
+      limit: limitNum
     });
     const total = await Sale.count({ where });
     res.json({
       data: sales,
-      pagination: { page: Number(page), limit: Number(limit), total }
+      pagination: { page: pageNum, limit: limitNum, total }
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -350,11 +385,20 @@ const getComparativeSales = async (req, res) => {
         raw: true
       });
 
+      const [stockResult] = await sequelize.query(
+        `SELECT (
+          (SELECT COALESCE(SUM(stock), 0) FROM branch_products WHERE branch_id = :branchId) +
+          (SELECT COALESCE(SUM(quantity), 0) FROM inventories WHERE branch_id = :branchId)
+        ) AS total_stock`,
+        { replacements: { branchId: branch.id }, type: sequelize.QueryTypes.SELECT }
+      ).catch(() => [{ total_stock: 0 }]);
+
       results.push({
         branch_id:    branch.id,
         branch_name:  branch.name,
         total_revenue: parseFloat(stats?.total_revenue || 0),
         order_count:  parseInt(stats?.order_count || 0),
+        total_stock:  parseInt(stockResult?.total_stock || 0),
         top_product:  topItem ? `${topItem.productName}` : 'N/A'
       });
     }

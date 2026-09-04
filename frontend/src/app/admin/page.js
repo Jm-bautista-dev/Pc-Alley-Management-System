@@ -32,6 +32,7 @@ function AdminPageContent() {
   const [users, setUsers] = useState([]);
   const [branches, setBranches] = useState([]);
   const [comparativeData, setComparativeData] = useState([]);
+  const [activityLogs, setActivityLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("personnel");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -50,6 +51,19 @@ function AdminPageContent() {
   });
   const [editingBranch, setEditingBranch] = useState(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  const formatTimeAgo = (dateStr) => {
+    if (!dateStr) return "Just now";
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "Just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  };
+
   const availableRoles = currentUser?.role === "super_admin"
     ? [
         { value: "employee", label: "Staff" },
@@ -124,11 +138,12 @@ function AdminPageContent() {
   const fetchData = async () => {
     const token = localStorage.getItem("token");
     try {
-      const [uRes, bRes, compRes, restockRes] = await Promise.all([
-        fetch(apiUrl("/api/auth/users"), { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(apiUrl("/api/branches"), { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(apiUrl("/api/sales/comparative"), { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(apiUrl("/api/restock-requests?status=Pending"), { headers: { Authorization: `Bearer ${token}` } })
+      const [uRes, bRes, compRes, restockRes, auditRes] = await Promise.all([
+        fetch(apiUrl("/api/auth/users"), { headers: { Authorization: `Bearer ${token}` }, credentials: "include" }),
+        fetch(apiUrl("/api/branches"), { headers: { Authorization: `Bearer ${token}` }, credentials: "include" }),
+        fetch(apiUrl("/api/sales/comparative"), { headers: { Authorization: `Bearer ${token}` }, credentials: "include" }),
+        fetch(apiUrl("/api/restock-requests?status=Pending"), { headers: { Authorization: `Bearer ${token}` }, credentials: "include" }),
+        fetch(apiUrl("/api/audit"), { headers: { Authorization: `Bearer ${token}` }, credentials: "include" }).catch(() => ({ ok: false }))
       ]);
       
       const uData = await uRes.json();
@@ -145,19 +160,34 @@ function AdminPageContent() {
         // Store pending count for badge
         setComparativeData(prev => Array.isArray(prev) ? prev : { ...prev, pendingRestock: restockData.length });
       }
+
+      if (auditRes.ok) {
+        const auditData = await auditRes.json();
+        if (Array.isArray(auditData) && auditData.length > 0) {
+          setActivityLogs(auditData.slice(0, 10).map(log => ({
+            id: log.id,
+            action: log.action ? log.action.replace(/_/g, ' ') : 'System Action',
+            user: log.User?.username || log.user?.username || (log.user_id ? `User #${log.user_id}` : 'System Core'),
+            time: formatTimeAgo(log.createdAt),
+            status: (log.action && (log.action.includes('FAIL') || log.action.includes('LOCK') || log.action.includes('DELETE') || log.action.includes('TERMINAT') || log.action.includes('REVOK'))) ? 'Alert' : 'Success',
+            detail: log.details || 'System operation executed'
+          })));
+        } else {
+          setActivityLogs([
+            { id: 1, action: "SYSTEM AUDIT", user: "System Core", time: "Active", status: "Success", detail: "Real-time ledger online" }
+          ]);
+        }
+      } else {
+        setActivityLogs([
+          { id: 1, action: "SYSTEM AUDIT", user: "System Core", time: "Active", status: "Success", detail: "Real-time ledger online" }
+        ]);
+      }
     } catch (err) {
       console.error("Link Failure:", err);
     } finally {
       setLoading(false);
     }
   };
-
-  const activityLogs = [
-    { id: 101, action: "Inventory Restock", user: "Alexander Pierce", time: "2m ago", status: "Success", detail: "Added 50x RTX 4090" },
-    { id: 102, action: "Security Login", user: "Maria Clara", time: "1h ago", status: "Success", detail: "Terminal 04 Access" },
-    { id: 103, action: "Refund Issued", user: "Renato Cruz", time: "2h ago", status: "Alert", detail: "Γé▒12,500 Vector Loop" },
-    { id: 104, action: "Registry Change", user: "System Core", time: "5h ago", status: "Success", detail: "Price matrix update" },
-  ];
 
   const handleProvision = async (e) => {
     e.preventDefault();
@@ -513,7 +543,7 @@ function AdminPageContent() {
                     <p className="text-[11px] font-medium text-muted mb-3">{log.detail}</p>
                     <div className="flex items-center gap-2">
                        <div className="w-4 h-4 rounded bg-brand-bgbase flex items-center justify-center text-[8px] font-black text-muted border border-border">
-                         {log.user.split(' ').map(n => n[0]).join('')}
+                         {log.user ? (log.user.includes(' ') ? log.user.split(' ').map(n => n[0]).join('') : log.user.slice(0, 2).toUpperCase()) : 'SC'}
                        </div>
                        <span className="text-[9px] font-black text-main/40 uppercase tracking-widest">{log.user}</span>
                     </div>

@@ -14,6 +14,7 @@ import { useLayout } from "@/context/LayoutContext";
 import { useTheme } from "@/context/ThemeContext";
 import { LogoBrandingV2, LogoIcon } from "./Logo";
 import { useAuthGuard } from "@/lib/useAuthGuard";
+import { logoutUser } from "@/lib/api";
 
 const Sidebar = () => {
   const pathname = usePathname();
@@ -107,12 +108,7 @@ const Sidebar = () => {
   };
 
   const handleLogout = () => {
-    // Clear entire session
-    localStorage.clear();
-    sessionStorage.clear();
-    // Replace history so there's no "back" entry pointing to authenticated pages
-    window.history.replaceState(null, '', '/');
-    router.replace('/');
+    logoutUser();
   };
 
 

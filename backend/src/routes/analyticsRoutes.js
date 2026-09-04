@@ -12,7 +12,8 @@ const {
   getForecastingAnalytics,
   getPrescriptiveAnalytics,
   getForecastingBenchmark,
-  getBrandAnalytics
+  getBrandAnalytics,
+  getProfitLossAnalytics
 } = require('../controllers/analyticsController');
 
 router.use(authenticateToken);
@@ -25,6 +26,7 @@ router.get('/dead-stock', getDeadStock);
 router.get('/cross-sell', getCrossSellInsights);
 router.get('/customers', getCustomerAnalytics);
 router.get('/brands', getBrandAnalytics);
+router.get('/profit-loss', getProfitLossAnalytics);
 
 // Refactored Super Admin & Branch Admin restricted analytics routes
 router.get('/forecasting', authorizeRoles('super_admin'), getForecastingAnalytics);

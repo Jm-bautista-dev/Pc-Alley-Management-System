@@ -93,7 +93,7 @@ export default function StockReportPage() {
         const invRes = await fetch(apiUrl(`/api/inventory?page=${page}&limit=${limit}&search=${encodeURIComponent(debouncedSearch)}&sortField=${sortField}&sortDir=${sortDir}${branchParam}`), {
           headers: { Authorization: `Bearer ${token}` }
         });
-        const salesRes = await fetch(apiUrl("/api/sales/history"), { headers: { Authorization: `Bearer ${token}` } });
+        const salesRes = await fetch(apiUrl("/api/sales/history?limit=10000"), { headers: { Authorization: `Bearer ${token}` } });
         if (invRes.ok) {
           const raw = await invRes.json();
           setInventory(raw.data ?? []);
@@ -111,37 +111,51 @@ export default function StockReportPage() {
   }, [page, limit, debouncedSearch, filterBranch, sortField, sortDir, refreshKey]);
 
   const processedData = useMemo(() => {
+    const today = new Date();
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const prodSales = {};
     salesData.forEach(order => {
       const orderDate = new Date(order.createdAt);
-      if (orderDate >= thirtyDaysAgo && order.OrderItems) {
-        order.OrderItems.forEach(item => {
-          prodSales[item.product_id] = (prodSales[item.product_id] || 0) + item.quantity;
+      if (orderDate >= thirtyDaysAgo) {
+        const items = order.SaleItems || order.OrderItems || order.items || [];
+        items.forEach(item => {
+          const pId = item.productId ?? item.product_id;
+          if (pId) {
+            prodSales[pId] = (prodSales[pId] || 0) + (Number(item.quantity) || 0);
+          }
         });
       }
     });
     return inventory.map(item => {
-      const sold = prodSales[item.product_id] || 0;
+      const pId = item.product_id || item.Product?.id || item.id;
+      const stock = item.stock !== undefined && item.stock !== null ? Number(item.stock) : Number(item.quantity || 0);
+      const sold = prodSales[pId] || 0;
       const daily = sold / 30;
-      const daysRem = daily > 0 ? Math.floor(item.quantity / daily) : 999;
+      const daysRem = daily > 0 ? Math.floor(stock / daily) : (stock === 0 ? 0 : 999);
 
       const threshold = item.low_stock_threshold || 10;
+      const createdAtDate = item.Product?.createdAt || item.createdAt;
+      const ageDays = createdAtDate ? (today - new Date(createdAtDate)) / 86400000 : 90;
+
       let statusGroup = 'In Stock', statusColor = 'text-green-500', badge = 'bg-green-500/10 border-green-500/20';
-      if (item.quantity === 0) {
+      if (stock === 0) {
         statusGroup = 'Out of Stock';
         statusColor = 'text-brand-crimson';
         badge = 'bg-red-500/10 border-red-500/20';
-      } else if (item.quantity <= threshold) {
+      } else if (sold === 0 && ageDays >= 30) {
+        statusGroup = 'Dead Stock';
+        statusColor = 'text-yellow-500';
+        badge = 'bg-yellow-500/10 border-yellow-500/20';
+      } else if (stock <= threshold) {
         statusGroup = 'Low Stock';
         statusColor = 'text-orange-500';
         badge = 'bg-orange-500/10 border-orange-500/20';
       }
       return {
-        id: item.product_id,
+        id: pId,
         branch_id: item.branch_id,
-        name: item.Product?.name || 'Unknown',
+        name: item.Product?.name || item.name || 'Unknown',
         category: item.Product?.Category?.name || 'Uncategorized',
         category_id: item.Product?.category_id || '',
         brand_id: item.Product?.brand_id || '',
@@ -156,7 +170,8 @@ export default function StockReportPage() {
         global_price: item.Product?.price,
         enabled: item.enabled !== false,
         low_stock_threshold: item.low_stock_threshold,
-        stock: item.quantity,
+        stock,
+        sold30: sold,
         dailySales: daily.toFixed(1),
         daysRemaining: daysRem > 500 ? '∞' : daysRem,
         statusGroup,
@@ -172,6 +187,8 @@ export default function StockReportPage() {
       let matchesFilter = true;
       if (filterStatus === "Low Stock") {
         matchesFilter = i.statusGroup === "Low Stock";
+      } else if (filterStatus === "Dead Stock") {
+        matchesFilter = i.statusGroup === "Dead Stock";
       } else if (filterStatus === "Out of Stock") {
         matchesFilter = i.statusGroup === "Out of Stock";
       } else if (filterStatus !== "All") {
@@ -184,7 +201,8 @@ export default function StockReportPage() {
   const kpis = {
     total: processedData.length,
     low: processedData.filter(i => i.statusGroup === 'Low Stock').length,
-    dead: processedData.filter(i => i.statusGroup === 'Out of Stock').length,
+    dead: processedData.filter(i => i.statusGroup === 'Dead Stock').length,
+    outOfStock: processedData.filter(i => i.statusGroup === 'Out of Stock').length,
     incoming: 0
   };
 
@@ -193,6 +211,7 @@ export default function StockReportPage() {
       'Product Name': i.name,
       'Category': i.category,
       'Current Stock': i.stock,
+      '30-Day Sales': i.sold30,
       'Daily Sales Trend': i.dailySales,
       'Days Remaining': i.daysRemaining,
       'Status': i.statusGroup
@@ -204,6 +223,7 @@ export default function StockReportPage() {
         'Total Unique SKUs': kpis.total,
         'Stock Alert Count': kpis.low,
         'Dead Stock Items': kpis.dead,
+        'Out of Stock Items': kpis.outOfStock,
         'Report Accuracy': 'High (Live System Data)'
       }
     };
@@ -318,7 +338,7 @@ export default function StockReportPage() {
                 </h1>
               </div>
               <div className="flex gap-2">
-                {['All', 'Low Stock', 'Out of Stock'].map(status => (
+                {['All', 'Low Stock', 'Dead Stock', 'Out of Stock'].map(status => (
                   <button
                     key={status}
                     onClick={() => setFilterStatus(status)}
@@ -339,13 +359,13 @@ export default function StockReportPage() {
                 <div><p className="text-[10px] uppercase font-black tracking-widest text-muted mb-1">Low Stock</p><h3 className="text-2xl font-black text-orange-500">{kpis.low}</h3></div>
                 <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-500"><TrendingUp size={20} /></div>
               </div>
-              <div className="glass-card p-4 md:p-6 flex items-center justify-between border-l-2 border-brand-crimson">
-                <div><p className="text-[10px] uppercase font-black tracking-widest text-muted mb-1">Out of Stock</p><h3 className="text-2xl font-black text-brand-crimson">{kpis.dead}</h3></div>
-                <div className="w-10 h-10 rounded-xl bg-brand-crimson/10 flex items-center justify-center text-brand-crimson"><AlertCircle size={20} /></div>
+              <div className="glass-card p-4 md:p-6 flex items-center justify-between border-l-2 border-yellow-500">
+                <div><p className="text-[10px] uppercase font-black tracking-widest text-muted mb-1">Dead Stock</p><h3 className="text-2xl font-black text-yellow-500">{kpis.dead}</h3></div>
+                <div className="w-10 h-10 rounded-xl bg-yellow-500/10 flex items-center justify-center text-yellow-500"><Clock size={20} /></div>
               </div>
-              <div className="glass-card p-4 md:p-6 flex items-center justify-between">
-                <div><p className="text-[10px] uppercase font-black tracking-widest text-muted mb-1">On The Way</p><h3 className="text-2xl font-black text-main">{kpis.incoming}</h3></div>
-                <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center text-green-500"><Clock size={20} /></div>
+              <div className="glass-card p-4 md:p-6 flex items-center justify-between border-l-2 border-brand-crimson">
+                <div><p className="text-[10px] uppercase font-black tracking-widest text-muted mb-1">Out of Stock</p><h3 className="text-2xl font-black text-brand-crimson">{kpis.outOfStock}</h3></div>
+                <div className="w-10 h-10 rounded-xl bg-brand-crimson/10 flex items-center justify-center text-brand-crimson"><AlertCircle size={20} /></div>
               </div>
             </div>
             {/* Filter & Action Bar */}

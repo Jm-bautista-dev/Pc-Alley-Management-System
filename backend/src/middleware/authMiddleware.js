@@ -1,23 +1,37 @@
 const jwt = require('jsonwebtoken');
+const { isTokenRevoked } = require('../utils/tokenRevocation');
 
 const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'] || 
-                     req.headers['x-access-token'] || 
-                     req.headers['x-auth-token'] || 
-                     req.headers['token'] || 
-                     req.headers['x-token'];
+  // 1. Check HttpOnly cookies first
+  let token = req.cookies?.token || req.cookies?.access_token || null;
 
-  let token = null;
+  // 2. Fall back to Authorization headers or query param
+  if (!token) {
+    const authHeader = req.headers['authorization'] || 
+                       req.headers['x-access-token'] || 
+                       req.headers['x-auth-token'] || 
+                       req.headers['token'] || 
+                       req.headers['x-token'];
 
-  if (authHeader) {
-    token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : authHeader.trim();
-  } else if (req.query && req.query.token) {
-    token = req.query.token;
+    if (authHeader) {
+      token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : authHeader.trim();
+    } else if (req.query && req.query.token) {
+      token = req.query.token;
+    }
   }
 
   if (!token) {
     console.warn(`[AUTH] Missing token for ${req.method} ${req.url}. Available headers:`, Object.keys(req.headers));
     return res.status(401).json({ message: 'Access denied, token missing' });
+  }
+
+  // 3. Check if token was revoked upon logout
+  if (isTokenRevoked(token)) {
+    console.warn(`[AUTH] Rejected revoked token for ${req.method} ${req.url}`);
+    return res.status(401).json({ 
+      message: 'Session has been revoked. Please log in again.',
+      code: 'SESSION_REVOKED'
+    });
   }
 
   jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
@@ -31,6 +45,7 @@ const authenticateToken = (req, res, next) => {
       });
     }
     req.user = user;
+    req.rawToken = token;
     next();
   });
 };

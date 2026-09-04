@@ -80,8 +80,9 @@ const createCustomer = async (req, res) => {
 
     if (email && email.trim()) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        return res.status(400).json({ message: 'Please enter a valid email address.' });
+      const lowerEmail = email.trim().toLowerCase();
+      if (!emailRegex.test(lowerEmail) || /@(gamil|yaho|hotmial|outlok)\.com$/i.test(lowerEmail)) {
+        return res.status(400).json({ message: 'Please enter a valid email address without domain typos.' });
       }
     }
 
@@ -104,7 +105,7 @@ const createCustomer = async (req, res) => {
 
     const customer = await Customer.create({
       name: trimmedName,
-      email: (email && email.trim()) || null,
+      email: (email && email.trim().toLowerCase()) || null,
       phone: cleanPhone,
       address: address ? address.trim().slice(0, 255) : null,
       branchId: targetBranchId
@@ -137,10 +138,11 @@ const updateCustomer = async (req, res) => {
     if (email !== undefined) {
       if (email && email.trim()) {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) {
-          return res.status(400).json({ message: 'Please enter a valid email address.' });
+        const lowerEmail = email.trim().toLowerCase();
+        if (!emailRegex.test(lowerEmail) || /@(gamil|yaho|hotmial|outlok)\.com$/i.test(lowerEmail)) {
+          return res.status(400).json({ message: 'Please enter a valid email address without domain typos.' });
         }
-        customer.email = email.trim();
+        customer.email = lowerEmail;
       } else {
         customer.email = null;
       }

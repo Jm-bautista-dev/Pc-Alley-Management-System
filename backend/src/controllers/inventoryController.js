@@ -339,14 +339,42 @@ const getProductRestockAnalytics = async (req, res) => {
   try {
     const { product_id, branch_id } = req.query;
     const resolvedBranchId = req.user.role !== 'super_admin' ? req.user.branch_id : branch_id;
-    const { Order, OrderItem } = require('../models');
+    const { Sale, SaleItem, Order, OrderItem } = require('../models');
     const { Op } = require('sequelize');
 
     // Get sales for the last 30 days
     const dateLimit = new Date();
     dateLimit.setDate(dateLimit.getDate() - 30);
 
-    const sales = await OrderItem.findAll({
+    const saleWhere = {
+      status: 'completed',
+      createdAt: { [Op.gte]: dateLimit }
+    };
+    if (resolvedBranchId) {
+      saleWhere.branchId = resolvedBranchId;
+    }
+
+    const saleSales = await SaleItem.findAll({
+      where: { productId: product_id },
+      attributes: [
+        [sequelize.fn('SUM', sequelize.col('SaleItem.quantity')), 'total_sold']
+      ],
+      include: [{
+        model: Sale,
+        attributes: [],
+        where: saleWhere
+      }],
+      raw: true
+    });
+
+    const orderWhere = {
+      createdAt: { [Op.gte]: dateLimit }
+    };
+    if (resolvedBranchId) {
+      orderWhere.branch_id = resolvedBranchId;
+    }
+
+    const orderSales = await OrderItem.findAll({
       where: { product_id },
       attributes: [
         [sequelize.fn('SUM', sequelize.col('OrderItem.quantity')), 'total_sold']
@@ -354,15 +382,14 @@ const getProductRestockAnalytics = async (req, res) => {
       include: [{
         model: Order,
         attributes: [],
-        where: {
-          branch_id: resolvedBranchId,
-          createdAt: { [Op.gte]: dateLimit }
-        }
+        where: orderWhere
       }],
       raw: true
     });
 
-    const totalSold = parseInt(sales[0]?.total_sold || 0);
+    const saleSold = parseInt(saleSales[0]?.total_sold || 0);
+    const orderSold = parseInt(orderSales[0]?.total_sold || 0);
+    const totalSold = saleSold + orderSold;
     const dailySales = parseFloat((totalSold / 30).toFixed(2));
 
     res.json({

@@ -49,8 +49,10 @@ const OrderDetailsModal = ({ isOpen, onClose, order }) => {
     const price = parseFloat(item.unitPrice || item.price_at_sale || 0);
     return sum + price * item.quantity;
   }, 0);
-  const tax         = subtotal * 0.12;
-  const grandTotal  = subtotal + tax;
+  const discount    = parseFloat(order.discountAmount || order.discount_amount || 0);
+  const grandTotal  = Math.max(0, parseFloat(order.totalAmount || order.total_amount || (subtotal - discount)));
+  const vatableSales = grandTotal / 1.12;
+  const tax         = grandTotal - vatableSales;
   const amountPaid  = parseFloat(order.amountPaid  || order.amount_paid  || grandTotal);
   const changeAmount = parseFloat(order.changeAmount || order.change_amount || 0);
 
@@ -174,16 +176,28 @@ const OrderDetailsModal = ({ isOpen, onClose, order }) => {
 
             {/* Totals */}
             <div className="bg-brand-bgbase/30 rounded-xl p-4 border border-border/10 flex flex-col items-end text-right">
-              <p className="flex justify-between w-48 text-muted text-xs font-bold mb-1 uppercase tracking-widest">
-                <span>Subtotal</span>
-                <span>₱{subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              {discount > 0 && (
+                <p className="flex justify-between w-56 text-muted text-xs font-bold mb-1 uppercase tracking-widest">
+                  <span>Subtotal</span>
+                  <span>₱{subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </p>
+              )}
+              {discount > 0 && (
+                <p className="flex justify-between w-56 text-red-500 text-xs font-bold mb-1 uppercase tracking-widest">
+                  <span>Discount</span>
+                  <span>−₱{discount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </p>
+              )}
+              <p className="flex justify-between w-56 text-muted text-xs font-bold mb-1 uppercase tracking-widest">
+                <span>VATable Sales</span>
+                <span>₱{vatableSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
               </p>
-              <p className="flex justify-between w-48 text-muted text-xs font-bold mb-1 uppercase tracking-widest">
+              <p className="flex justify-between w-56 text-muted text-xs font-bold mb-1 uppercase tracking-widest">
                 <span>VAT (12%)</span>
                 <span>₱{tax.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
               </p>
-              <p className="flex justify-between w-48 text-main font-black text-xl border-t border-border/50 pt-2 uppercase">
-                <span>Total</span>
+              <p className="flex justify-between w-56 text-main font-black text-xl border-t border-border/50 pt-2 uppercase">
+                <span>Total (VAT-Inclusive)</span>
                 <span className="text-brand-neonblue">₱{grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
               </p>
             </div>

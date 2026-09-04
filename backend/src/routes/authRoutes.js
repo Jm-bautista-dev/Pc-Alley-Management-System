@@ -2,8 +2,9 @@ const express = require('express');
 const router = express.Router();
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
-const { register, login, getUsers, updateProfile, changePassword } = require('../controllers/authController');
+const { register, login, logout, getUsers, updateProfile, changePassword, forgotPassword, verifyResetToken, resetPassword } = require('../controllers/authController');
 const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
+const { loginRateLimiter } = require('../middleware/loginRateLimiter');
 
 router.post('/register', [
   authenticateToken, 
@@ -35,6 +36,7 @@ router.post('/register', [
 ]); 
 
 router.post('/login', [
+  loginRateLimiter,
   body('username')
     .trim()
     .notEmpty()
@@ -42,6 +44,29 @@ router.post('/login', [
   body('password').notEmpty().withMessage('Access key is required'),
   validate,
   login
+]);
+
+router.post('/logout', authenticateToken, logout);
+
+router.post('/forgot-password', [
+  body('email').trim().notEmpty().withMessage('Email or username is required'),
+  validate,
+  forgotPassword
+]);
+
+router.post('/verify-reset-token', [
+  body('email').trim().notEmpty().withMessage('Email or username is required'),
+  body('token').trim().notEmpty().withMessage('Verification code is required'),
+  validate,
+  verifyResetToken
+]);
+
+router.post('/reset-password', [
+  body('email').trim().notEmpty().withMessage('Email or username is required'),
+  body('token').trim().notEmpty().withMessage('Verification code is required'),
+  body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters'),
+  validate,
+  resetPassword
 ]);
 
 router.get('/users', authenticateToken, authorizeRoles('super_admin', 'branch_admin'), getUsers);

@@ -42,8 +42,15 @@ router.post('/', [
   body('email')
     .optional({ checkFalsy: true })
     .trim()
-    .isEmail().withMessage('Valid email is required.')
-    .isLength({ max: 100 }).withMessage('Email cannot exceed 100 characters.'),
+    .isEmail().withMessage('Please provide a valid RFC-compliant email address.')
+    .isLength({ max: 100 }).withMessage('Email cannot exceed 100 characters.')
+    .custom(val => {
+      const lower = val.toLowerCase();
+      if (/@gamil\.com$/i.test(lower) || /@yaho\.com$/i.test(lower) || /@hotmial\.com$/i.test(lower) || /@outlok\.com$/i.test(lower)) {
+        throw new Error('Invalid email domain. Please check for common typos (e.g., @gmail.com).');
+      }
+      return true;
+    }),
   body('phone')
     .optional({ checkFalsy: true })
     .trim()
@@ -71,8 +78,15 @@ router.put('/:id', [
   body('email')
     .optional({ checkFalsy: true })
     .trim()
-    .isEmail().withMessage('Valid email is required.')
-    .isLength({ max: 100 }).withMessage('Email cannot exceed 100 characters.'),
+    .isEmail().withMessage('Please provide a valid RFC-compliant email address.')
+    .isLength({ max: 100 }).withMessage('Email cannot exceed 100 characters.')
+    .custom(val => {
+      const lower = val.toLowerCase();
+      if (/@gamil\.com$/i.test(lower) || /@yaho\.com$/i.test(lower) || /@hotmial\.com$/i.test(lower) || /@outlok\.com$/i.test(lower)) {
+        throw new Error('Invalid email domain. Please check for common typos (e.g., @gmail.com).');
+      }
+      return true;
+    }),
   body('phone')
     .optional({ checkFalsy: true })
     .trim()

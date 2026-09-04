@@ -260,7 +260,10 @@ function ReceiptModal({ isOpen, onClose, receipt }) {
 
   const items = receipt.SaleItems || receipt.OrderItems || [];
   const subtotal = items.reduce((sum, item) => sum + parseFloat(item.unitPrice || item.price_at_sale || 0) * item.quantity, 0);
-  const grandTotal = subtotal * 1.12;
+  const discount = parseFloat(receipt.discountAmount || receipt.discount_amount || 0);
+  const grandTotal = Math.max(0, parseFloat(receipt.totalAmount || receipt.total_amount || (subtotal - discount)));
+  const vatableSales = grandTotal / 1.12;
+  const tax = grandTotal - vatableSales;
 
   return (
     <>
@@ -516,30 +519,74 @@ export default function SalesPage() {
     }
   }, [user]);
 
+  const [isDraftRestored, setIsDraftRestored] = useState(false);
+
+  // Restore POS cart draft on mount
   useEffect(() => {
     try {
-      const savedCart = localStorage.getItem("pc_alley_pos_cart");
-      const savedCustomerName = localStorage.getItem("pc_alley_pos_customer");
-      if (savedCart) {
-        const parsed = JSON.parse(savedCart);
+      const savedDraft = localStorage.getItem("pc_alley_pos_cart_draft");
+      const legacyCart = localStorage.getItem("pc_alley_pos_cart");
+      const legacyCustomer = localStorage.getItem("pc_alley_pos_customer");
+
+      if (savedDraft) {
+        const parsed = JSON.parse(savedDraft);
+        if (parsed) {
+          if (Array.isArray(parsed.cart) && parsed.cart.length > 0) {
+            setCart(parsed.cart);
+          }
+          if (parsed.selectedCustomer) setSelectedCustomer(parsed.selectedCustomer);
+          if (parsed.customerQuery) setCustomerQuery(parsed.customerQuery);
+          if (parsed.customNotes) setCustomNotes(parsed.customNotes);
+          if (parsed.selectedDiscount) setSelectedDiscount(parsed.selectedDiscount);
+          if (parsed.selectedBranchId) setSelectedBranchId(parsed.selectedBranchId);
+          if (parsed.paymentMethod) setPaymentMethod(parsed.paymentMethod);
+          if (parsed.cashPaid) setCashPaid(parsed.cashPaid);
+        }
+      } else if (legacyCart) {
+        const parsed = JSON.parse(legacyCart);
         if (Array.isArray(parsed) && parsed.length > 0) {
           setCart(parsed);
         }
-        localStorage.removeItem("pc_alley_pos_cart");
-      }
-      if (savedCustomerName) {
-        setCustomerQuery(savedCustomerName);
-        if (savedCustomerName !== "Walk-in Customer" && savedCustomerName !== "") {
-          setSelectedCustomer({ name: savedCustomerName });
-        } else {
-          setSelectedCustomer(null);
+        if (legacyCustomer) {
+          setCustomerQuery(legacyCustomer);
+          if (legacyCustomer !== "Walk-in Customer" && legacyCustomer !== "") {
+            setSelectedCustomer({ name: legacyCustomer });
+          }
         }
-        localStorage.removeItem("pc_alley_pos_customer");
       }
     } catch (err) {
       console.error("Failed to restore cart draft:", err);
+    } finally {
+      setIsDraftRestored(true);
     }
   }, []);
+
+  // Continuously persist in-progress sale draft to localStorage
+  useEffect(() => {
+    if (!isDraftRestored) return;
+    try {
+      if (cart.length > 0) {
+        const draft = {
+          cart,
+          selectedCustomer,
+          customerQuery,
+          customNotes,
+          selectedDiscount,
+          selectedBranchId,
+          paymentMethod,
+          cashPaid,
+          updatedAt: new Date().toISOString()
+        };
+        localStorage.setItem("pc_alley_pos_cart_draft", JSON.stringify(draft));
+      } else {
+        localStorage.removeItem("pc_alley_pos_cart_draft");
+        localStorage.removeItem("pc_alley_pos_cart");
+        localStorage.removeItem("pc_alley_pos_customer");
+      }
+    } catch (err) {
+      console.error("Failed to persist cart draft:", err);
+    }
+  }, [cart, selectedCustomer, customerQuery, customNotes, selectedDiscount, selectedBranchId, paymentMethod, cashPaid, isDraftRestored]);
 
   useEffect(() => {
     if (selectedBranchId) {
@@ -1038,6 +1085,7 @@ export default function SalesPage() {
     .filter(i => i.isService || i.item_type === "service")
     .reduce((s, i) => s + i.price * i.quantity, 0);
 
+  // Shelf prices are VAT-inclusive (standard for Philippine retail)
   const subtotal       = productSubtotal + serviceSubtotal;
   const discountAmount = (() => {
     if (!selectedDiscount) return 0;
@@ -1048,13 +1096,18 @@ export default function SalesPage() {
     }
     return Math.min(Math.max(Number(selectedDiscount.value) || 0, 0), subtotal);
   })();
-  const discountedSubtotal = subtotal - discountAmount;
-  const tax        = discountedSubtotal * 0.12;
-  const grandTotal = discountedSubtotal + tax;
+  const grandTotal = Math.max(0, subtotal - discountAmount);
+  const vatableSales = grandTotal / 1.12;
+  const tax        = grandTotal - vatableSales; // Extracted VAT (grandTotal * 12 / 112)
 
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
     if (cart.length === 0 || processing) return;
+
+    if (user?.role === "super_admin" && !selectedBranchId) {
+      showError("Branch selection is required for checkout. Please select a branch.");
+      return;
+    }
     
     if (paymentMethod === "Cash" && (!cashPaid || parseFloat(cashPaid) < grandTotal)) {
       showError(t[language].insufficientCash);
@@ -1076,11 +1129,15 @@ export default function SalesPage() {
       let backendPaymentMethod = paymentMethod.toLowerCase();
       if (backendPaymentMethod === "bank") backendPaymentMethod = "bank_transfer";
 
+      const resolvedBranch = user?.role === "super_admin" 
+        ? (selectedBranchId ? Number(selectedBranchId) : undefined)
+        : (user?.branch_id ? Number(user?.branch_id) : (selectedBranchId ? Number(selectedBranchId) : undefined));
+
       const payload = {
         customer_name: selectedCustomer?.name || "Walk-in Customer",
         customer_id:   selectedCustomer?.id   || undefined,
         payment_method: backendPaymentMethod,
-        branch_id:     selectedBranchId || undefined,
+        branch_id:     resolvedBranch,
         amount_paid:   paymentMethod === "Cash" ? parseFloat(cashPaid) : grandTotal,
         change_amount: paymentMethod === "Cash" ? Math.max(0, parseFloat(cashPaid) - grandTotal) : 0,
         notes:         combinedNotes,
@@ -1288,6 +1345,24 @@ export default function SalesPage() {
 
         {/* Right: Actions */}
         <div className="flex items-center gap-3">
+          {/* Branch Selector for Super Admin in Header */}
+          {user?.role === "super_admin" && branches.length > 0 && (
+            <div className="flex items-center gap-2 bg-brand-bgbase px-3.5 py-1.5 rounded-full border border-brand-border shadow-inner">
+              <span className="text-[9px] font-black uppercase tracking-wider text-brand-neonblue">Branch:</span>
+              <select
+                value={selectedBranchId || ""}
+                onChange={handleBranchChange}
+                className="bg-transparent text-xs font-bold text-main outline-none cursor-pointer pr-1"
+              >
+                {branches.map(b => (
+                  <option key={b.id} value={b.id} className="bg-brand-surface text-main">
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* Search Trigger */}
           <button
             onClick={() => setSearchOpen(!searchOpen)}
@@ -2335,6 +2410,29 @@ export default function SalesPage() {
                     </div>
                   </div>
 
+                  {/* Target Branch selection for Super Admin */}
+                  {user?.role === "super_admin" && (
+                    <div className="bg-brand-panel border border-brand-border rounded-2xl p-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-[9px] font-black uppercase tracking-widest text-brand-muted leading-none">
+                          Target Branch (Required)
+                        </h4>
+                        <span className="text-[9px] font-bold text-brand-neonblue uppercase">Super Admin</span>
+                      </div>
+                      <select
+                        value={selectedBranchId || ""}
+                        onChange={handleBranchChange}
+                        className="w-full bg-brand-surface border border-brand-border rounded-xl py-2.5 px-3 text-xs font-bold text-main outline-none focus:border-brand-neonblue/40 cursor-pointer"
+                      >
+                        {branches.map(b => (
+                          <option key={b.id} value={b.id} className="bg-brand-surface text-main">
+                            🏪 {b.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
                   {/* Customer search selection details */}
                   <div className="bg-brand-panel border border-brand-border rounded-2xl p-4 space-y-3">
                     <h4 className="text-[9px] font-black uppercase tracking-widest text-brand-muted leading-none">
@@ -2511,13 +2609,21 @@ export default function SalesPage() {
 
 
                     <div className="flex justify-between">
+                      <span>VATable Sales</span>
+                      <span className="text-main font-bold">₱{vatableSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+
+                    <div className="flex justify-between">
                       <span>{t[language].tax}</span>
                       <span className="text-main font-bold">₱{tax.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                   </div>
 
                   <div className="flex justify-between items-baseline pt-2">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-brand-muted">Total</span>
+                    <div>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-brand-muted block">Total Due</span>
+                      <span className="text-[8px] font-bold text-brand-muted/70 uppercase tracking-wider">VAT-Inclusive</span>
+                    </div>
                     <span className="text-2xl font-rajdhani font-black text-main tracking-wide">
                       ₱{grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>

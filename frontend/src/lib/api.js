@@ -31,12 +31,24 @@ const apiUrl = (path) => {
   return `${base}${normalizedPath}`;
 };
 
-const getApiErrorMessage = (error, fallbackMessage) => {
-  if (error?.name === "TypeError") {
-    return "Backend server is offline. Start the backend server, then refresh this page.";
-  }
+const logoutUser = async () => {
+  try {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    await fetch(apiUrl("/api/auth/logout"), {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      }
+    }).catch(() => {});
+  } catch (e) {}
 
-  return fallbackMessage;
+  if (typeof window !== "undefined") {
+    localStorage.clear();
+    sessionStorage.clear();
+    window.location.href = "/";
+  }
 };
 
-export { API_BASE_URL, SOCKET_BASE_URL, apiUrl, getApiErrorMessage };
+export { API_BASE_URL, SOCKET_BASE_URL, apiUrl, getApiErrorMessage, logoutUser };

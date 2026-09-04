@@ -10,6 +10,8 @@ import { useTheme } from "@/context/ThemeContext";
 import { useLayout } from "@/context/LayoutContext";
 import { useNotifications } from "@/context/NotificationContext";
 
+import { logoutUser } from "@/lib/api";
+
 const TopBar = ({ title }) => {
   const { theme, toggleTheme } = useTheme();
   const { isMobile, isSidebarOpen, setIsSidebarOpen } = useLayout();
@@ -21,9 +23,7 @@ const TopBar = ({ title }) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    router.push("/");
+    logoutUser();
   };
 
   const getInitials = (name) => {

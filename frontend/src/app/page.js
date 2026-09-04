@@ -20,6 +20,30 @@ export default function LoginPage() {
     password: ""
   });
 
+  const [lockoutTimer, setLockoutTimer] = useState(0);
+  const [lockoutMessage, setLockoutMessage] = useState("");
+  const [attemptsWarning, setAttemptsWarning] = useState("");
+  const [requiresCaptcha, setRequiresCaptcha] = useState(false);
+  const [captchaVerified, setCaptchaVerified] = useState(false);
+
+  useEffect(() => {
+    let interval = null;
+    if (lockoutTimer > 0) {
+      interval = setInterval(() => {
+        setLockoutTimer((prev) => {
+          if (prev <= 1) {
+            setLockoutMessage("");
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [lockoutTimer]);
+
   useEffect(() => {
     // If user is already logged in, redirect them away from the login page
     const storedToken = localStorage.getItem("token");
@@ -38,10 +62,22 @@ export default function LoginPage() {
     }
   }, []);
 
-  const handleChange = (e) => setFormData({ ...formData, [e.target.id]: e.target.value });
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.id]: e.target.value });
+    setAttemptsWarning("");
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (lockoutTimer > 0) {
+      showError(`Account is locked. Please wait ${lockoutTimer} seconds.`);
+      return;
+    }
+    if (requiresCaptcha && !captchaVerified) {
+      showWarning("Please complete the security challenge before logging in.");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -78,7 +114,18 @@ export default function LoginPage() {
         } else {
           router.push("/dashboard");
         }
+      } else if (res.status === 429) {
+        const seconds = data.retryAfter || 900;
+        setLockoutTimer(seconds);
+        setLockoutMessage(data.message || "Account temporarily locked due to excessive failed attempts.");
+        showError(data.message || `Account locked. Retry in ${Math.ceil(seconds / 60)} minutes.`);
       } else {
+        if (data.requireCaptcha) {
+          setRequiresCaptcha(true);
+        }
+        if (data.attemptsRemaining !== undefined) {
+          setAttemptsWarning(`Security Notice: ${data.attemptsRemaining} attempt(s) remaining before temporary lockout.`);
+        }
         showError(data.message || "Invalid Security Credentials");
       }
     } catch (err) {
@@ -210,8 +257,33 @@ export default function LoginPage() {
               </button>
             </div>
 
+            {/* Lockout Notification Banner */}
+            {lockoutTimer > 0 && (
+              <div className="p-3.5 bg-brand-crimson/15 border border-brand-crimson/40 rounded-xl text-left">
+                <div className="flex items-center gap-2 text-brand-crimson font-bold text-xs">
+                  <ShieldAlert size={16} />
+                  <span>ACCOUNT LOCKED</span>
+                </div>
+                <p className="text-[11px] text-main mt-1 leading-snug">
+                  {lockoutMessage || "Too many failed attempts."}
+                </p>
+                <p className="text-[10px] font-mono text-brand-crimson font-bold mt-1.5">
+                  Retry available in: {Math.floor(lockoutTimer / 60)}m {lockoutTimer % 60}s
+                </p>
+              </div>
+            )}
+
+            {/* Attempts Remaining Warning */}
+            {attemptsWarning && lockoutTimer === 0 && (
+              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-left">
+                <p className="text-[11px] text-amber-500 font-semibold leading-snug">
+                  {attemptsWarning}
+                </p>
+              </div>
+            )}
+
             {/* Checkbox and Forgot Password */}
-            <div className="flex items-center justify-between text-[10px] md:text-xs font-bold uppercase tracking-wider pt-2 pb-4 text-muted">
+            <div className="flex items-center justify-between text-[10px] md:text-xs font-bold uppercase tracking-wider pt-2 pb-2 text-muted">
               <label className="flex items-center gap-2 cursor-pointer select-none hover:text-main transition-colors">
                 <input
                   type="checkbox"
@@ -226,13 +298,35 @@ export default function LoginPage() {
               </Link>
             </div>
 
+            {/* CAPTCHA Challenge (if repeated failures) */}
+            {requiresCaptcha && (
+              <div className="p-3 bg-brand-neonblue/10 border border-brand-neonblue/30 rounded-xl flex items-center justify-between">
+                <label className="flex items-center gap-2.5 cursor-pointer select-none text-xs text-main">
+                  <input
+                    type="checkbox"
+                    checked={captchaVerified}
+                    onChange={(e) => setCaptchaVerified(e.target.checked)}
+                    className="w-4 h-4 rounded bg-brand-surface/40 border-border text-brand-neonblue focus:ring-0 cursor-pointer"
+                  />
+                  <span>I am not a robot (Security Verification)</span>
+                </label>
+                <div className="w-2 h-2 rounded-full bg-brand-neonblue animate-pulse" />
+              </div>
+            )}
+
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || lockoutTimer > 0}
               className="btn-primary w-full py-4 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-wait"
             >
-              {loading ? <Loader2 className="animate-spin" size={16} /> : <>LOGIN <ArrowRight size={16} /></>}
+              {loading ? (
+                <Loader2 className="animate-spin" size={16} />
+              ) : lockoutTimer > 0 ? (
+                `LOCKED (${lockoutTimer}s)`
+              ) : (
+                <>LOGIN <ArrowRight size={16} /></>
+              )}
             </button>
           </form>
 

@@ -13,9 +13,10 @@ export function CashReceiptContent({ receipt, copy = "ORIGINAL" }) {
     const price = parseFloat(item.unitPrice || item.price_at_sale || 0);
     return sum + price * (item.quantity || 1);
   }, 0);
-  const vatAmt    = subtotal * 0.12;
-  const grandTotal = subtotal + vatAmt;
   const discount   = parseFloat(receipt?.discountAmount || receipt?.discount_amount || 0);
+  const grandTotal = Math.max(0, parseFloat(receipt?.totalAmount || receipt?.total_amount || (subtotal - discount)));
+  const vatableSales = grandTotal / 1.12;
+  const vatAmt     = grandTotal - vatableSales;
   const amountPaid = parseFloat(receipt?.amountPaid || receipt?.amount_paid || grandTotal);
   const change     = parseFloat(receipt?.changeAmount || receipt?.change_amount || 0);
 
@@ -357,16 +358,22 @@ export function CashReceiptContent({ receipt, copy = "ORIGINAL" }) {
                 </>
               )}
 
+              <tr style={{ backgroundColor: "#f9fafb" }}>
+                <td colSpan={3} style={{ padding: "3px 5px", fontWeight: "700", fontSize: "10px" }}>VATable Sales</td>
+                <td style={{ padding: "3px 5px", textAlign: "right", fontWeight: "700" }}>
+                  ₱{vatableSales.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </td>
+              </tr>
               <tr style={{ backgroundColor: "#eff6ff" }}>
                 <td colSpan={3} style={{ padding: "3px 5px", fontWeight: "700", fontSize: "10px" }}>VAT (12%)</td>
                 <td style={{ padding: "3px 5px", textAlign: "right", fontWeight: "700" }}>
-                  ₱{vatAmt.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                  ₱{vatAmt.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </td>
               </tr>
               <tr style={{ backgroundColor: "#1e3a8a", color: "#fff" }}>
-                <td colSpan={3} style={{ padding: "3px 5px", fontWeight: "900", fontSize: "11px" }}>GRAND TOTAL</td>
+                <td colSpan={3} style={{ padding: "3px 5px", fontWeight: "900", fontSize: "11px" }}>GRAND TOTAL (VAT-INCLUSIVE)</td>
                 <td style={{ padding: "3px 5px", textAlign: "right", fontWeight: "900", fontSize: "12px" }}>
-                  ₱{grandTotal.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                  ₱{grandTotal.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </td>
               </tr>
             </tbody>

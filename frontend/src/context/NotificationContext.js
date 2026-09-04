@@ -24,10 +24,16 @@ export function NotificationProvider({ children }) {
   const intervalRef = useRef(null);
 
   const fetchNotifications = async () => {
+    if (typeof window === "undefined") return;
     const token = localStorage.getItem("token");
-    if (!token) return;
+    if (!token) {
+      setNotifications([]);
+      return;
+    }
+
     try {
       const res = await fetch(apiUrl("/api/notifications"), {
+        credentials: "include",
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -44,6 +50,9 @@ export function NotificationProvider({ children }) {
             };
           })
         );
+      } else if (res.status === 401) {
+        // Unauthenticated - pause polling
+        setNotifications([]);
       }
     } catch (_) {
       // silently fail — no network = no notifications
@@ -51,10 +60,33 @@ export function NotificationProvider({ children }) {
   };
 
   useEffect(() => {
-    fetchNotifications();
-    // Poll every 15 seconds so notifications feel live
-    intervalRef.current = setInterval(fetchNotifications, 15000);
-    return () => clearInterval(intervalRef.current);
+    if (typeof window === "undefined") return;
+    const token = localStorage.getItem("token");
+    if (token) {
+      fetchNotifications();
+    }
+
+    // Poll every 15 seconds if authenticated
+    intervalRef.current = setInterval(() => {
+      const currentToken = localStorage.getItem("token");
+      if (currentToken) {
+        fetchNotifications();
+      }
+    }, 15000);
+
+    const handleStorage = (e) => {
+      if (e.key === "token" && e.newValue) {
+        fetchNotifications();
+      } else if (e.key === "token" && !e.newValue) {
+        setNotifications([]);
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      clearInterval(intervalRef.current);
+      window.removeEventListener("storage", handleStorage);
+    };
   }, []);
 
   // Local-only activity item for non-blocking system updates.

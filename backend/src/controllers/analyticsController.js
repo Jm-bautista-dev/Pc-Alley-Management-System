@@ -1,5 +1,5 @@
 const sequelize = require('../db');
-const { Sale, SaleItem, Customer, Inventory, Product, Branch, Category, Brand } = require('../models');
+const { Sale, SaleItem, Order, OrderItem, Customer, Inventory, BranchProduct, Product, Branch, Category, Brand, Expense } = require('../models');
 const { Op } = require('sequelize');
 
 // 1. Dashboard Overview Metrics
@@ -239,7 +239,18 @@ const getDashboardMetrics = async (req, res) => {
 const getBranchPerformance = async (req, res) => {
   try {
     const { days, startDate, endDate } = req.query;
-    const branches = await Branch.findAll();
+
+    const branchWhere = {};
+    if (req.user.role !== 'super_admin') {
+      if (!req.user.branch_id) {
+        return res.json([]);
+      }
+      branchWhere.id = req.user.branch_id;
+    } else if (req.query.branchId || req.query.branch_id) {
+      branchWhere.id = req.query.branchId || req.query.branch_id;
+    }
+
+    const branches = await Branch.findAll({ where: branchWhere });
     const performance = [];
 
     const whereSale = { status: 'completed' };
@@ -563,7 +574,7 @@ const getDeadStock = async (req, res) => {
     const dateLimit = new Date();
     dateLimit.setDate(dateLimit.getDate() - days);
 
-    // Find all product IDs sold in the last N days
+    // Find all product IDs sold in the last N days (SaleItem + OrderItem)
     const activeSales = await SaleItem.findAll({
       attributes: ['productId'],
       include: [{
@@ -579,22 +590,46 @@ const getDeadStock = async (req, res) => {
     });
     const activeProductIds = activeSales.map(s => s.productId).filter(Boolean);
 
-    // Query products not in active sales list
+    const legacySales = await OrderItem.findAll({
+      attributes: ['product_id'],
+      include: [{
+        model: Order,
+        attributes: [],
+        where: {
+          createdAt: { [Op.gte]: dateLimit }
+        }
+      }],
+      group: ['product_id'],
+      raw: true
+    });
+    const legacyProductIds = legacySales.map(s => s.product_id).filter(Boolean);
+
+    const allActiveProductIds = Array.from(new Set([...activeProductIds, ...legacyProductIds]));
+
+    // Query products created more than N days ago not in active sales list
     const deadProducts = await Product.findAll({
       where: {
-        id: { [Op.notIn]: activeProductIds }
+        id: { [Op.notIn]: allActiveProductIds },
+        createdAt: { [Op.lte]: dateLimit }
       },
-      include: [Category],
+      include: [
+        { model: Category },
+        { model: BranchProduct }
+      ],
       limit: 20
     });
 
-    res.json(deadProducts.map(p => ({
-      id: p.id,
-      name: p.name,
-      sku: p.sku,
-      price: p.price,
-      category: p.Category?.name || 'N/A'
-    })));
+    res.json(deadProducts.map(p => {
+      const totalStock = (p.BranchProducts || []).reduce((acc, bp) => acc + (bp.stock || 0), 0);
+      return {
+        id: p.id,
+        name: p.name,
+        sku: p.sku,
+        price: p.price,
+        stock: totalStock,
+        category: p.Category?.name || 'N/A'
+      };
+    }));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1349,6 +1384,249 @@ const getBrandAnalytics = async (req, res) => {
   }
 };
 
+// 12. Profit & Loss Analytics
+const getProfitLossAnalytics = async (req, res) => {
+  try {
+    const isSuperAdmin = req.user.role === 'super_admin';
+    const branchId = !isSuperAdmin ? req.user.branch_id : (req.query.branch_id || req.query.branchId);
+    const { days, startDate, endDate } = req.query;
+
+    const whereSale = { status: 'completed' };
+    const whereExpense = {};
+
+    if (branchId) {
+      whereSale.branchId = branchId;
+      whereExpense.branchId = branchId;
+    }
+
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(new Date(endDate).setHours(23, 59, 59, 999));
+      whereSale.createdAt = { [Op.between]: [start, end] };
+      whereExpense.expenseDate = { [Op.between]: [start, end] };
+    } else if (days && !isNaN(parseInt(days, 10))) {
+      const limitDate = new Date();
+      limitDate.setDate(limitDate.getDate() - parseInt(days, 10));
+      whereSale.createdAt = { [Op.gte]: limitDate };
+      whereExpense.expenseDate = { [Op.gte]: limitDate };
+    }
+
+    // Fetch all matching completed sales with SaleItems and Product info
+    const sales = await Sale.findAll({
+      where: whereSale,
+      include: [
+        {
+          model: SaleItem,
+          include: [{ model: Product, attributes: ['id', 'name', 'price', 'last_purchase_price'] }]
+        }
+      ],
+      order: [['createdAt', 'ASC']]
+    });
+
+    // Fetch all matching expenses
+    const expenses = await Expense.findAll({
+      where: whereExpense,
+      order: [['expenseDate', 'ASC']]
+    });
+
+    // Compute Summary Totals
+    let totalRevenue = 0;
+    let totalCogs = 0;
+    const totalSalesCount = sales.length;
+
+    sales.forEach(sale => {
+      const saleTotal = parseFloat(sale.totalAmount || 0);
+      totalRevenue += saleTotal;
+
+      if (sale.SaleItems && sale.SaleItems.length > 0) {
+        sale.SaleItems.forEach(item => {
+          const qty = parseInt(item.quantity, 10) || 1;
+          const itemType = (item.item_type || (item.serviceId ? 'service' : 'product')).toLowerCase();
+          if (itemType === 'product') {
+            const product = item.Product;
+            let unitCost = 0;
+            if (product && product.last_purchase_price !== null && product.last_purchase_price !== undefined) {
+              unitCost = parseFloat(product.last_purchase_price);
+            } else if (product && product.price) {
+              unitCost = parseFloat(product.price) * 0.70; // 30% margin fallback
+            } else if (item.unitPrice) {
+              unitCost = parseFloat(item.unitPrice) * 0.70;
+            }
+            totalCogs += unitCost * qty;
+          }
+        });
+      }
+    });
+
+    let totalExpenses = 0;
+    expenses.forEach(exp => {
+      totalExpenses += parseFloat(exp.amount || 0);
+    });
+
+    totalRevenue = parseFloat(totalRevenue.toFixed(2));
+    totalCogs = parseFloat(totalCogs.toFixed(2));
+    totalExpenses = parseFloat(totalExpenses.toFixed(2));
+
+    const grossProfit = parseFloat((totalRevenue - totalCogs).toFixed(2));
+    const netIncome = parseFloat((grossProfit - totalExpenses).toFixed(2));
+    const grossMargin = totalRevenue > 0 ? parseFloat(((grossProfit / totalRevenue) * 100).toFixed(1)) : 0;
+    const netMargin = totalRevenue > 0 ? parseFloat(((netIncome / totalRevenue) * 100).toFixed(1)) : 0;
+
+    // Daily trends (last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    thirtyDaysAgo.setHours(0, 0, 0, 0);
+
+    const dailyMap = {};
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().split('T')[0];
+      const label = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+      dailyMap[key] = { date: key, label, revenue: 0, expenses: 0, cogs: 0, netIncome: 0 };
+    }
+
+    sales.forEach(sale => {
+      const saleDate = new Date(sale.createdAt);
+      if (saleDate >= thirtyDaysAgo) {
+        const key = saleDate.toISOString().split('T')[0];
+        if (dailyMap[key]) {
+          const rev = parseFloat(sale.totalAmount || 0);
+          dailyMap[key].revenue += rev;
+          let cogs = 0;
+          if (sale.SaleItems) {
+            sale.SaleItems.forEach(item => {
+              const qty = parseInt(item.quantity, 10) || 1;
+              if ((item.item_type || 'product').toLowerCase() === 'product') {
+                const p = item.Product;
+                const cost = p?.last_purchase_price ? parseFloat(p.last_purchase_price) : (parseFloat(item.unitPrice || 0) * 0.70);
+                cogs += cost * qty;
+              }
+            });
+          }
+          dailyMap[key].cogs += cogs;
+        }
+      }
+    });
+
+    expenses.forEach(exp => {
+      const expDate = new Date(exp.expenseDate || exp.createdAt);
+      if (expDate >= thirtyDaysAgo) {
+        const key = expDate.toISOString().split('T')[0];
+        if (dailyMap[key]) {
+          dailyMap[key].expenses += parseFloat(exp.amount || 0);
+        }
+      }
+    });
+
+    const trends = Object.values(dailyMap).map(d => {
+      const rev = parseFloat(d.revenue.toFixed(2));
+      const exp = parseFloat(d.expenses.toFixed(2));
+      const cogs = parseFloat(d.cogs.toFixed(2));
+      const net = parseFloat((rev - cogs - exp).toFixed(2));
+      return {
+        date: d.date,
+        label: d.label,
+        revenue: rev,
+        expenses: exp,
+        cogs,
+        netIncome: net
+      };
+    });
+
+    // Monthly breakdown across the last 12 calendar months
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const monthlyMap = {};
+    
+    const now = new Date();
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const mIdx = d.getMonth();
+      const yr = d.getFullYear();
+      const key = `${yr}-${String(mIdx + 1).padStart(2, '0')}`;
+      monthlyMap[key] = {
+        month: monthNames[mIdx],
+        year: yr,
+        monthKey: key,
+        revenue: 0,
+        cogs: 0,
+        grossProfit: 0,
+        expenses: 0,
+        profit: 0,
+        margin: 0,
+        status: 'positive'
+      };
+    }
+
+    sales.forEach(sale => {
+      const d = new Date(sale.createdAt);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (monthlyMap[key]) {
+        const rev = parseFloat(sale.totalAmount || 0);
+        monthlyMap[key].revenue += rev;
+        let cogs = 0;
+        if (sale.SaleItems) {
+          sale.SaleItems.forEach(item => {
+            const qty = parseInt(item.quantity, 10) || 1;
+            if ((item.item_type || 'product').toLowerCase() === 'product') {
+              const p = item.Product;
+              const cost = p?.last_purchase_price ? parseFloat(p.last_purchase_price) : (parseFloat(item.unitPrice || 0) * 0.70);
+              cogs += cost * qty;
+            }
+          });
+        }
+        monthlyMap[key].cogs += cogs;
+      }
+    });
+
+    expenses.forEach(exp => {
+      const d = new Date(exp.expenseDate || exp.createdAt);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (monthlyMap[key]) {
+        monthlyMap[key].expenses += parseFloat(exp.amount || 0);
+      }
+    });
+
+    const monthly = Object.values(monthlyMap).map(m => {
+      const rev = parseFloat(m.revenue.toFixed(2));
+      const cogs = parseFloat(m.cogs.toFixed(2));
+      const exp = parseFloat(m.expenses.toFixed(2));
+      const gp = parseFloat((rev - cogs).toFixed(2));
+      const np = parseFloat((gp - exp).toFixed(2));
+      const margin = rev > 0 ? parseFloat(((np / rev) * 100).toFixed(1)) : 0;
+      return {
+        month: m.month,
+        year: m.year,
+        monthKey: m.monthKey,
+        revenue: rev,
+        cogs,
+        grossProfit: gp,
+        expenses: exp,
+        profit: np,
+        margin,
+        status: np >= 0 ? 'positive' : 'negative'
+      };
+    });
+
+    res.json({
+      summary: {
+        revenue: totalRevenue,
+        cogs: totalCogs,
+        grossProfit,
+        operatingExpenses: totalExpenses,
+        netIncome,
+        grossMargin,
+        netMargin,
+        totalSalesCount
+      },
+      trends,
+      monthly
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   getDashboardMetrics,
   getBranchPerformance,
@@ -1360,5 +1638,6 @@ module.exports = {
   getForecastingAnalytics,
   getPrescriptiveAnalytics,
   getForecastingBenchmark,
-  getBrandAnalytics
+  getBrandAnalytics,
+  getProfitLossAnalytics
 };

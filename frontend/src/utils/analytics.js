@@ -184,15 +184,16 @@ export const getBurnRates = (salesHistory, inventory) => {
       order.items.forEach(item => {
         // Support both new SaleItem (productId) and old OrderItem (product_id)
         const pId = item.productId ?? item.product_id;
-        if (pId) productVelocity[pId] = (productVelocity[pId] || 0) + (item.quantity || 0);
+        if (pId) productVelocity[pId] = (productVelocity[pId] || 0) + (Number(item.quantity) || 0);
       });
     }
   });
 
   const burnRates = [];
   inventory.forEach(item => {
-    const stock = item.quantity;
-    const velocity = productVelocity[item.product_id] || 0;
+    const pId = item.product_id || (item.Product && item.Product.id) || item.id;
+    const stock = item.stock !== undefined && item.stock !== null ? Number(item.stock) : Number(item.quantity || 0);
+    const velocity = productVelocity[pId] || 0;
     const daily = velocity / 30;
 
     if (daily > 0) {
@@ -202,8 +203,8 @@ export const getBurnRates = (salesHistory, inventory) => {
       else if (daysRemaining <= 10) status = 'warning';
 
       burnRates.push({
-        id: item.product_id,
-        name: item.Product?.name || 'Unknown Product',
+        id: pId,
+        name: item.Product?.name || item.name || 'Unknown Product',
         stock,
         dailyVelocity: daily.toFixed(1),
         daysRemaining,
@@ -285,10 +286,10 @@ export const getProductPerformance = (salesHistory, inventory, correlations) => 
       }
 
       if (orderDate >= thirtyDaysAgo) {
-        productSales[pId].sold30 += item.quantity || 0;
+        productSales[pId].sold30 += Number(item.quantity) || 0;
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(today.getDate() - 7);
-        if (orderDate >= sevenDaysAgo) productSales[pId].sold7 += item.quantity || 0;
+        if (orderDate >= sevenDaysAgo) productSales[pId].sold7 += Number(item.quantity) || 0;
       }
     });
   });
@@ -296,8 +297,8 @@ export const getProductPerformance = (salesHistory, inventory, correlations) => 
   // Star products
   const starProducts = Object.entries(productSales)
     .map(([pId, data]) => {
-      const inv     = inventory.find(i => String(i.product_id) === String(pId));
-      const product = inv?.Product;
+      const inv     = inventory.find(i => String(i.product_id || i.Product?.id || i.id) === String(pId));
+      const product = inv?.Product || inv;
       const name    = product?.name || 'Unknown';
       const cat     = product?.Category?.name || '';
       const dailyVelocity = (data.sold30 / 30).toFixed(1);
@@ -312,15 +313,20 @@ export const getProductPerformance = (salesHistory, inventory, correlations) => 
     .sort((a, b) => b.sold - a.sold)
     .slice(0, 3);
 
-  // Dead stock
+  // Dead stock: Only products with stock > 0, 0 sales in the last 30 days, and catalog age >= 30 days
   const deadStock = inventory
     .filter(item => {
-      const sold = productSales[item.product_id]?.sold30 || 0;
-      const ageDays = (today - new Date(item.Product?.createdAt || today)) / 86400000;
-      return sold === 0 && item.quantity > 0 && ageDays >= 30;
+      const pId = item.product_id || (item.Product && item.Product.id) || item.id;
+      const stock = item.stock !== undefined && item.stock !== null ? Number(item.stock) : Number(item.quantity || 0);
+      const sold = productSales[pId]?.sold30 || 0;
+      const createdAtDate = item.Product?.createdAt || item.createdAt;
+      const ageDays = createdAtDate ? (today - new Date(createdAtDate)) / 86400000 : 90;
+      return sold === 0 && stock > 0 && ageDays >= 30;
     })
     .map(item => {
-      const lastSold    = productLastSold[item.product_id];
+      const pId = item.product_id || (item.Product && item.Product.id) || item.id;
+      const stock = item.stock !== undefined && item.stock !== null ? Number(item.stock) : Number(item.quantity || 0);
+      const lastSold    = productLastSold[pId];
       const daysStagnant = lastSold
         ? Math.floor((today - lastSold) / 86400000)
         : 90;
@@ -337,8 +343,9 @@ export const getProductPerformance = (salesHistory, inventory, correlations) => 
 
       const confidence = Math.min(99, 60 + daysStagnant * 0.4);
       return {
-        name:  item.Product?.name || 'Unknown',
-        stock: item.quantity,
+        id:    pId,
+        name:  item.Product?.name || item.name || 'Unknown',
+        stock,
         daysStagnant,
         severity,
         tagColor,

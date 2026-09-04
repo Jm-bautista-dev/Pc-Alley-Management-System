@@ -7,6 +7,8 @@ require('./models');
 const migrateUsers = require('./db/migrateUsers');
 const migrateSchema = require('./db/migrateSchema');
 const backfillSkus = require('./db/backfillSkus');
+const cleanProductionData = require('./db/cleanProductionData');
+const cookieParser = require('./middleware/cookieParser');
 const path = require('path');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -45,7 +47,7 @@ const isOriginAllowed = (origin) => {
   return false;
 };
 
-app.use(cors({
+const corsOptions = {
   origin(origin, callback) {
     if (isOriginAllowed(origin)) {
       return callback(null, true);
@@ -67,8 +69,12 @@ app.use(cors({
     'Access-Control-Request-Headers'
   ],
   credentials: true
-}));
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json());
+app.use(cookieParser);
 
 // ── Security: Prevent all API responses from being cached ──
 app.use((req, res, next) => {
@@ -190,6 +196,7 @@ server.on('error', (err) => {
     await migrateUsers();
     await migrateSchema();
     await backfillSkus();
+    await cleanProductionData();
     console.log('DATABASE: Schema synced and migrations completed.');
   } catch (err) {
     console.error('--------------------------------------------------');

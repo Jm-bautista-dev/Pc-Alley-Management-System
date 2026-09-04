@@ -18,6 +18,7 @@ import {
 import { useState, useEffect } from "react";
 import { useTheme } from "@/context/ThemeContext";
 import { showSuccess, showError, showInfo, showWarning, showConfirm, showModal } from "@/context/ModalContext";
+import { logoutUser } from "@/lib/api";
 
 const SettingsPanel = ({ isOpen, onClose }) => {
   const [activeTab, setActiveTab] = useState("profile");
@@ -371,11 +372,7 @@ const SettingsPanel = ({ isOpen, onClose }) => {
               <motion.button 
                 whileHover={{ x: -4 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => {
-                  localStorage.removeItem("token");
-                  localStorage.removeItem("user");
-                  window.location.href = "/";
-                }} 
+                onClick={() => logoutUser()} 
                 className="flex items-center gap-2 text-brand-muted hover:text-brand-crimson transition-colors group"
               >
                  <LogOut size={16} />

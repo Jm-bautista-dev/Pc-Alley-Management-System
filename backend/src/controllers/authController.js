@@ -1,6 +1,17 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const { User, Branch } = require('../models');
+const crypto = require('crypto');
+const { User, Branch, AuditLog } = require('../models');
+const pagination = require('../utils/pagination');
+const sequelize = require('../db');
+const {
+  recordFailedAttempt,
+  recordSuccessfulLogin,
+  unlockAccount
+} = require('../middleware/loginRateLimiter');
+
+// In-memory store for active password reset tokens
+const passwordResetTokens = new Map(); // identifier -> { token, expiresAt, userId }
 
 const normalizeBranchId = (value) => {
   if (value === '' || value === null || typeof value === 'undefined') {
@@ -106,7 +117,21 @@ const login = async (req, res) => {
 
     if (!matchingUsers.length) {
       console.warn(`[AUTH] Login failed: User not found for username: ${username}`);
-      return res.status(401).json({ message: 'Incorrect Username or Password' });
+      const attemptInfo = recordFailedAttempt(req, username);
+      if (attemptInfo.isLocked) {
+        return res.status(429).json({
+          error: 'Account Temporarily Locked',
+          message: 'Account temporarily locked due to repeated failed login attempts. Try again in 15 minutes.',
+          requireCaptcha: true
+        });
+      }
+      return res.status(401).json({
+        message: 'Incorrect Username or Password',
+        failedAttempts: attemptInfo.failedAttempts,
+        remainingAttempts: attemptInfo.remainingAttempts,
+        attemptsRemaining: attemptInfo.remainingAttempts,
+        requireCaptcha: attemptInfo.requireCaptcha
+      });
     }
 
     let user = null;
@@ -120,8 +145,25 @@ const login = async (req, res) => {
 
     if (!user) {
       console.warn(`[AUTH] Login failed: Password mismatch for user: ${username}`);
-      return res.status(401).json({ message: 'Incorrect Username or Password' });
+      const attemptInfo = recordFailedAttempt(req, username);
+      if (attemptInfo.isLocked) {
+        return res.status(429).json({
+          error: 'Account Temporarily Locked',
+          message: 'Account temporarily locked due to repeated failed login attempts. Try again in 15 minutes.',
+          requireCaptcha: true
+        });
+      }
+      return res.status(401).json({
+        message: 'Incorrect Username or Password',
+        failedAttempts: attemptInfo.failedAttempts,
+        remainingAttempts: attemptInfo.remainingAttempts,
+        attemptsRemaining: attemptInfo.remainingAttempts,
+        requireCaptcha: attemptInfo.requireCaptcha
+      });
     }
+
+    // Reset failed attempt counters upon successful login
+    recordSuccessfulLogin(req, username);
 
     console.log(`[AUTH] User successfully authenticated: ${username} (Role: ${user.role})`);
 
@@ -142,6 +184,15 @@ const login = async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
+
+    // Set secure HttpOnly cookie for XSS protection
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 24 * 60 * 60 * 1000
+    });
 
     res.json({
       token,
@@ -165,11 +216,46 @@ const login = async (req, res) => {
   }
 };
 
+const logout = async (req, res) => {
+  try {
+    const { revokeToken } = require('../utils/tokenRevocation');
+    const token = req.rawToken || req.cookies?.token || (req.headers['authorization'] ? req.headers['authorization'].replace(/^Bearer\s+/i, '').trim() : null);
+
+    if (token) {
+      revokeToken(token);
+    }
+
+    res.clearCookie('token', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/'
+    });
+
+    if (req.user) {
+      await AuditLog.create({
+        action: 'USER_LOGOUT',
+        user_id: req.user.id,
+        details: `User ${req.user.username} logged out. Session revoked.`,
+        ip_address: req.ip
+      }).catch(e => console.warn('[AUTH] AuditLog error:', e.message));
+    }
+
+    res.json({ message: 'Logged out successfully. Session invalidated.' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 const getUsers = async (req, res) => {
   try {
-    const { page = 1, limit = 20, search = '', branch_id } = req.query;
-    const pagination = require('../utils/pagination');
-    const { offset, where, order } = pagination({ page, limit, search, searchableFields: ['username', 'first_name', 'last_name'] });
+    const { branch_id } = req.query;
+    const { offset, where, order, page: pageNum, limit: limitNum } = pagination({
+      page: req.query.page,
+      limit: req.query.limit,
+      search: req.query.search,
+      searchableFields: ['username', 'first_name', 'last_name']
+    });
     // Apply role‑based branch filter
     if (req.user.role === 'branch_admin') {
       where.branch_id = req.user.branch_id;
@@ -185,14 +271,14 @@ const getUsers = async (req, res) => {
       include: [Branch],
       attributes: { exclude: ['password'] },
       offset,
-      limit: Number(limit),
+      limit: limitNum,
       order
     });
     res.json({
       data: rows,
       pagination: {
-        page: Number(page),
-        limit: Number(limit),
+        page: pageNum,
+        limit: limitNum,
         total: count
       }
     });
@@ -264,4 +350,134 @@ const changePassword = async (req, res) => {
   }
 };
 
-module.exports = { register, login, getUsers, updateProfile, changePassword };
+const forgotPassword = async (req, res) => {
+  try {
+    const identifier = String(req.body.email || req.body.username || '').trim().toLowerCase();
+    if (!identifier) {
+      return res.status(400).json({ message: 'Email or username is required' });
+    }
+
+    // Find user by username
+    const user = await User.findOne({
+      where: sequelize.where(sequelize.fn('LOWER', sequelize.col('username')), identifier)
+    });
+
+    // Generate secure 6-digit cryptographic token
+    const token = String(crypto.randomInt(100000, 999999));
+    const expiresAt = Date.now() + 15 * 60 * 1000; // 15 minutes validity
+
+    if (user) {
+      passwordResetTokens.set(identifier, {
+        token,
+        expiresAt,
+        userId: user.id
+      });
+
+      await AuditLog.create({
+        action: 'PASSWORD_RESET_REQUESTED',
+        user_id: user.id,
+        details: `Password recovery token issued for ${identifier}`,
+        ip_address: req.ip
+      }).catch(e => console.warn('[AUTH] AuditLog error:', e.message));
+
+      console.log(`[AUTH] Recovery token generated for ${identifier}: ${token} (expires in 15m)`);
+    }
+
+    // Return generic success to protect user privacy
+    res.json({
+      message: 'If an account with this identity exists, a recovery token has been transmitted.',
+      debugToken: process.env.NODE_ENV !== 'production' ? token : undefined
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const verifyResetToken = async (req, res) => {
+  try {
+    const identifier = String(req.body.email || req.body.username || '').trim().toLowerCase();
+    const token = String(req.body.token || '').trim();
+
+    if (!identifier || !token) {
+      return res.status(400).json({ message: 'Email/username and recovery token are required' });
+    }
+
+    const record = passwordResetTokens.get(identifier);
+    if (!record || record.token !== token) {
+      return res.status(400).json({ message: 'Invalid or incorrect recovery token' });
+    }
+
+    if (Date.now() > record.expiresAt) {
+      passwordResetTokens.delete(identifier);
+      return res.status(400).json({ message: 'Recovery token has expired. Please request a new token.' });
+    }
+
+    res.json({ valid: true, message: 'Recovery token verified successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const resetPassword = async (req, res) => {
+  try {
+    const identifier = String(req.body.email || req.body.username || '').trim().toLowerCase();
+    const token = String(req.body.token || '').trim();
+    const newPassword = String(req.body.newPassword || req.body.password || '');
+
+    if (!identifier || !token || !newPassword) {
+      return res.status(400).json({ message: 'Identifier, token, and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'New password must be at least 6 characters long' });
+    }
+
+    const record = passwordResetTokens.get(identifier);
+    if (!record || record.token !== token) {
+      return res.status(400).json({ message: 'Invalid or expired recovery token' });
+    }
+
+    if (Date.now() > record.expiresAt) {
+      passwordResetTokens.delete(identifier);
+      return res.status(400).json({ message: 'Recovery token has expired' });
+    }
+
+    const user = await User.findByPk(record.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'Account no longer exists' });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword;
+    await user.save();
+
+    // Invalidate reset token and unlock account lockout
+    passwordResetTokens.delete(identifier);
+    unlockAccount(identifier, req);
+    unlockAccount(user.username, req);
+
+    await AuditLog.create({
+      action: 'PASSWORD_RESET_COMPLETED',
+      user_id: user.id,
+      details: `Password reset completed for ${user.username}`,
+      ip_address: req.ip
+    }).catch(e => console.warn('[AUTH] AuditLog error:', e.message));
+
+    console.log(`[AUTH] Password reset successfully for user ${user.username}`);
+    res.json({ message: 'Password has been successfully updated. You may now log in.' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+module.exports = {
+  register,
+  login,
+  logout,
+  getUsers,
+  updateProfile,
+  changePassword,
+  forgotPassword,
+  verifyResetToken,
+  resetPassword
+};
