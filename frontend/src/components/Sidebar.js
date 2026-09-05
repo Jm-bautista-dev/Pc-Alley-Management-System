@@ -24,14 +24,14 @@ const Sidebar = () => {
   const [openMenus, setOpenMenus] = useState(() => {
     const initial = {};
     const paths = {
-      "Contacts":        ["/customers", "/customer-groups", "/import-contacts", "/suppliers"],
-      "Products":        ["/products", "/reports/stock", "/products/my-requests", "/admin/product-requests", "/products/brands", "/products/import"],
-      "Services":        ["/services", "/services/jobs"],
-      "Purchases":       ["/purchases"],
-      "Sell":            ["/sell"],
+      "Customers":       ["/customers", "/suppliers"],
+      "Sales":           ["/sell"],
+      "Services":        ["/services"],
+      "Inventory":       ["/products", "/reports/stock"],
+      "Procurement":     ["/purchases", "/admin/product-requests", "/products/my-requests"],
       "Reports":         ["/reports"],
-      "Analytics":       ["/forecasting", "/prescriptive-analytics", "/forecasting/benchmark"],
-      "User Management": ["/staff", "/roles"],
+      "Analytics":       ["/forecasting", "/prescriptive-analytics"],
+      "Administration":  ["/staff", "/roles", "/admin"],
     };
     Object.entries(paths).forEach(([key, matches]) => {
       if (matches.some((p) => pathname.startsWith(p))) initial[key] = true;
@@ -42,65 +42,116 @@ const Sidebar = () => {
   const { isCollapsed, isMobile, isSidebarOpen, setIsSidebarOpen } = useLayout();
   const { theme } = useTheme();
   const { user, isChecking } = useAuthGuard();
-  const personnelTitle = user?.role === "super_admin" ? "Team List" : "Our Staff";
 
   const getNavItems = () => {
     const role = user?.role;
-    if (role === "employee" || role === "staff") return [
-      { title: "Dashboard",     icon: LayoutDashboard, path: "/dashboard",   group: "MAIN" },
-      { title: "Sales Terminal", icon: Upload, path: "/sales",               group: "MAIN" },
-      { title: "Services",  icon: Wrench,      path: "#services",            group: "SALES", subItems: [{ title: "Service Catalog", path: "/services" }, { title: "Work Orders", path: "/services/jobs" }] },
-      { title: "Sales",     icon: FileText,    path: "#sell",                group: "SALES", subItems: [{ title: "All Sales", path: "/sell/all" }, { title: "Warranties", path: "/sell/quotations" }, { title: "Saved Drafts", path: "/sell/drafts" }] },
-      { title: "Customers", icon: Users,       path: "#contacts",            group: "SALES", subItems: [{ title: "Customer List", path: "/customers" }] },
-      { title: "Products",  icon: Package,     path: "#products",            group: "SALES", subItems: [{ title: "Product List", path: "/products" }, { title: "Manage Stock", path: "/reports/stock" }] },
-    ];
-    if (role === "super_admin") return [
-      { title: "Dashboard",    icon: LayoutDashboard, path: "/dashboard", group: "MAIN" },
-      { title: "Contacts",     icon: Users,           path: "#contacts",  group: "SALES", subItems: [{ title: "Customer", path: "/customers" }, { title: "Supplier", path: "/suppliers" }] },
-      { title: "Products",     icon: Package,         path: "#products",  group: "SALES", subItems: [{ title: "Product List", path: "/products" }, { title: "Manage Stock", path: "/reports/stock" }, { title: "Categories", path: "/products/categories" }, { title: "Brands", path: "/products/brands" }, { title: "Import Products", path: "/products/import" }, { title: "Product Requests", path: "/admin/product-requests" }] },
-      { title: "Services",     icon: Wrench,          path: "#services",  group: "SALES", subItems: [
+
+    if (role === "employee" || role === "staff") {
+      return [
+        { title: "Dashboard",       icon: LayoutDashboard, path: "/dashboard",        group: "MAIN" },
+        { title: "Sales Terminal",  icon: Upload,          path: "/sales",            group: "MAIN" },
+        { title: "Sales",           icon: FileText,        path: "#sell",             group: "SALES & SERVICES", subItems: [{ title: "All Sales", path: "/sell/all" }, { title: "Warranties", path: "/sell/quotations" }, { title: "Saved Drafts", path: "/sell/drafts" }] },
+        { title: "Services",        icon: Wrench,          path: "#services",         group: "SALES & SERVICES", subItems: [{ title: "Service Catalog", path: "/services" }, { title: "Work Orders", path: "/services/jobs" }] },
+        { title: "Customers",       icon: Users,           path: "/customers",        group: "SALES & SERVICES" },
+        { title: "Products",        icon: Package,         path: "/products",         group: "INVENTORY" },
+        { title: "Manage Stock",    icon: ClipboardList,   path: "/reports/stock",    group: "INVENTORY" },
+      ];
+    }
+
+    if (role === "super_admin") {
+      return [
+        { title: "Dashboard",       icon: LayoutDashboard, path: "/dashboard",        group: "MAIN" },
+        { title: "Sales Terminal",  icon: Upload,          path: "/sales",            group: "MAIN" },
+
+        { title: "Sales",           icon: FileText,        path: "#sell",             group: "OPERATIONS", subItems: [
+          { title: "All Sales", path: "/sell/all" },
+          { title: "Warranties", path: "/sell/quotations" },
+          { title: "Returns", path: "/sell/returns" },
+          { title: "Shipments", path: "/sell/shipments" },
+          { title: "Discounts", path: "/sell/discounts" },
+        ] },
+        { title: "Services",        icon: Wrench,          path: "#services",         group: "OPERATIONS", subItems: [
+          { title: "Service Catalog", path: "/services" },
+          { title: "Work Orders / Jobs", path: "/services/jobs" }
+        ] },
+        { title: "Customers",       icon: Users,           path: "#contacts",         group: "OPERATIONS", subItems: [
+          { title: "Customer Registry", path: "/customers" },
+          { title: "Suppliers", path: "/suppliers" }
+        ] },
+
+        { title: "Products",        icon: Package,         path: "#products",         group: "INVENTORY & PROCUREMENT", subItems: [
+          { title: "Product Catalog", path: "/products" },
+          { title: "Categories", path: "/products/categories" },
+          { title: "Brands", path: "/products/brands" },
+          { title: "Import Products", path: "/products/import" },
+        ] },
+        { title: "Stock Management",icon: ClipboardList,   path: "#stock",            group: "INVENTORY & PROCUREMENT", subItems: [
+          { title: "Stock Levels", path: "/reports/stock" },
+          { title: "Restock Orders", path: "/purchases/restock" },
+          { title: "Product Requisitions", path: "/admin/product-requests" },
+          { title: "Stock Purchases", path: "/purchases" },
+        ] },
+
+        { title: "Financial Reports",icon: DollarSign,     path: "#reports",          group: "REPORTS & ANALYTICS", subItems: [
+          { title: "Profit & Loss", path: "/reports/profit-loss" },
+          { title: "Stock Activity", path: "/reports/purchase-sale" },
+          { title: "Brand Reports", path: "/reports/brands" }
+        ] },
+        { title: "Analytics",       icon: Activity,        path: "#analytics",        group: "REPORTS & ANALYTICS", subItems: [
+          { title: "Sales Forecasting", path: "/forecasting" },
+          { title: "Prescriptive Insights", path: "/prescriptive-analytics" }
+        ] },
+
+        { title: "User Management", icon: UserPlus,        path: "#user-management",  group: "ADMINISTRATION", subItems: [
+          { title: "Staff Registry", path: "/staff" },
+          { title: "Roles & Permissions", path: "/roles" },
+        ] },
+        { title: "System Admin",    icon: ShieldCheck,     path: "/admin",            group: "ADMINISTRATION" },
+      ];
+    }
+
+    // Default / Branch Admin
+    return [
+      { title: "Dashboard",       icon: LayoutDashboard, path: "/dashboard",        group: "MAIN" },
+      { title: "Sales Terminal",  icon: Upload,          path: "/sales",            group: "MAIN" },
+
+      { title: "Sales",           icon: FileText,        path: "#sell",             group: "OPERATIONS", subItems: [
+        { title: "All Sales", path: "/sell/all" },
+        { title: "Warranties", path: "/sell/quotations" },
+        { title: "Returns", path: "/sell/returns" },
+        { title: "Saved Drafts", path: "/sell/drafts" },
+      ] },
+      { title: "Services",        icon: Wrench,          path: "#services",         group: "OPERATIONS", subItems: [
         { title: "Service Catalog", path: "/services" },
         { title: "Work Orders / Jobs", path: "/services/jobs" }
       ] },
-      { title: "Sales",        icon: Upload,          path: "#sell",      group: "SALES", subItems: [
-        { title: "All Sales", path: "/sell/all" },
-        { title: "Warranties", path: "/sell/quotations" },
-        { title: "Returns", path: "/sell/returns" },
-        { title: "Shipments", path: "/sell/shipments" },
-        { title: "Discounts", path: "/sell/discounts" },
-        { title: "Import Sales", path: "/sell/import" }
+      { title: "Customers",       icon: Users,           path: "/customers",        group: "OPERATIONS" },
+
+      { title: "Products",        icon: Package,         path: "#products",         group: "INVENTORY & PROCUREMENT", subItems: [
+        { title: "Product Catalog", path: "/products" },
+        { title: "Categories", path: "/products/categories" },
+        { title: "Brands", path: "/products/brands" },
       ] },
-      { title: "Buy Stock",    icon: Download,        path: "#purchases", group: "SALES", subItems: [{ title: "Stock Purchases", path: "/purchases" }, { title: "Order Stock", path: "/purchases/restock" }] },
-      { title: "Reports",      icon: ClipboardList,   path: "#reports",   group: "SYSTEM", subItems: [{ title: "Profit / Loss", path: "/reports/profit-loss" }, { title: "Stock Activity", path: "/reports/purchase-sale" }, { title: "Brand Reports", path: "/reports/brands" }] },
-      { title: "Analytics",    icon: Activity,        path: "#analytics", group: "SYSTEM", subItems: [
-        { title: "Forecasting", path: "/forecasting" },
-        // { title: "Model Benchmarking", path: "/forecasting/benchmark" },
-        { title: "Prescriptive Analytics", path: "/prescriptive-analytics" }
+      { title: "Stock Management",icon: ClipboardList,   path: "#stock",            group: "INVENTORY & PROCUREMENT", subItems: [
+        { title: "Stock Levels", path: "/reports/stock" },
+        { title: "Restock Orders", path: "/purchases/restock" },
+        { title: "My Requisitions", path: "/products/my-requests" },
       ] },
-      { title: "System Admin", icon: ShieldCheck,     path: "/admin",     group: "SYSTEM" },
-    ];
-    return [
-      { title: "Dashboard",    icon: LayoutDashboard, path: "/dashboard",        group: "MAIN" },
-      { title: "Customers",    icon: Users,           path: "#contacts",         group: "SALES", subItems: [{ title: "Customer List", path: "/customers" }] },
-      { title: "Products",     icon: Package,         path: "#products",         group: "SALES", subItems: [{ title: "Product List", path: "/products" }, { title: "Manage Stock", path: "/reports/stock" }, { title: "Categories", path: "/products/categories" }, { title: "Brands", path: "/products/brands" }, { title: "My Requests", path: "/products/my-requests" }] },
-      { title: "Services",     icon: Wrench,          path: "#services",         group: "SALES", subItems: [{ title: "Service Catalog", path: "/services" }, { title: "Work Orders / Jobs", path: "/services/jobs" }] },
-      { title: "Buy Stock",    icon: Download,        path: "#purchases",        group: "SALES", subItems: [{ title: "Stock Purchases", path: "/purchases" }, { title: "Order Stock", path: "/purchases/restock" }] },
-      { title: "Sales",        icon: Upload,          path: "#sell",             group: "SALES", subItems: [
-        { title: "All Sales", path: "/sell/all" },
-        { title: "Warranties", path: "/sell/quotations" },
-        { title: "Saved Drafts", path: "/sell/drafts" },
-        { title: "Returns", path: "/sell/returns" },
-        { title: "Shipments", path: "/sell/shipments" },
-        { title: "Discounts", path: "/sell/discounts" },
-        { title: "Import Sales", path: "/sell/import" }
+
+      { title: "Reports",         icon: DollarSign,      path: "#reports",          group: "REPORTS", subItems: [
+        { title: "Profit & Loss", path: "/reports/profit-loss" },
+        { title: "Stock Activity", path: "/reports/purchase-sale" }
       ] },
-      { title: personnelTitle, icon: UserPlus,        path: "#user-management",  group: "SALES", subItems: [{ title: "Staff List", path: "/staff" }] },
-      { title: "Reports",      icon: ClipboardList,   path: "#reports",          group: "SYSTEM", subItems: [{ title: "Profit / Loss", path: "/reports/profit-loss" }, { title: "Stock Activity", path: "/reports/purchase-sale" }] },
+
+      { title: "Team Management", icon: UserPlus,        path: "#user-management",  group: "ADMINISTRATION", subItems: [
+        { title: "Staff Registry", path: "/staff" },
+        { title: "Roles & Permissions", path: "/roles" },
+      ] },
     ];
   };
 
   const navItems = getNavItems();
-  const menuGroups = ["MAIN", "SALES", "SYSTEM"];
+  const menuGroups = Array.from(new Set(navItems.map(i => i.group)));
 
   const toggleMenu = (title, e) => {
     if (e) e.preventDefault();

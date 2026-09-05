@@ -311,11 +311,14 @@ export default function AdminProductRequestsPage() {
             {/* Header */}
             <div className="mb-8 flex justify-between items-center">
               <div>
+                <p className="text-[10px] font-black tracking-[3px] uppercase text-main/40 mb-1">
+                  HQ Inventory Dispatch
+                </p>
                 <h1 className="text-2xl font-rajdhani font-black uppercase">
-                  BRANCH PRODUCT <span className="text-brand-neonblue">REQUESTS</span>
+                  BRANCH PRODUCT <span className="text-brand-neonblue">REQUISITIONS</span>
                 </h1>
-                <p className="text-[10px] text-main/40 font-black uppercase tracking-widest mt-1">
-                  Manage inventory requests, schedule transfers, and track delivery logistics
+                <p className="text-[10px] text-main/50 font-medium mt-1">
+                  Review, approve, schedule, and dispatch warehouse stock requisitions to regional branches.
                 </p>
               </div>
               <motion.button

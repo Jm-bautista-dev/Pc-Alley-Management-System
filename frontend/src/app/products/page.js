@@ -19,7 +19,10 @@ import {
   Hash,
   ChevronRight,
   Zap,
-  Trash2
+  Trash2,
+  UploadCloud,
+  QrCode,
+  Barcode
 } from "lucide-react";
 import { apiUrl } from "@/lib/api";
 import { showSuccess, showError, showInfo, showWarning, showConfirm, showModal } from "@/context/ModalContext";
@@ -281,7 +284,7 @@ export default function ProductsPage() {
             </div>
 
             {/* Search + Filter */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
               <div className="relative group w-full md:w-96">
                 <div className="absolute left-4 top-1/2 -translate-y-1/2 text-main/30 group-focus-within:text-brand-neonblue transition-colors">
                   <Search size={18} />
@@ -290,30 +293,41 @@ export default function ProductsPage() {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by name or SKU code..."
-                  className="w-full bg-brand-surface border border-border rounded-xl py-4 pl-12 pr-4 text-xs text-main focus:outline-none focus:border-brand-neonblue/20 transition-all font-bold tracking-tight shadow-sm"
+                  placeholder="Search by name, SKU, or barcode..."
+                  className="w-full bg-brand-surface border border-border rounded-xl py-3.5 pl-12 pr-4 text-xs text-main focus:outline-none focus:border-brand-neonblue/40 transition-all font-bold tracking-tight shadow-sm"
                 />
               </div>
-              <div className="flex gap-4">
+              <div className="flex items-center gap-3 flex-wrap">
                 {user?.role === 'super_admin' && (
-                  <Link href="/products/add">
-                    <motion.button 
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="btn-premium h-12"
-                    >
-                      <Package size={16} /> Add Product
-                    </motion.button>
-                  </Link>
+                  <>
+                    <Link href="/products/add">
+                      <motion.button 
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.97 }}
+                        className="btn-premium h-11 px-5"
+                      >
+                        <Package size={15} /> Add Product
+                      </motion.button>
+                    </Link>
+                    <Link href="/products/import">
+                      <motion.button 
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.97 }}
+                        className="btn-ghost h-11 px-4 border border-border hover:border-brand-neonblue/40"
+                      >
+                        <UploadCloud size={15} /> Import Excel
+                      </motion.button>
+                    </Link>
+                  </>
                 )}
                 
                 <motion.button 
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
                   onClick={() => setShowFilters(!showFilters)} 
-                  className={`btn-ghost h-12 ${showFilters ? 'border-brand-neonblue/50 text-brand-neonblue' : ''}`}
+                  className={`btn-ghost h-11 px-4 ${showFilters ? 'border-brand-neonblue/50 text-brand-neonblue' : ''}`}
                 >
-                  <Filter size={16} /> Advanced Filter
+                  <Filter size={15} /> Filters
                 </motion.button>
               </div>
             </div>
@@ -505,17 +519,31 @@ export default function ProductsPage() {
                         )}
                       </div>
 
-                      {/* SKU */}
-                      <span className="font-mono text-[10px] text-muted/40 uppercase tracking-widest w-32 flex-shrink-0 hidden md:block">
-                        {product.sku}
-                      </span>
+                      {/* SKU & Barcode */}
+                      <div className="w-36 flex-shrink-0 hidden md:flex flex-col gap-0.5">
+                        <span className="font-mono text-[10px] text-muted/60 uppercase tracking-wider font-bold">
+                          {product.sku}
+                        </span>
+                        {product.barcode && (
+                          <span className="inline-flex items-center gap-1 font-mono text-[9px] text-brand-neonblue/80 bg-brand-neonblue/10 px-1.5 py-0.5 rounded border border-brand-neonblue/20 w-fit">
+                            <Barcode size={10} /> {product.barcode}
+                          </span>
+                        )}
+                      </div>
 
                       {/* Name */}
                       <div className="flex-1 min-w-0">
                         <h4 className="text-sm font-rajdhani font-bold text-main group-hover:text-brand-neonblue transition-colors truncate capitalize">
                           {product.name}
                         </h4>
-                        <p className="text-[10px] text-muted/40 uppercase tracking-widest font-mono md:hidden">{product.sku}</p>
+                        <div className="flex items-center gap-2 mt-0.5 md:hidden">
+                          <span className="text-[10px] text-muted/50 uppercase tracking-widest font-mono">{product.sku}</span>
+                          {product.barcode && (
+                            <span className="inline-flex items-center gap-1 font-mono text-[9px] text-brand-neonblue/80 bg-brand-neonblue/10 px-1.5 py-0.2 rounded border border-brand-neonblue/20">
+                              <Barcode size={9} /> {product.barcode}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       {/* Stock + Price */}

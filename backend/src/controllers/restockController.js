@@ -1,4 +1,6 @@
 const { RestockRequest, Product, Inventory, User, Branch, Notification, StockMovement } = require('../models');
+const { notifyUser, notifyUsers } = require('../services/notificationService');
+const { invalidateCache } = require('../middleware/cacheMiddleware');
 
 const createRequest = async (req, res) => {
   try {
@@ -39,17 +41,29 @@ const createRequest = async (req, res) => {
     const branch = await Branch.findByPk(branch_id);
 
     if (admins.length > 0 && product && branch) {
-      const notifications = admins.map(admin => ({
-        userId: admin.id,
+      await notifyUsers({
+        users: admins,
         branchId: branch_id,
         title: 'New Restock Request',
         message: `${req.user.username} requested ${quantity} units of ${product.name} for ${branch.name}.`,
-        type: 'restock_request',
-        link: `/admin?tab=restock&id=${request.id}`
-      }));
-      await Notification.bulkCreate(notifications);
+        type: 'info',
+        link: `/purchases/restock`,
+        emailDetails: {
+          details: {
+            'Product': product.name,
+            'SKU': product.sku || 'N/A',
+            'Quantity Requested': `${quantity} units`,
+            'Branch': branch.name,
+            'Requested By': req.user.username,
+            'Notes': notes || 'None'
+          },
+          actionUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/purchases/restock`,
+          actionText: 'Review Restock Request'
+        }
+      });
     }
 
+    invalidateCache('inventory');
     res.status(201).json(request);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -148,18 +162,32 @@ const approveRequest = async (req, res) => {
     request.processed_at = new Date();
     await request.save();
 
-    // Notify Manager
-    await Notification.create({
+    // Notify Manager with responsive email
+    await notifyUser({
       userId: request.manager_id,
       branchId: request.branch_id,
       title: 'Restock Request Approved',
-      message: `Your restock request for ${request.Product.name} has been approved.`,
+      message: `Your restock request for ${request.Product.name} (${request.quantity} units) has been approved.`,
       type: 'success',
-      link: '/inventory'
+      link: '/reports/stock',
+      emailDetails: {
+        details: {
+          'Product': request.Product.name,
+          'Quantity Added': `${request.quantity} units`,
+          'New Stock Level': `${new_stock} units`,
+          'Approved By': req.user.username,
+          'Branch': request.Branch?.name || 'Assigned Branch'
+        },
+        actionUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reports/stock`,
+        actionText: 'View Stock Inventory'
+      }
     });
 
     // Remove the original request notification
-    await Notification.destroy({ where: { link: `/admin?tab=restock&id=${request.id}` } });
+    await Notification.destroy({ where: { link: `/purchases/restock` } });
+
+    invalidateCache('inventory');
+    invalidateCache('analytics');
 
     if (req.app.get('io')) {
       req.app.get('io').emit('dashboard_update', { type: 'RESTOCK_APPROVED' });
@@ -194,17 +222,29 @@ const rejectRequest = async (req, res) => {
     await request.save();
 
     // Notify Manager
-    await Notification.create({
+    await notifyUser({
       userId: request.manager_id,
       branchId: request.branch_id,
       title: 'Restock Request Rejected',
       message: `Your request for ${request.Product.name} was rejected. Reason: ${reason || 'No reason provided.'}`,
-      type: 'error',
-      link: '/inventory'
+      type: 'danger',
+      link: '/reports/stock',
+      emailDetails: {
+        details: {
+          'Product': request.Product.name,
+          'Quantity Requested': `${request.quantity} units`,
+          'Rejection Reason': reason || 'Not specified',
+          'Reviewed By': req.user.username
+        },
+        actionUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reports/stock`,
+        actionText: 'Check Inventory Status'
+      }
     });
 
     // Remove the original request notification
-    await Notification.destroy({ where: { link: `/admin?tab=restock&id=${request.id}` } });
+    await Notification.destroy({ where: { link: `/purchases/restock` } });
+
+    invalidateCache('inventory');
 
     res.json({ message: 'Request rejected.', request });
   } catch (error) {

@@ -136,13 +136,17 @@ export default function MyRequestsPage() {
         <div className="flex-1 overflow-y-auto custom-scrollbar relative z-10 bg-brand-bgbase text-main">
           <div className="responsive-container">
             
-            <div className="mb-6 flex justify-between items-center">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
               <div>
+                <p className="text-[10px] font-black tracking-[3px] uppercase text-main/40 mb-1">
+                  Branch to HQ Logistics
+                </p>
                 <h1 className="text-2xl font-rajdhani font-black uppercase">
-                  MY PRODUCT <span className="text-brand-neonblue">REQUESTS</span>
+                  BRANCH <span className="text-brand-neonblue">REQUISITIONS</span>
                 </h1>
-                <p className="text-[10px] text-main/40 font-black uppercase tracking-widest mt-1">
-                  Track and manage your branch procurement requests
+                <p className="text-[10px] text-main/50 font-medium mt-1">
+                  Track and manage multi-item stock requisitions dispatched from Central HQ Warehouse.
                 </p>
               </div>
               <motion.button

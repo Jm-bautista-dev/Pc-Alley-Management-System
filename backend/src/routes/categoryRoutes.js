@@ -2,9 +2,10 @@ const express = require('express');
 const router = express.Router();
 const { Category } = require('../models');
 const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
+const { cacheMiddleware, invalidateCache } = require('../middleware/cacheMiddleware');
 
 // Get all categories
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', authenticateToken, cacheMiddleware(300, 'categories'), async (req, res) => {
   try {
     const categories = await Category.findAll();
     res.json(categories);
@@ -21,6 +22,7 @@ router.post('/', [authenticateToken, authorizeRoles('super_admin')], async (req,
       return res.status(400).json({ error: 'Category name is required.' });
     }
     const category = await Category.create({ name });
+    invalidateCache('categories');
     res.status(201).json(category);
   } catch (error) {
     if (error.name === 'SequelizeUniqueConstraintError') {
@@ -38,6 +40,7 @@ router.delete('/:id', [authenticateToken, authorizeRoles('super_admin')], async 
       return res.status(404).json({ error: 'Category not found.' });
     }
     await category.destroy();
+    invalidateCache('categories');
     res.json({ message: 'Category deleted successfully.' });
   } catch (error) {
     res.status(500).json({ error: error.message });

@@ -39,6 +39,7 @@ export const viewport = {
 };
 
 import { ThemeProvider } from '../context/ThemeContext';
+import SessionWatcher from '../components/SessionWatcher';
 
 export default function RootLayout({ children }) {
   return (
@@ -64,6 +65,7 @@ export default function RootLayout({ children }) {
             <ModalProvider>
               <LayoutProvider>
                 {children}
+                <SessionWatcher />
               </LayoutProvider>
             </ModalProvider>
           </NotificationProvider>
