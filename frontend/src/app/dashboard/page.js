@@ -234,10 +234,10 @@ export default function Dashboard() {
         : `days=${days}`;
 
       const [salesRes, invRes, metricsRes, perfRes] = await Promise.all([
-        fetch(apiUrl(`/api/sales?limit=25&${queryParam}`), { headers }),
+        fetch(apiUrl(`/api/sales/history?limit=25&${queryParam}`), { headers }),
         fetch(apiUrl("/api/inventory?limit=5000"), { headers }),
-        fetch(apiUrl(`/api/analytics/kpis?${queryParam}`), { headers }),
-        fetch(apiUrl(`/api/analytics/product-performance?${queryParam}`), { headers })
+        fetch(apiUrl(`/api/analytics/dashboard?${queryParam}`), { headers }),
+        fetch(apiUrl(`/api/analytics/best-sellers?${queryParam}`), { headers })
       ]);
 
       if (salesRes.ok) {
