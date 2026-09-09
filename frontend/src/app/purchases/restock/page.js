@@ -461,7 +461,7 @@ export default function ProcurementPage() {
                 {/* Quick Metrics */}
                 <div className="flex items-center gap-3">
                   <div className="bg-brand-surface border border-border px-5 py-2.5 rounded-xl text-center shadow-sm">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-muted block">Request Restock</span>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-muted block">Restock Requests</span>
                     <span className="text-lg font-rajdhani font-black text-brand-neonblue font-mono">{totalPendingRequests} Products</span>
                   </div>
                   <button
@@ -524,11 +524,11 @@ export default function ProcurementPage() {
                               </div>
                             </div>
 
-                            {/* Status Badge: Request Restock {number of products} */}
+                            {/* Status Badge: Restock Requests {number of products} */}
                             <div className="flex flex-wrap items-center gap-2 mb-4">
                               <span className="text-[11px] font-black uppercase px-3 py-1.5 rounded-full bg-brand-neonblue/15 text-brand-neonblue border border-brand-neonblue/30 flex items-center gap-1.5 font-mono">
                                 <Inbox size={13} />
-                                Request Restock: {branch.pendingRequestsCount} {branch.pendingRequestsCount === 1 ? 'Product' : 'Products'}
+                                Restock Requests: {branch.pendingRequestsCount} {branch.pendingRequestsCount === 1 ? 'Product' : 'Products'}
                               </span>
                             </div>
                           </div>
