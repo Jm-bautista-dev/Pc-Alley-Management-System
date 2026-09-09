@@ -391,9 +391,7 @@ export default function StockReportPage() {
                 <button onClick={handleExport} className="bg-brand-bgbase border border-border text-muted hover:text-main px-5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all hover:bg-brand-surface">
                   <FileDown size={16} className="text-brand-neonblue" /> Export Excel
                 </button>
-                <button onClick={() => setShowDebug(!showDebug)} className="bg-brand-surface border border-border text-muted hover:text-main px-5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all">
-                  {showDebug ? "Hide Debug" : "Show Debug"}
-                </button>
+
               </div>
             </div>
             {/* Rows‑per‑page selector */}
@@ -433,7 +431,7 @@ export default function StockReportPage() {
                           <td className="py-4 px-4 text-right font-bold text-brand-crimson">₱{Number(item.price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                           <td className="py-4 px-4"><span className={`px-2.5 py-1 text-[9px] font-black uppercase tracking-widest border rounded w-full inline-block text-center ${item.badge} ${item.statusColor}`}>{item.statusGroup}</span></td>
                           <td className="py-4 px-6"><div className="flex items-center justify-end gap-2 transition-opacity">
-                            {user?.role === 'employee' && (
+                            {(user?.role === 'employee' || user?.role === 'branch_admin') && (
                               <button
                                 onClick={() => setActiveRestock(item)}
                                 className="px-3 py-1.5 bg-brand-neonblue/10 border border-brand-neonblue/20 rounded-lg text-[10px] font-black uppercase tracking-widest text-brand-neonblue hover:bg-brand-neonblue/20 transition-all"
