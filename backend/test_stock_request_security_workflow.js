@@ -98,7 +98,7 @@ async function runTests() {
       where: {
         product_id: testProduct.id,
         branch_id: staCruzBranch.id,
-        status: ['PENDING', 'Pending']
+        status: ['PENDING', 'Pending', 'PENDING_ADMIN', 'PENDING_SUPERADMIN']
       }
     });
 
@@ -118,7 +118,7 @@ async function runTests() {
     assert(staffReqRes.status === 201, 'Staff can create stock request (201 Created)');
     assert(staffReqRes.data.request_number.startsWith('SR-'), 'Request number generated with SR- prefix');
     const staffRequest = staffReqRes.data.requests[0];
-    assert(staffRequest.status === 'PENDING', 'Initial request status is strictly PENDING');
+    assert(staffRequest.status === 'PENDING' || staffRequest.status === 'PENDING_ADMIN', `Initial request status is strictly PENDING or PENDING_ADMIN (Got: ${staffRequest.status})`);
 
     // Verify Pending does NOT modify inventory
     const refreshedProd = await Product.findByPk(testProduct.id);

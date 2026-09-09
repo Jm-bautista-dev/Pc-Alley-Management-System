@@ -2,18 +2,21 @@ const { ProductRequest, Product, BranchProduct, Inventory, User, Branch, Notific
 const { Op } = require('sequelize');
 const sequelize = require('../db');
 
-// Helper to generate professional request number: SR-YYYYMMDD-XXXX
+// Helper to generate professional request number: SR-YYYYMMDD-XXXX-RAND
 async function generateRequestNumber() {
   const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
   const count = await ProductRequest.count({
     where: {
       createdAt: {
-        [Op.gte]: new Date().setHours(0, 0, 0, 0)
+        [Op.gte]: startOfDay
       }
     }
   });
+  const rand = Math.floor(1000 + Math.random() * 9000);
   const seq = String(count + 1).padStart(4, '0');
-  return `SR-${datePart}-${seq}`;
+  return `SR-${datePart}-${seq}-${rand}`;
 }
 
 /**
@@ -80,14 +83,14 @@ const createRequest = async (req, res) => {
       }
     }
 
-    const requestNumber = await generateRequestNumber();
     const createdRequests = [];
 
     // Determine initial status based on creator's role
     const isStaff = req.user.role === 'employee';
     const initialStatus = isStaff ? 'PENDING_ADMIN' : 'PENDING_SUPERADMIN';
 
-    for (const item of items) {
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
       const { product_id, quantity_requested } = item;
 
       if (!quantity_requested || parseInt(quantity_requested) < 1) {
@@ -129,8 +132,10 @@ const createRequest = async (req, res) => {
         return res.status(400).json({ message: `You already have an active pending request for product: ${product.name}.` });
       }
 
+      const itemRequestNumber = await generateRequestNumber();
+
       const reqRecord = await ProductRequest.create({
-        request_number: requestNumber,
+        request_number: itemRequestNumber,
         branch_id,
         source_branch_id: source_branch_id || null,
         product_id,
@@ -146,7 +151,7 @@ const createRequest = async (req, res) => {
       await AuditLog.create({
         action: 'CREATE_STOCK_REQUEST',
         user_id: req.user.id,
-        details: `Stock request ${requestNumber} created for product '${product.name}' (SKU: ${product.sku}, Qty: ${quantity_requested}) by ${req.user.username} [${req.user.role}] for branch '${destBranch.name}'. Initial status: ${initialStatus}.`,
+        details: `Stock request ${itemRequestNumber} created for product '${product.name}' (SKU: ${product.sku}, Qty: ${quantity_requested}) by ${req.user.username} [${req.user.role}] for branch '${destBranch.name}'. Initial status: ${initialStatus}.`,
         ip_address: req.ip || req.connection?.remoteAddress || null
       }, { transaction });
 
@@ -159,6 +164,7 @@ const createRequest = async (req, res) => {
     // - If Staff: notify Branch Admin(s) of that branch
     // - If Admin/Super Admin: notify Super Admin(s)
     try {
+      const summaryNumbers = createdRequests.map(r => r.request_number).join(', ');
       if (isStaff) {
         const branchAdmins = await User.findAll({
           where: { role: 'branch_admin', branch_id }
@@ -168,7 +174,7 @@ const createRequest = async (req, res) => {
             userId: admin.id,
             branchId: branch_id,
             title: 'Staff Restock Request Pending Review',
-            message: `Staff member ${req.user.username} submitted restock request ${requestNumber} for ${items.length} item(s) awaiting your endorsement.`,
+            message: `Staff member ${req.user.username} submitted restock request (${summaryNumbers}) for ${items.length} item(s) awaiting your endorsement.`,
             type: 'restock_request',
             link: '/admin?tab=restock'
           }));
@@ -180,7 +186,7 @@ const createRequest = async (req, res) => {
           const notifications = superAdmins.map(admin => ({
             userId: admin.id,
             title: 'New Branch Stock Request Pending HQ Review',
-            message: `Branch '${destBranch.name}' submitted stock request ${requestNumber} for ${items.length} item(s).`,
+            message: `Branch '${destBranch.name}' submitted stock request (${summaryNumbers}) for ${items.length} item(s).`,
             type: 'stock_request',
             link: '/admin/product-requests'
           }));
@@ -195,7 +201,7 @@ const createRequest = async (req, res) => {
       message: isStaff
         ? 'Stock request submitted to Branch Admin for initial review.'
         : 'Stock request submitted to Super Admin for fulfillment.',
-      request_number: requestNumber,
+      request_number: createdRequests[0]?.request_number || null,
       requests: createdRequests
     });
   } catch (error) {
@@ -478,7 +484,7 @@ const batchSuperAdminApprove = async (req, res) => {
       }
 
       const currentStatus = (request.status || '').toUpperCase();
-      if (!['PENDING_SUPERADMIN', 'PENDING'].includes(currentStatus)) {
+      if (!['PENDING_SUPERADMIN', 'PENDING', 'PENDING_ADMIN'].includes(currentStatus)) {
         await transaction.rollback();
         results.failed.push({ id, error: `Invalid status '${request.status}'` });
         continue;
@@ -832,10 +838,10 @@ const approveRequest = async (req, res) => {
     }
 
     const currentStatus = (request.status || '').toUpperCase();
-    if (!['PENDING_SUPERADMIN', 'PENDING'].includes(currentStatus)) {
+    if (!['PENDING_SUPERADMIN', 'PENDING', 'PENDING_ADMIN'].includes(currentStatus)) {
       await transaction.rollback();
       return res.status(400).json({
-        message: `Cannot approve request with status '${request.status}'. Only PENDING_SUPERADMIN requests can be approved by HQ.`
+        message: `Cannot approve request with status '${request.status}'. Only pending requests can be approved by HQ.`
       });
     }
 

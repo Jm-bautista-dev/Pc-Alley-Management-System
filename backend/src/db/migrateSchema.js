@@ -465,6 +465,19 @@ const migrateSchema = async () => {
         type: DataTypes.DATE,
         allowNull: true
       });
+      await addColumnIfMissing(queryInterface, 'product_requests', 'branch_approved_by', {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: { model: 'users', key: 'id' }
+      });
+      await addColumnIfMissing(queryInterface, 'product_requests', 'branch_approved_at', {
+        type: DataTypes.DATE,
+        allowNull: true
+      });
+      await addColumnIfMissing(queryInterface, 'product_requests', 'branch_approval_notes', {
+        type: DataTypes.TEXT,
+        allowNull: true
+      });
 
       // Alter status to VARCHAR(50) so it supports modern PENDING, APPROVED, PROCESSING, FULFILLED, REJECTED, CANCELLED
       try {

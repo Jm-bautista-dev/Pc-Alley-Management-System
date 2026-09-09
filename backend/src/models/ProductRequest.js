@@ -1,4 +1,4 @@
-const { DataTypes } = require('sequelize');
+const { DataTypes, Op } = require('sequelize');
 const sequelize = require('../db');
 
 const ProductRequest = sequelize.define('ProductRequest', {
@@ -37,9 +37,12 @@ const ProductRequest = sequelize.define('ProductRequest', {
     beforeCreate: async (request, options) => {
       if (!request.request_number) {
         const datePart = new Date().toISOString().slice(0,10).replace(/-/g,'');
-        const count = await ProductRequest.count({ where: { createdAt: { [sequelize.Op.gte]: new Date().setHours(0,0,0,0) } } });
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+        const count = await ProductRequest.count({ where: { createdAt: { [Op.gte]: startOfDay } } });
+        const randomPart = Math.floor(1000 + Math.random() * 9000);
         const seq = String(count + 1).padStart(4, '0');
-        request.request_number = `SR-${datePart}-${seq}`;
+        request.request_number = `SR-${datePart}-${seq}-${randomPart}`;
       }
       if (request.status) {
         request.status = request.status.toUpperCase();
