@@ -215,6 +215,17 @@ export default function ProcurementPage() {
     });
   }, [activeBranchModal, requests, branchModalSearch, branchModalReqStatus]);
 
+  // Live Counts for Branch Modal Status Tabs
+  const branchStatusCounts = useMemo(() => {
+    if (!activeBranchModal) return { Pending: 0, Approved: 0, Fulfilled: 0, Rejected: 0, All: 0 };
+    const bReqs = requests.filter(r => r.branch_id === activeBranchModal.id);
+    const Pending = bReqs.filter(r => isPendingStatus(r.status)).length;
+    const Approved = bReqs.filter(r => ["APPROVED", "PARTIALLY_APPROVED"].includes((r.status || "").toUpperCase())).length;
+    const Fulfilled = bReqs.filter(r => ["FULFILLED", "COMPLETED"].includes((r.status || "").toUpperCase())).length;
+    const Rejected = bReqs.filter(r => (r.status || "").toUpperCase() === "REJECTED").length;
+    return { Pending, Approved, Fulfilled, Rejected, All: bReqs.length };
+  }, [activeBranchModal, requests]);
+
   // ── Checkbox Selection Handlers in Modal ──
   const isPendingStatus = (st) => ["PENDING_SUPERADMIN", "PENDING", "PENDING_ADMIN"].includes((st || "").toUpperCase());
   const selectableRequests = activeBranchRequests.filter(r => isPendingStatus(r.status));
@@ -688,142 +699,191 @@ export default function ProcurementPage() {
       {/* ========================================================================= */}
       <AnimatePresence>
         {activeBranchModal && isSuperAdmin && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/75 backdrop-blur-md">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md">
             <motion.div
-              initial={{ scale: 0.96, opacity: 0, y: 10 }}
+              initial={{ scale: 0.95, opacity: 0, y: 15 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.96, opacity: 0, y: 10 }}
-              transition={{ duration: 0.2 }}
-              className="bg-brand-surface border border-border rounded-2xl w-full max-w-6xl h-[90vh] flex flex-col shadow-2xl overflow-hidden relative"
+              exit={{ scale: 0.95, opacity: 0, y: 15 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              className="bg-brand-bgbase/95 border border-brand-neonblue/25 rounded-3xl w-full max-w-6xl max-h-[86vh] flex flex-col shadow-[0_25px_80px_rgba(0,0,0,0.85),0_0_35px_rgba(0,210,255,0.08)] overflow-hidden relative backdrop-blur-2xl"
             >
+              {/* Top Cyber Accent Line */}
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-brand-neonblue to-transparent" />
+
               {/* Modal Header */}
-              <div className="px-6 py-5 border-b border-border bg-brand-bgbase flex justify-between items-center gap-4 shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-brand-neonblue/15 border border-brand-neonblue/30 text-brand-neonblue flex items-center justify-center shrink-0">
-                    <Building size={20} />
+              <div className="px-6 py-5 border-b border-border bg-brand-surface/70 flex justify-between items-center gap-4 shrink-0">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-11 h-11 rounded-2xl bg-brand-neonblue/15 border border-brand-neonblue/30 text-brand-neonblue flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(0,210,255,0.2)]">
+                    <Building size={22} />
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-xl font-rajdhani font-black uppercase tracking-wider text-main">
+                    <div className="flex items-center gap-2.5">
+                      <h2 className="text-xl sm:text-2xl font-rajdhani font-black uppercase tracking-wide text-main">
                         {activeBranchModal.name}
                       </h2>
-                      <span className="text-[10px] font-black uppercase tracking-widest text-brand-neonblue bg-brand-neonblue/10 px-2 py-0.5 rounded border border-brand-neonblue/20">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-brand-neonblue bg-brand-neonblue/10 px-2.5 py-0.5 rounded-full border border-brand-neonblue/25 font-mono flex items-center gap-1">
+                        <MapPin size={10} />
                         {activeBranchModal.location || 'Branch Sector'}
                       </span>
                     </div>
                     <p className="text-xs text-muted font-medium mt-0.5">
-                      Review stock requests and approve with checkboxes for batch approval.
+                      Review stock requests, verify requested quantities, and batch authorize replenishment.
                     </p>
                   </div>
                 </div>
 
-                {/* Modal Close Button */}
-                <button
-                  onClick={() => setActiveBranchModal(null)}
-                  className="p-2 rounded-xl bg-brand-surface border border-border text-muted hover:text-main hover:border-brand-neonblue/30 transition-colors"
-                >
-                  <X size={18} />
-                </button>
+                {/* Header Metrics & Close Button */}
+                <div className="flex items-center gap-3">
+                  <div className="hidden sm:flex items-center gap-2">
+                    <div className="px-3 py-1.5 rounded-xl bg-amber-400/10 border border-amber-400/25 text-amber-400 font-mono text-xs font-bold flex items-center gap-1.5 shadow-sm">
+                      <Clock size={12} />
+                      <span>{branchStatusCounts.Pending} Pending</span>
+                    </div>
+                    <div className="px-3 py-1.5 rounded-xl bg-brand-surface border border-border text-main font-mono text-xs font-bold flex items-center gap-1.5 shadow-sm">
+                      <Inbox size={12} className="text-brand-neonblue" />
+                      <span>{branchStatusCounts.All} Total</span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setActiveBranchModal(null)}
+                    title="Close"
+                    className="p-2 rounded-xl bg-brand-surface hover:bg-rose-500/15 border border-border hover:border-rose-500/30 text-muted hover:text-rose-400 transition-all shadow-sm"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
               </div>
 
               {/* Modal Body */}
-              <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-brand-surface">
-                
-                {/* ── SEARCH & FILTER CONTROLS ── */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-                  
-                  {/* Status subtabs for requests */}
-                  <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar w-full md:w-auto pb-2 md:pb-0">
-                    {[
-                      { id: "Pending", label: "Pending Review" },
-                      { id: "Approved", label: "Approved" },
-                      { id: "Fulfilled", label: "Fulfilled" },
-                      { id: "Rejected", label: "Rejected" },
-                      { id: "All", label: "All Records" }
-                    ].map(tab => (
-                      <button
-                        key={tab.id}
-                        onClick={() => setBranchModalReqStatus(tab.id)}
-                        className={`px-3 py-1.5 rounded-lg text-[11px] font-bold font-rajdhani uppercase tracking-wider transition-all whitespace-nowrap ${
-                          branchModalReqStatus === tab.id
-                            ? "bg-brand-neonblue/20 text-brand-neonblue border border-brand-neonblue/40"
-                            : "text-muted hover:text-main bg-brand-bgbase border border-border"
-                        }`}
-                      >
-                        {tab.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Search Bar */}
-                  <div className="relative w-full md:w-72">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-                    <input
-                      type="text"
-                      value={branchModalSearch}
-                      onChange={(e) => setBranchModalSearch(e.target.value)}
-                      placeholder="Search request #, product, staff..."
-                      className="w-full bg-brand-bgbase border border-border rounded-xl py-2 pl-9 pr-3 text-xs text-main focus:outline-none focus:border-brand-neonblue/30 transition-all font-bold"
-                    />
-                  </div>
-                </div>
-
-                {/* ── BRANCH REQUESTS LIST WITH CHECKBOXES ── */}
+              <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-brand-surface/40 flex flex-col justify-between">
                 <div>
-                  {/* Batch Selection Bar */}
-                  {selectableRequests.length > 0 && (
-                    <div className="flex items-center justify-between bg-brand-bgbase border border-border rounded-xl px-4 py-2.5 mb-4">
-                      <button
-                        onClick={handleToggleSelectAll}
-                        className="flex items-center gap-2 text-xs font-rajdhani font-bold uppercase tracking-wider text-main hover:text-brand-neonblue transition-colors"
-                      >
-                        {isAllSelectableChecked ? (
-                          <CheckSquare size={17} className="text-brand-neonblue" />
-                        ) : (
-                          <Square size={17} className="text-muted" />
-                        )}
-                        <span>
-                          {isAllSelectableChecked ? "Deselect All" : "Select All Pending"} ({selectableRequests.length})
-                        </span>
-                      </button>
-
-                      {isSomeChecked && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-amber-400 font-bold font-mono">
-                            {selectedRequestIds.size} Selected
+                  {/* ── SEARCH & FILTER CONTROLS ── */}
+                  <div className="bg-brand-surface border border-border rounded-2xl p-2.5 flex flex-col lg:flex-row justify-between items-center gap-3 mb-5 shadow-sm">
+                    
+                    {/* Status subtabs for requests with live badge counters */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar w-full lg:w-auto pb-1 lg:pb-0">
+                      {[
+                        { id: "Pending", label: "Pending Review", count: branchStatusCounts.Pending },
+                        { id: "Approved", label: "Approved", count: branchStatusCounts.Approved },
+                        { id: "Fulfilled", label: "Fulfilled", count: branchStatusCounts.Fulfilled },
+                        { id: "Rejected", label: "Rejected", count: branchStatusCounts.Rejected },
+                        { id: "All", label: "All Records", count: branchStatusCounts.All }
+                      ].map(tab => (
+                        <button
+                          key={tab.id}
+                          onClick={() => setBranchModalReqStatus(tab.id)}
+                          className={`px-3.5 py-1.5 rounded-xl text-xs font-rajdhani font-bold uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-2 ${
+                            branchModalReqStatus === tab.id
+                              ? "bg-brand-neonblue text-slate-950 font-black shadow-[0_0_15px_rgba(0,210,255,0.35)]"
+                              : "text-muted hover:text-main bg-brand-bgbase/80 border border-border hover:border-brand-neonblue/30"
+                          }`}
+                        >
+                          <span>{tab.label}</span>
+                          <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-md ${
+                            branchModalReqStatus === tab.id
+                              ? "bg-slate-950/25 text-slate-950 font-black"
+                              : "bg-brand-surface text-muted font-bold"
+                          }`}>
+                            {tab.count}
                           </span>
-                          <button
-                            onClick={handleBatchApprove}
-                            disabled={batchActionLoading}
-                            className="bg-emerald-500/15 hover:bg-emerald-500 hover:text-white text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-lg text-xs font-rajdhani font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm"
-                          >
-                            <ThumbsUp size={12} />
-                            Approve Selected ({selectedRequestIds.size})
-                          </button>
-                          <button
-                            onClick={() => {
-                              setBatchRejectReason("");
-                              setShowBatchRejectModal(true);
-                            }}
-                            disabled={batchActionLoading}
-                            className="bg-rose-500/15 hover:bg-rose-500 hover:text-white text-rose-400 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-rajdhani font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm"
-                          >
-                            <ThumbsDown size={12} />
-                            Reject Selected ({selectedRequestIds.size})
-                          </button>
-                        </div>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Search Bar */}
+                    <div className="relative w-full lg:w-80">
+                      <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
+                      <input
+                        type="text"
+                        value={branchModalSearch}
+                        onChange={(e) => setBranchModalSearch(e.target.value)}
+                        placeholder="Search SKU, product, request #..."
+                        className="w-full bg-brand-bgbase border border-border rounded-xl py-2 pl-9 pr-8 text-xs text-main placeholder:text-muted/60 focus:outline-none focus:border-brand-neonblue/40 focus:ring-1 focus:ring-brand-neonblue/20 transition-all font-medium"
+                      />
+                      {branchModalSearch && (
+                        <button
+                          onClick={() => setBranchModalSearch("")}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-main"
+                        >
+                          <X size={13} />
+                        </button>
                       )}
                     </div>
-                  )}
+                  </div>
 
-                  {/* Empty State */}
-                  {activeBranchRequests.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-16 bg-brand-bgbase border border-border rounded-2xl border-dashed">
-                      <Inbox size={40} className="text-main/20 mb-3" />
-                      <h4 className="text-xs font-black uppercase tracking-[2px] text-main">No Stock Requisitions Found</h4>
-                      <p className="text-[11px] text-muted mt-1">There are no stock requisitions under this filter for this branch.</p>
-                    </div>
-                  ) : (
+                  {/* ── BRANCH REQUESTS LIST WITH CHECKBOXES ── */}
+                  <div>
+                    {/* Batch Selection Bar */}
+                    {selectableRequests.length > 0 && (
+                      <div className="flex items-center justify-between bg-brand-bgbase border border-border rounded-xl px-4 py-2.5 mb-4 shadow-sm">
+                        <button
+                          onClick={handleToggleSelectAll}
+                          className="flex items-center gap-2 text-xs font-rajdhani font-bold uppercase tracking-wider text-main hover:text-brand-neonblue transition-colors"
+                        >
+                          {isAllSelectableChecked ? (
+                            <CheckSquare size={17} className="text-brand-neonblue" />
+                          ) : (
+                            <Square size={17} className="text-muted" />
+                          )}
+                          <span>
+                            {isAllSelectableChecked ? "Deselect All" : "Select All Pending"} ({selectableRequests.length})
+                          </span>
+                        </button>
+
+                        {isSomeChecked && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-amber-400 font-bold font-mono">
+                              {selectedRequestIds.size} Selected
+                            </span>
+                            <button
+                              onClick={handleBatchApprove}
+                              disabled={batchActionLoading}
+                              className="bg-emerald-500/15 hover:bg-emerald-500 hover:text-white text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-lg text-xs font-rajdhani font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm"
+                            >
+                              <ThumbsUp size={12} />
+                              Approve Selected ({selectedRequestIds.size})
+                            </button>
+                            <button
+                              onClick={() => {
+                                setBatchRejectReason("");
+                                setShowBatchRejectModal(true);
+                              }}
+                              disabled={batchActionLoading}
+                              className="bg-rose-500/15 hover:bg-rose-500 hover:text-white text-rose-400 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-rajdhani font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm"
+                            >
+                              <ThumbsDown size={12} />
+                              Reject Selected ({selectedRequestIds.size})
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Empty State */}
+                    {activeBranchRequests.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-20 px-4 bg-brand-surface/40 border border-border rounded-2xl border-dashed">
+                        <div className="w-16 h-16 rounded-2xl bg-brand-neonblue/10 border border-brand-neonblue/20 text-brand-neonblue flex items-center justify-center mb-3 shadow-[0_0_20px_rgba(0,210,255,0.12)]">
+                          <Inbox size={28} />
+                        </div>
+                        <h4 className="text-sm font-rajdhani font-black uppercase tracking-[2px] text-main">
+                          No Requisitions Found
+                        </h4>
+                        <p className="text-xs text-muted mt-1 max-w-sm text-center">
+                          {branchModalSearch 
+                            ? `No records found matching "${branchModalSearch}".`
+                            : `There are currently no stock requisitions under ${branchModalReqStatus} for this branch.`}
+                        </p>
+                        {branchModalSearch && (
+                          <button
+                            onClick={() => setBranchModalSearch("")}
+                            className="mt-4 px-3 py-1.5 rounded-lg text-xs font-bold text-brand-neonblue bg-brand-neonblue/10 border border-brand-neonblue/20 hover:bg-brand-neonblue/20 transition-all"
+                          >
+                            Clear Search Filter
+                          </button>
+                        )}
+                      </div>
+                    ) : (
                     <div className="bg-brand-bgbase border border-border rounded-xl overflow-hidden">
                       <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
@@ -969,8 +1029,8 @@ export default function ProcurementPage() {
                     </div>
                   )}
                 </div>
-
               </div>
+            </div>
             </motion.div>
           </div>
         )}
