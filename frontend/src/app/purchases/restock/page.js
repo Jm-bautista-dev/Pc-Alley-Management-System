@@ -247,6 +247,41 @@ export default function ProcurementPage() {
     ).length;
   }, [requests, currentBranchId]);
 
+  // Auto-open staff modal from URL query params (e.g. ?staff_id=X or ?requester_id=X or ?request_id=Y or from notification)
+  useEffect(() => {
+    if (typeof window === "undefined" || !users.length) return;
+    const params = new URLSearchParams(window.location.search);
+    const staffIdParam = params.get("staff_id") || params.get("requester_id");
+    const reqIdParam = params.get("request_id") || params.get("id");
+    const tabParam = params.get("tab");
+
+    if (staffIdParam) {
+      const targetStaff = users.find(u => String(u.id) === String(staffIdParam));
+      if (targetStaff) {
+        setActiveStaffModal(targetStaff);
+        return;
+      }
+    }
+
+    if (reqIdParam && requests.length) {
+      const targetReq = requests.find(r => String(r.id) === String(reqIdParam));
+      if (targetReq) {
+        const staff = users.find(u => u.id === targetReq.requested_by);
+        if (staff) {
+          setActiveStaffModal(staff);
+          return;
+        }
+      }
+    }
+
+    if (tabParam === "requests" && staffPillData.length > 0) {
+      const staffWithPending = staffPillData.find(s => s.pendingRequestsCount > 0) || staffPillData[0];
+      if (staffWithPending) {
+        setActiveStaffModal(staffWithPending);
+      }
+    }
+  }, [users, requests, staffPillData]);
+
   // ── Branch Admin: Flat Inventory Filter ──
   const filteredInventory = useMemo(() => {
     return inventory.filter(item => {

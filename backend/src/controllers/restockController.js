@@ -80,7 +80,7 @@ const createRequest = async (req, res) => {
         title: 'New Restock Request',
         message: `${req.user.username} requested ${quantity} units of ${product.name} for ${branch.name}.`,
         type: 'restock_request',
-        link: `/purchases/restock`,
+        link: isEmployee ? `/purchases/restock?staff_id=${req.user.id}` : `/purchases/restock`,
         emailDetails: {
           details: {
             'Product': product.name,

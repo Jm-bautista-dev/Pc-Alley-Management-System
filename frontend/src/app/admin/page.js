@@ -24,7 +24,6 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { apiUrl } from "@/lib/api";
 import { showSuccess, showError, showInfo, showWarning, showConfirm, showModal } from "@/context/ModalContext";
-import RestockManagement from "@/components/restock/RestockManagement";
 
 function AdminPageContent() {
   const router = useRouter();
@@ -94,9 +93,10 @@ function AdminPageContent() {
 
   useEffect(() => {
     const tab = searchParams.get("tab");
-    if (tab === "restock") setActiveTab("restock");
-    else if (tab === "personnel") setActiveTab("personnel");
-  }, [searchParams]);
+    if (tab === "restock") {
+      router.replace("/purchases/restock");
+    }
+  }, [searchParams, router]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -431,38 +431,7 @@ function AdminPageContent() {
             </motion.div>
           )}
 
-          {/* Tab Navigation */}
-          <div className="flex gap-2 mb-6">
-            <button 
-              onClick={() => setActiveTab("personnel")}
-              className={`h-9 px-5 rounded-lg text-sm font-semibold transition-colors border ${
-                activeTab === "personnel" 
-                ? "bg-brand-neonblue/10 border-brand-neonblue/30 text-brand-neonblue" 
-                : "bg-brand-surface border-border text-muted hover:text-main hover:bg-brand-bgbase"
-              }`}
-            >
-              Staff & Branches
-            </button>
-            <button 
-              onClick={() => setActiveTab("restock")}
-              className={`h-9 px-5 rounded-lg text-sm font-semibold transition-colors border flex items-center gap-2 ${
-                activeTab === "restock" 
-                ? "bg-amber-500/10 border-amber-500/30 text-amber-500" 
-                : "bg-brand-surface border-border text-muted hover:text-main hover:bg-brand-bgbase"
-              }`}
-            >
-              Restock Requests
-              {pendingRestockCount > 0 && (
-                <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded-full bg-amber-400 text-white text-[10px] font-bold">
-                  {pendingRestockCount}
-                </span>
-              )}
-            </button>
-          </div>
-
-          {activeTab === "personnel" ? (
-            <>
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
             {/* User Management Section */}
             <motion.div 
                initial={{ opacity: 0, scale: 0.98 }}
@@ -746,16 +715,6 @@ function AdminPageContent() {
               </table>
             </div>
           </motion.div>
-            </>
-          ) : (
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-            >
-              <RestockManagement onRequestProcessed={() => setPendingRestockCount(c => Math.max(0, c - 1))} />
-            </motion.div>
-          )}
-
         </div>
       </main>
 

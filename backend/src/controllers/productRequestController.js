@@ -176,7 +176,7 @@ const createRequest = async (req, res) => {
             title: 'Staff Restock Request Pending Review',
             message: `Staff member ${req.user.username} submitted restock request (${summaryNumbers}) for ${items.length} item(s) awaiting your endorsement.`,
             type: 'restock_request',
-            link: '/admin?tab=restock'
+            link: `/purchases/restock?staff_id=${req.user.id}`
           }));
           await Notification.bulkCreate(notifications);
         }
