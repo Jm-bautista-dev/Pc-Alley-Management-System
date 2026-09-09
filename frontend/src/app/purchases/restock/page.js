@@ -1398,6 +1398,20 @@ export default function ProcurementPage() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* ========================================================================= */}
+      {/* BRANCH RESTOCK REQUEST MODAL (FOR BRANCH ADMIN / STAFF) */}
+      {/* ========================================================================= */}
+      {restockItem && (
+        <RestockRequestModal
+          inventoryItem={restockItem}
+          onClose={() => setRestockItem(null)}
+          onSuccess={() => {
+            fetchData();
+            fetchRequests();
+          }}
+        />
+      )}
     </div>
   );
 }

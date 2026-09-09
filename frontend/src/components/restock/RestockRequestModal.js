@@ -115,32 +115,35 @@ export default function RestockRequestModal({ inventoryItem, product: legacyProd
     const token = localStorage.getItem('token');
 
     try {
-      const res = await fetch(apiUrl('/api/restock-requests'), {
+      const res = await fetch(apiUrl('/api/product-requests'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          product_id: product.id,
           branch_id: branchId,
-          quantity: qty,
-          notes: (notes || "").trim().slice(0, 255),
-          cost_price: parseFloat(product?.last_purchase_price || product?.price || 0),
-          supplier_id: product?.supplier_id || undefined
+          items: [
+            {
+              product_id: product.id,
+              quantity_requested: qty
+            }
+          ],
+          notes: (notes || "").trim().slice(0, 500),
+          priority: 'normal'
         })
       });
 
       if (res.ok) {
-        showSuccess('Stock request submitted successfully!');
+        showSuccess('Restock request submitted successfully! Super Admin will review it on the Restock Desk.');
         if (onSuccess) onSuccess();
         onClose();
       } else {
         const error = await res.json();
-        showError(error.message || 'Failed to submit request');
+        showError(error.message || 'Failed to submit restock request');
       }
     } catch (err) {
-      showError('An error occurred. Please try again.');
+      showError('An error occurred while submitting restock request.');
     } finally {
       setLoading(false);
     }

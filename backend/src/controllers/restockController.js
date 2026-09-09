@@ -1,4 +1,4 @@
-const { RestockRequest, Product, Inventory, User, Branch, Notification, StockMovement } = require('../models');
+const { RestockRequest, Product, Inventory, User, Branch, Notification, StockMovement, ProductRequest, AuditLog } = require('../models');
 const { notifyUser, notifyUsers } = require('../services/notificationService');
 const { invalidateCache } = require('../middleware/cacheMiddleware');
 
@@ -27,11 +27,38 @@ const createRequest = async (req, res) => {
       status: 'Pending'
     });
 
-    // Notification routing:
-    // - Employee (staff) → notify only the Branch Admins of that branch
-    // - Branch Admin → notify the Branch Admins of that branch + Super Admins
     const { Op } = require('sequelize');
     const isEmployee = req.user.role === 'employee';
+
+    // Bridge sync to ProductRequest table
+    try {
+      const existingPR = await ProductRequest.findOne({
+        where: {
+          branch_id,
+          product_id,
+          status: { [Op.in]: ['PENDING', 'Pending', 'PENDING_ADMIN', 'PENDING_SUPERADMIN'] }
+        }
+      });
+      if (!existingPR) {
+        const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const rand = Math.floor(1000 + Math.random() * 9000);
+        const reqNum = `SR-${datePart}-${request.id || rand}-${rand}`;
+        const initialStatus = isEmployee ? 'PENDING_ADMIN' : 'PENDING_SUPERADMIN';
+        await ProductRequest.create({
+          request_number: reqNum,
+          branch_id,
+          product_id,
+          requested_by: req.user.id,
+          quantity_requested: parseInt(quantity),
+          notes: notes ? String(notes).trim().slice(0, 500) : null,
+          priority: 'normal',
+          status: initialStatus,
+          requested_at: new Date()
+        });
+      }
+    } catch (prErr) {
+      console.error('Failed to sync RestockRequest to ProductRequest:', prErr);
+    }
 
     const recipientQuery = isEmployee
       ? { role: 'branch_admin', branch_id }
