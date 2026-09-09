@@ -199,7 +199,7 @@ export default function MyRequestsPage() {
     const matchesSearch = !q || reqNum.includes(q) || prodName.includes(q) || prodSku.includes(q);
 
     let matchesTab = true;
-    if (activeTab === "Pending") matchesTab = statusUpper === "PENDING";
+    if (activeTab === "Pending") matchesTab = statusUpper === "PENDING" || statusUpper === "PENDING_ADMIN" || statusUpper === "PENDING_SUPERADMIN";
     else if (activeTab === "Approved") matchesTab = statusUpper === "APPROVED" || statusUpper === "PARTIALLY_APPROVED";
     else if (activeTab === "Processing") matchesTab = statusUpper === "PROCESSING" || statusUpper === "SCHEDULED";
     else if (activeTab === "Fulfilled") matchesTab = statusUpper === "FULFILLED" || statusUpper === "COMPLETED";
@@ -212,10 +212,13 @@ export default function MyRequestsPage() {
   const getStatusBadge = (status) => {
     const s = (status || "").toUpperCase();
     switch (s) {
+      case "PENDING_ADMIN":
+        return { label: "Pending Branch Admin Review", cls: "text-orange-400 border-orange-400/20 bg-orange-400/10", dot: "bg-orange-400" };
+      case "PENDING_SUPERADMIN":
       case "PENDING":
-        return { label: "Pending Review", cls: "text-amber-400 border-amber-400/20 bg-amber-400/10", dot: "bg-amber-400" };
+        return { label: "Pending HQ Review", cls: "text-amber-400 border-amber-400/20 bg-amber-400/10", dot: "bg-amber-400" };
       case "APPROVED":
-        return { label: "Approved", cls: "text-emerald-400 border-emerald-400/20 bg-emerald-400/10", dot: "bg-emerald-400" };
+        return { label: "Approved / Reserved", cls: "text-emerald-400 border-emerald-400/20 bg-emerald-400/10", dot: "bg-emerald-400" };
       case "PARTIALLY_APPROVED":
         return { label: "Partially Approved", cls: "text-lime-400 border-lime-400/20 bg-lime-400/10", dot: "bg-lime-400" };
       case "PROCESSING":

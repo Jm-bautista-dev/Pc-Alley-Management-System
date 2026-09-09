@@ -22,7 +22,9 @@ async function generateRequestNumber() {
 function normalizeStatus(status) {
   if (!status) return null;
   const s = status.trim().toUpperCase();
-  if (s === 'PENDING') return ['PENDING', 'Pending'];
+  if (s === 'PENDING_ADMIN') return ['PENDING_ADMIN', 'Pending Admin', 'Pending Branch Admin'];
+  if (s === 'PENDING_SUPERADMIN' || s === 'PENDING_HQ') return ['PENDING_SUPERADMIN', 'Pending Super Admin', 'Pending HQ', 'FORWARDED_TO_HQ'];
+  if (s === 'PENDING') return ['PENDING', 'Pending', 'PENDING_ADMIN', 'PENDING_SUPERADMIN'];
   if (s === 'APPROVED') return ['APPROVED', 'Approved'];
   if (s === 'PARTIALLY_APPROVED' || s === 'PARTIALLY APPROVED') return ['PARTIALLY_APPROVED', 'Partially Approved'];
   if (s === 'PROCESSING') return ['PROCESSING', 'Scheduled', 'In Transit'];
@@ -35,6 +37,8 @@ function normalizeStatus(status) {
 /**
  * 1. Create Stock Request
  * Authorized for: super_admin, branch_admin, employee
+ * - If employee (staff) submits: status = 'PENDING_ADMIN' -> routed to Branch Admin
+ * - If branch_admin / super_admin submits: status = 'PENDING_SUPERADMIN' -> routed directly to Super Admin
  */
 const createRequest = async (req, res) => {
   const transaction = await sequelize.transaction();
@@ -79,6 +83,10 @@ const createRequest = async (req, res) => {
     const requestNumber = await generateRequestNumber();
     const createdRequests = [];
 
+    // Determine initial status based on creator's role
+    const isStaff = req.user.role === 'employee';
+    const initialStatus = isStaff ? 'PENDING_ADMIN' : 'PENDING_SUPERADMIN';
+
     for (const item of items) {
       const { product_id, quantity_requested } = item;
 
@@ -112,7 +120,7 @@ const createRequest = async (req, res) => {
         where: {
           branch_id,
           product_id,
-          status: { [Op.in]: ['PENDING', 'Pending'] }
+          status: { [Op.in]: ['PENDING', 'Pending', 'PENDING_ADMIN', 'PENDING_SUPERADMIN'] }
         }
       });
 
@@ -121,7 +129,6 @@ const createRequest = async (req, res) => {
         return res.status(400).json({ message: `You already have an active pending request for product: ${product.name}.` });
       }
 
-      // Strict security: do not trust client input for approval/status fields
       const reqRecord = await ProductRequest.create({
         request_number: requestNumber,
         branch_id,
@@ -131,7 +138,7 @@ const createRequest = async (req, res) => {
         quantity_requested: parseInt(quantity_requested),
         notes: notes ? String(notes).trim().slice(0, 500) : null,
         priority: priority && ['low', 'normal', 'urgent'].includes(priority) ? priority : 'normal',
-        status: 'PENDING',
+        status: initialStatus,
         requested_at: new Date()
       }, { transaction });
 
@@ -139,7 +146,7 @@ const createRequest = async (req, res) => {
       await AuditLog.create({
         action: 'CREATE_STOCK_REQUEST',
         user_id: req.user.id,
-        details: `Stock request ${requestNumber} created for product '${product.name}' (SKU: ${product.sku}, Qty: ${quantity_requested}) by ${req.user.username} [${req.user.role}] for branch '${destBranch.name}'.`,
+        details: `Stock request ${requestNumber} created for product '${product.name}' (SKU: ${product.sku}, Qty: ${quantity_requested}) by ${req.user.username} [${req.user.role}] for branch '${destBranch.name}'. Initial status: ${initialStatus}.`,
         ip_address: req.ip || req.connection?.remoteAddress || null
       }, { transaction });
 
@@ -148,25 +155,46 @@ const createRequest = async (req, res) => {
 
     await transaction.commit();
 
-    // In-app Notification to all Super Admins
+    // In-app Notification routing:
+    // - If Staff: notify Branch Admin(s) of that branch
+    // - If Admin/Super Admin: notify Super Admin(s)
     try {
-      const superAdmins = await User.findAll({ where: { role: 'super_admin' } });
-      if (superAdmins.length > 0) {
-        const notifications = superAdmins.map(admin => ({
-          userId: admin.id,
-          title: 'New Stock Request Pending Review',
-          message: `Branch '${destBranch.name}' submitted stock request ${requestNumber} for ${items.length} item(s).`,
-          type: 'stock_request',
-          link: '/admin/product-requests'
-        }));
-        await Notification.bulkCreate(notifications);
+      if (isStaff) {
+        const branchAdmins = await User.findAll({
+          where: { role: 'branch_admin', branch_id }
+        });
+        if (branchAdmins.length > 0) {
+          const notifications = branchAdmins.map(admin => ({
+            userId: admin.id,
+            branchId: branch_id,
+            title: 'Staff Restock Request Pending Review',
+            message: `Staff member ${req.user.username} submitted restock request ${requestNumber} for ${items.length} item(s) awaiting your endorsement.`,
+            type: 'restock_request',
+            link: '/admin?tab=restock'
+          }));
+          await Notification.bulkCreate(notifications);
+        }
+      } else {
+        const superAdmins = await User.findAll({ where: { role: 'super_admin' } });
+        if (superAdmins.length > 0) {
+          const notifications = superAdmins.map(admin => ({
+            userId: admin.id,
+            title: 'New Branch Stock Request Pending HQ Review',
+            message: `Branch '${destBranch.name}' submitted stock request ${requestNumber} for ${items.length} item(s).`,
+            type: 'stock_request',
+            link: '/admin/product-requests'
+          }));
+          await Notification.bulkCreate(notifications);
+        }
       }
     } catch (notifErr) {
       console.warn('[Notification Warning]', notifErr.message);
     }
 
     return res.status(201).json({
-      message: 'Stock request submitted successfully. Pending Super Admin review.',
+      message: isStaff
+        ? 'Stock request submitted to Branch Admin for initial review.'
+        : 'Stock request submitted to Super Admin for fulfillment.',
       request_number: requestNumber,
       requests: createdRequests
     });
@@ -178,7 +206,458 @@ const createRequest = async (req, res) => {
 };
 
 /**
- * 2. List Stock Requests
+ * 2. Branch Admin Approves & Endorses Request (Tier 1 -> Tier 2)
+ * Transitions status from PENDING_ADMIN to PENDING_SUPERADMIN.
+ * Authorized for: branch_admin (for their own branch) and super_admin.
+ */
+const branchAdminApprove = async (req, res) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const { id } = req.params;
+    const { approval_notes } = req.body;
+
+    const request = await ProductRequest.findByPk(id, {
+      include: [
+        { model: Product },
+        { model: Branch, as: 'Branch' },
+        { model: User, as: 'Requester' }
+      ],
+      transaction
+    });
+
+    if (!request) {
+      await transaction.rollback();
+      return res.status(404).json({ message: 'Stock request not found.' });
+    }
+
+    if (req.user.role !== 'super_admin' && request.branch_id !== req.user.branch_id) {
+      await transaction.rollback();
+      return res.status(403).json({ message: 'Forbidden: You can only approve requests for your assigned branch.' });
+    }
+
+    const currentStatus = (request.status || '').toUpperCase();
+    if (!['PENDING_ADMIN', 'PENDING'].includes(currentStatus)) {
+      await transaction.rollback();
+      return res.status(400).json({
+        message: `Cannot branch-approve request with current status '${request.status}'. Only PENDING_ADMIN requests can be endorsed.`
+      });
+    }
+
+    request.status = 'PENDING_SUPERADMIN';
+    request.branch_approved_by = req.user.id;
+    request.branch_approved_at = new Date();
+    request.branch_approval_notes = approval_notes ? String(approval_notes).trim() : null;
+    await request.save({ transaction });
+
+    await AuditLog.create({
+      action: 'BRANCH_APPROVE_STOCK_REQUEST',
+      user_id: req.user.id,
+      details: `Stock request ${request.request_number} endorsed by Branch Admin ${req.user.username} for Branch '${request.Branch?.name}'. Forwarded to Super Admin. Notes: ${request.branch_approval_notes || 'None'}.`,
+      ip_address: req.ip || req.connection?.remoteAddress || null
+    }, { transaction });
+
+    await transaction.commit();
+
+    // In-app Notifications:
+    // 1. Notify Super Admins that branch approved request is ready for HQ review
+    try {
+      const superAdmins = await User.findAll({ where: { role: 'super_admin' } });
+      if (superAdmins.length > 0) {
+        const notifications = superAdmins.map(admin => ({
+          userId: admin.id,
+          title: 'Branch-Endorsed Stock Request Awaiting HQ',
+          message: `Branch Admin ${req.user.username} approved request ${request.request_number} for '${request.Product?.name}' (${request.quantity_requested} units). Ready for HQ review.`,
+          type: 'stock_request',
+          link: '/admin/product-requests'
+        }));
+        await Notification.bulkCreate(notifications);
+      }
+      // 2. Notify Requester (Staff)
+      await Notification.create({
+        userId: request.requested_by,
+        title: 'Restock Request Endorsed by Branch Admin',
+        message: `Your restock request ${request.request_number} was endorsed by your Branch Admin and forwarded to Super Admin for fulfillment.`,
+        type: 'info',
+        link: '/products/my-requests'
+      });
+    } catch (notifErr) {
+      console.warn('[Notification Warning]', notifErr.message);
+    }
+
+    return res.json({
+      message: `Stock request ${request.request_number} endorsed and forwarded to Super Admin.`,
+      request
+    });
+  } catch (error) {
+    console.error('[branchAdminApprove Error]', error);
+    if (transaction && !transaction.finished) await transaction.rollback();
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+/**
+ * 3. Branch Admin Rejects Request
+ * Authorized for: branch_admin (for their branch) and super_admin.
+ */
+const branchAdminReject = async (req, res) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    if (!reason || String(reason).trim() === '') {
+      await transaction.rollback();
+      return res.status(400).json({ message: 'Rejection reason is strictly required.' });
+    }
+
+    const request = await ProductRequest.findByPk(id, {
+      include: [
+        { model: Product },
+        { model: Branch, as: 'Branch' },
+        { model: User, as: 'Requester' }
+      ],
+      transaction
+    });
+
+    if (!request) {
+      await transaction.rollback();
+      return res.status(404).json({ message: 'Stock request not found.' });
+    }
+
+    if (req.user.role !== 'super_admin' && request.branch_id !== req.user.branch_id) {
+      await transaction.rollback();
+      return res.status(403).json({ message: 'Forbidden: You can only reject requests for your assigned branch.' });
+    }
+
+    const currentStatus = (request.status || '').toUpperCase();
+    if (!['PENDING_ADMIN', 'PENDING', 'PENDING_SUPERADMIN'].includes(currentStatus)) {
+      await transaction.rollback();
+      return res.status(400).json({ message: `Cannot reject request with status '${request.status}'.` });
+    }
+
+    request.status = 'REJECTED';
+    request.rejection_reason = String(reason).trim();
+    request.branch_approved_by = req.user.id;
+    request.processed_at = new Date();
+    await request.save({ transaction });
+
+    await AuditLog.create({
+      action: 'BRANCH_REJECT_STOCK_REQUEST',
+      user_id: req.user.id,
+      details: `Stock request ${request.request_number} REJECTED by Branch Admin ${req.user.username}. Reason: ${request.rejection_reason}.`,
+      ip_address: req.ip || req.connection?.remoteAddress || null
+    }, { transaction });
+
+    await transaction.commit();
+
+    try {
+      await Notification.create({
+        userId: request.requested_by,
+        title: 'Restock Request Rejected by Branch Admin',
+        message: `Your restock request ${request.request_number} for '${request.Product?.name}' was rejected by Branch Admin. Reason: ${request.rejection_reason}`,
+        type: 'error',
+        link: '/products/my-requests'
+      });
+    } catch (notifErr) {}
+
+    return res.json({
+      message: `Stock request ${request.request_number} rejected.`,
+      request
+    });
+  } catch (error) {
+    console.error('[branchAdminReject Error]', error);
+    if (transaction && !transaction.finished) await transaction.rollback();
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+/**
+ * 4. Batch Branch Admin Approve & Reject
+ */
+const batchBranchApprove = async (req, res) => {
+  try {
+    const { ids, approval_notes } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: 'Array of request IDs is required.' });
+    }
+
+    let approvedCount = 0;
+    const errors = [];
+
+    for (const id of ids) {
+      try {
+        const request = await ProductRequest.findByPk(id);
+        if (!request) continue;
+        if (req.user.role !== 'super_admin' && request.branch_id !== req.user.branch_id) continue;
+        const s = (request.status || '').toUpperCase();
+        if (s === 'PENDING_ADMIN' || s === 'PENDING') {
+          request.status = 'PENDING_SUPERADMIN';
+          request.branch_approved_by = req.user.id;
+          request.branch_approved_at = new Date();
+          request.branch_approval_notes = approval_notes ? String(approval_notes).trim() : null;
+          await request.save();
+          approvedCount++;
+        }
+      } catch (err) {
+        errors.push({ id, error: err.message });
+      }
+    }
+
+    return res.json({
+      message: `${approvedCount} request(s) approved and forwarded to Super Admin.`,
+      approvedCount,
+      errors
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+const batchBranchReject = async (req, res) => {
+  try {
+    const { ids, reason } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: 'Array of request IDs is required.' });
+    }
+    if (!reason || String(reason).trim() === '') {
+      return res.status(400).json({ message: 'Rejection reason is required.' });
+    }
+
+    let rejectedCount = 0;
+    for (const id of ids) {
+      const request = await ProductRequest.findByPk(id);
+      if (!request) continue;
+      if (req.user.role !== 'super_admin' && request.branch_id !== req.user.branch_id) continue;
+      const s = (request.status || '').toUpperCase();
+      if (['PENDING_ADMIN', 'PENDING', 'PENDING_SUPERADMIN'].includes(s)) {
+        request.status = 'REJECTED';
+        request.rejection_reason = String(reason).trim();
+        request.branch_approved_by = req.user.id;
+        request.processed_at = new Date();
+        await request.save();
+        rejectedCount++;
+      }
+    }
+
+    return res.json({
+      message: `${rejectedCount} request(s) rejected.`,
+      rejectedCount
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+/**
+ * 5. Super Admin Batch Approve & Batch Reject
+ */
+const batchSuperAdminApprove = async (req, res) => {
+  if (req.user.role !== 'super_admin') {
+    return res.status(403).json({ message: 'Forbidden: ONLY Super Admin can batch approve stock requests.' });
+  }
+
+  const { ids, approval_notes } = req.body;
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ message: 'Array of request IDs is required.' });
+  }
+
+  const results = { approved: [], failed: [] };
+
+  for (const id of ids) {
+    const transaction = await sequelize.transaction();
+    try {
+      const request = await ProductRequest.findByPk(id, {
+        include: [{ model: Product }, { model: Branch, as: 'Branch' }],
+        transaction
+      });
+
+      if (!request) {
+        await transaction.rollback();
+        results.failed.push({ id, error: 'Not found' });
+        continue;
+      }
+
+      const currentStatus = (request.status || '').toUpperCase();
+      if (!['PENDING_SUPERADMIN', 'PENDING'].includes(currentStatus)) {
+        await transaction.rollback();
+        results.failed.push({ id, error: `Invalid status '${request.status}'` });
+        continue;
+      }
+
+      const product = request.Product;
+      const approvedQty = request.quantity_requested;
+
+      // Warehouse stock validation
+      if (!request.source_branch_id) {
+        if (product.available_quantity < approvedQty) {
+          await transaction.rollback();
+          results.failed.push({ id, error: `Insufficient warehouse stock (Available: ${product.available_quantity}, Required: ${approvedQty})` });
+          continue;
+        }
+        product.available_quantity -= approvedQty;
+        product.reserved_quantity += approvedQty;
+        await product.save({ transaction });
+      }
+
+      request.quantity_approved = approvedQty;
+      request.status = 'APPROVED';
+      request.approved_by = req.user.id;
+      request.approved_at = new Date();
+      request.approval_notes = approval_notes ? String(approval_notes).trim() : null;
+      await request.save({ transaction });
+
+      await AuditLog.create({
+        action: 'APPROVE_STOCK_REQUEST',
+        user_id: req.user.id,
+        details: `Stock request ${request.request_number} APPROVED (batch) by Super Admin ${req.user.username}. Authorized ${approvedQty} units of '${product.name}'.`,
+        ip_address: req.ip || req.connection?.remoteAddress || null
+      }, { transaction });
+
+      await transaction.commit();
+      results.approved.push(request.id);
+    } catch (err) {
+      if (transaction && !transaction.finished) await transaction.rollback();
+      results.failed.push({ id, error: err.message });
+    }
+  }
+
+  return res.json({
+    message: `Batch approve completed. ${results.approved.length} approved, ${results.failed.length} failed.`,
+    results
+  });
+};
+
+const batchSuperAdminReject = async (req, res) => {
+  if (req.user.role !== 'super_admin') {
+    return res.status(403).json({ message: 'Forbidden: ONLY Super Admin can batch reject stock requests.' });
+  }
+
+  const { ids, reason } = req.body;
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ message: 'Array of request IDs is required.' });
+  }
+  if (!reason || String(reason).trim() === '') {
+    return res.status(400).json({ message: 'Rejection reason is required.' });
+  }
+
+  const results = { rejected: [], failed: [] };
+
+  for (const id of ids) {
+    const transaction = await sequelize.transaction();
+    try {
+      const request = await ProductRequest.findByPk(id, {
+        include: [{ model: Product }],
+        transaction
+      });
+
+      if (!request) {
+        await transaction.rollback();
+        results.failed.push({ id, error: 'Not found' });
+        continue;
+      }
+
+      const currentStatus = (request.status || '').toUpperCase();
+      if (['FULFILLED', 'COMPLETED', 'REJECTED', 'CANCELLED'].includes(currentStatus)) {
+        await transaction.rollback();
+        results.failed.push({ id, error: `Cannot reject request with status '${request.status}'` });
+        continue;
+      }
+
+      // Release stock reservation if needed
+      if (['APPROVED', 'PARTIALLY_APPROVED', 'PROCESSING', 'SCHEDULED'].includes(currentStatus) && !request.source_branch_id && request.quantity_approved) {
+        const product = request.Product;
+        if (product) {
+          product.available_quantity += request.quantity_approved;
+          product.reserved_quantity = Math.max(0, product.reserved_quantity - request.quantity_approved);
+          await product.save({ transaction });
+        }
+      }
+
+      request.status = 'REJECTED';
+      request.rejection_reason = String(reason).trim();
+      request.processed_at = new Date();
+      await request.save({ transaction });
+
+      await AuditLog.create({
+        action: 'REJECT_STOCK_REQUEST',
+        user_id: req.user.id,
+        details: `Stock request ${request.request_number} REJECTED (batch) by Super Admin ${req.user.username}. Reason: ${request.rejection_reason}.`,
+        ip_address: req.ip || req.connection?.remoteAddress || null
+      }, { transaction });
+
+      await transaction.commit();
+      results.rejected.push(request.id);
+    } catch (err) {
+      if (transaction && !transaction.finished) await transaction.rollback();
+      results.failed.push({ id, error: err.message });
+    }
+  }
+
+  return res.json({
+    message: `Batch reject completed. ${results.rejected.length} rejected, ${results.failed.length} failed.`,
+    results
+  });
+};
+
+/**
+ * 6. Super Admin Branch Summary Aggregation
+ * Returns list of branches with aggregated stock request metrics.
+ */
+const getBranchSummary = async (req, res) => {
+  try {
+    const branches = await Branch.findAll({
+      order: [['name', 'ASC']]
+    });
+
+    const requests = await ProductRequest.findAll({
+      attributes: ['id', 'branch_id', 'status', 'quantity_requested', 'quantity_approved', 'priority', 'createdAt'],
+      order: [['createdAt', 'DESC']]
+    });
+
+    const summary = branches.map(branch => {
+      const branchReqs = requests.filter(r => r.branch_id === branch.id);
+      
+      const pendingSuperAdminReqs = branchReqs.filter(r => {
+        const s = (r.status || '').toUpperCase();
+        return s === 'PENDING_SUPERADMIN' || s === 'PENDING';
+      });
+
+      const pendingAdminReqs = branchReqs.filter(r => (r.status || '').toUpperCase() === 'PENDING_ADMIN');
+      const approvedReqs = branchReqs.filter(r => ['APPROVED', 'PARTIALLY_APPROVED'].includes((r.status || '').toUpperCase()));
+      const processingReqs = branchReqs.filter(r => ['PROCESSING', 'SCHEDULED'].includes((r.status || '').toUpperCase()));
+      const fulfilledReqs = branchReqs.filter(r => ['FULFILLED', 'COMPLETED'].includes((r.status || '').toUpperCase()));
+      const rejectedReqs = branchReqs.filter(r => (r.status || '').toUpperCase() === 'REJECTED');
+
+      const totalPendingUnits = pendingSuperAdminReqs.reduce((sum, r) => sum + (r.quantity_requested || 0), 0);
+      const hasUrgent = pendingSuperAdminReqs.some(r => r.priority === 'urgent');
+
+      return {
+        branch_id: branch.id,
+        branch_name: branch.name,
+        branch_location: branch.location,
+        branch_phone: branch.phone,
+        total_requests: branchReqs.length,
+        pending_superadmin_count: pendingSuperAdminReqs.length,
+        pending_admin_count: pendingAdminReqs.length,
+        approved_count: approvedReqs.length,
+        processing_count: processingReqs.length,
+        fulfilled_count: fulfilledReqs.length,
+        rejected_count: rejectedReqs.length,
+        total_pending_units: totalPendingUnits,
+        has_urgent: hasUrgent,
+        latest_request_at: branchReqs.length > 0 ? branchReqs[0].createdAt : null
+      };
+    });
+
+    return res.json(summary);
+  } catch (error) {
+    console.error('[getBranchSummary Error]', error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+/**
+ * 7. List Stock Requests
  * Roles:
  * - super_admin: views all requests, can filter by branch, requester, status, dates, priority, search
  * - branch_admin: views requests for their branch
@@ -186,14 +665,13 @@ const createRequest = async (req, res) => {
  */
 const listRequests = async (req, res) => {
   try {
-    const { status, branch_id, source_branch_id, from, to, priority, requester_id, search } = req.query;
+    const { status, branch_id, source_branch_id, from, to, priority, requester_id, search, stage } = req.query;
     const where = {};
 
     // Role-based scope
     if (req.user.role === 'branch_admin') {
       where.branch_id = req.user.branch_id;
     } else if (req.user.role === 'employee') {
-      // Employee views their own or their branch requests
       if (req.query.my_only === 'true') {
         where.requested_by = req.user.id;
       } else {
@@ -215,6 +693,13 @@ const listRequests = async (req, res) => {
       where.priority = priority;
     }
 
+    // Stage filter (e.g. stage=superadmin vs stage=branch_admin)
+    if (stage === 'superadmin') {
+      where.status = { [Op.in]: ['PENDING_SUPERADMIN', 'PENDING', 'APPROVED', 'PARTIALLY_APPROVED', 'PROCESSING', 'SCHEDULED', 'FULFILLED', 'REJECTED'] };
+    } else if (stage === 'branch_admin') {
+      where.status = { [Op.in]: ['PENDING_ADMIN', 'PENDING'] };
+    }
+
     // Status filter
     if (status) {
       const normalized = normalizeStatus(status);
@@ -233,7 +718,6 @@ const listRequests = async (req, res) => {
     }
 
     // Free text search
-    let productWhere = {};
     if (search && search.trim()) {
       const q = `%${search.trim()}%`;
       where[Op.or] = [
@@ -258,6 +742,7 @@ const listRequests = async (req, res) => {
         { model: Branch, as: 'SourceBranch', attributes: ['id', 'name', 'location'] },
         { model: User, as: 'Requester', attributes: ['id', 'username', 'first_name', 'last_name', 'role'] },
         { model: User, as: 'Approver', attributes: ['id', 'username', 'first_name', 'last_name', 'role'] },
+        { model: User, as: 'BranchApprover', attributes: ['id', 'username', 'first_name', 'last_name', 'role'] },
         { model: User, as: 'Fulfiller', attributes: ['id', 'username', 'first_name', 'last_name', 'role'] }
       ],
       order: [['createdAt', 'DESC']]
@@ -271,7 +756,7 @@ const listRequests = async (req, res) => {
 };
 
 /**
- * 3. Get Single Stock Request Details
+ * 8. Get Single Stock Request Details
  */
 const getRequest = async (req, res) => {
   try {
@@ -284,6 +769,7 @@ const getRequest = async (req, res) => {
         { model: Branch, as: 'SourceBranch' },
         { model: User, as: 'Requester', attributes: ['id', 'username', 'first_name', 'last_name', 'role'] },
         { model: User, as: 'Approver', attributes: ['id', 'username', 'first_name', 'last_name', 'role'] },
+        { model: User, as: 'BranchApprover', attributes: ['id', 'username', 'first_name', 'last_name', 'role'] },
         { model: User, as: 'Fulfiller', attributes: ['id', 'username', 'first_name', 'last_name', 'role'] }
       ]
     });
@@ -299,7 +785,6 @@ const getRequest = async (req, res) => {
       }
     }
 
-    // Also fetch audit logs for this request
     const auditLogs = await AuditLog.findAll({
       where: {
         details: { [Op.like]: `%${request.request_number}%` }
@@ -319,13 +804,9 @@ const getRequest = async (req, res) => {
 };
 
 /**
- * 4. Approve Stock Request
- * ONLY Super Admin can approve.
- * Requesters can NEVER approve their own or other requests.
- * Supports partial quantity approval and approval notes.
+ * 9. Approve Stock Request (Super Admin Final Authorization)
  */
 const approveRequest = async (req, res) => {
-  // Defensive server-side role check
   if (req.user.role !== 'super_admin') {
     return res.status(403).json({ message: 'Forbidden: ONLY Super Admin can approve stock requests.' });
   }
@@ -351,16 +832,18 @@ const approveRequest = async (req, res) => {
     }
 
     const currentStatus = (request.status || '').toUpperCase();
-    if (currentStatus !== 'PENDING') {
+    if (!['PENDING_SUPERADMIN', 'PENDING'].includes(currentStatus)) {
       await transaction.rollback();
-      return res.status(400).json({ message: `Cannot approve request with current status: '${request.status}'. Only PENDING requests can be approved.` });
+      return res.status(400).json({
+        message: `Cannot approve request with status '${request.status}'. Only PENDING_SUPERADMIN requests can be approved by HQ.`
+      });
     }
 
     const approvedQty = parseInt(quantity_approved, 10);
     if (!approvedQty || approvedQty < 1 || approvedQty > request.quantity_requested) {
       await transaction.rollback();
       return res.status(400).json({
-        message: `Approved quantity must be between 1 and the requested quantity (${request.quantity_requested}).`
+        message: `Approved quantity must be between 1 and requested quantity (${request.quantity_requested}).`
       });
     }
 
@@ -372,7 +855,6 @@ const approveRequest = async (req, res) => {
 
     // Check inventory availability
     if (request.source_branch_id) {
-      // Branch-to-branch request: check source branch inventory
       const sourceInv = await BranchProduct.findOne({
         where: { product_id: product.id, branch_id: request.source_branch_id },
         transaction
@@ -381,11 +863,10 @@ const approveRequest = async (req, res) => {
       if (sourceStock < approvedQty) {
         await transaction.rollback();
         return res.status(400).json({
-          message: `Insufficient stock at source branch '${request.SourceBranch?.name || request.source_branch_id}'. Only ${sourceStock} available.`
+          message: `Insufficient stock at source branch. Only ${sourceStock} available.`
         });
       }
     } else {
-      // Central Warehouse / HQ: check Product.available_quantity
       if (product.available_quantity < approvedQty) {
         await transaction.rollback();
         return res.status(400).json({
@@ -393,13 +874,11 @@ const approveRequest = async (req, res) => {
         });
       }
 
-      // Reserve warehouse stock
       product.available_quantity -= approvedQty;
       product.reserved_quantity += approvedQty;
       await product.save({ transaction });
     }
 
-    // Update request record
     const isPartial = approvedQty < request.quantity_requested;
     const newStatus = isPartial ? 'PARTIALLY_APPROVED' : 'APPROVED';
 
@@ -410,7 +889,6 @@ const approveRequest = async (req, res) => {
     request.approval_notes = approval_notes ? String(approval_notes).trim() : null;
     await request.save({ transaction });
 
-    // Create Audit Log
     await AuditLog.create({
       action: 'APPROVE_STOCK_REQUEST',
       user_id: req.user.id,
@@ -420,7 +898,6 @@ const approveRequest = async (req, res) => {
 
     await transaction.commit();
 
-    // In-app Notification to requester
     try {
       await Notification.create({
         userId: request.requested_by,
@@ -445,13 +922,9 @@ const approveRequest = async (req, res) => {
 };
 
 /**
- * 5. Reject Stock Request
- * ONLY Super Admin can reject.
- * Rejection reason is strictly mandatory.
- * Releases any reserved inventory.
+ * 10. Reject Stock Request (Super Admin Rejection)
  */
 const rejectRequest = async (req, res) => {
-  // Defensive server-side role check
   if (req.user.role !== 'super_admin') {
     return res.status(403).json({ message: 'Forbidden: ONLY Super Admin can reject stock requests.' });
   }
@@ -501,7 +974,6 @@ const rejectRequest = async (req, res) => {
     request.processed_at = new Date();
     await request.save({ transaction });
 
-    // Create Audit Log
     await AuditLog.create({
       action: 'REJECT_STOCK_REQUEST',
       user_id: req.user.id,
@@ -511,7 +983,6 @@ const rejectRequest = async (req, res) => {
 
     await transaction.commit();
 
-    // In-app Notification to requester
     try {
       await Notification.create({
         userId: request.requested_by,
@@ -536,8 +1007,7 @@ const rejectRequest = async (req, res) => {
 };
 
 /**
- * 6. Transition to Processing
- * Marks approved request as actively being prepared / packed / dispatched.
+ * 11. Transition to Processing
  */
 const processRequest = async (req, res) => {
   if (req.user.role !== 'super_admin') {
@@ -594,7 +1064,7 @@ const processRequest = async (req, res) => {
 };
 
 /**
- * 7. Schedule Request Delivery
+ * 12. Schedule Delivery
  */
 const scheduleRequest = async (req, res) => {
   if (req.user.role !== 'super_admin') {
@@ -624,7 +1094,7 @@ const scheduleRequest = async (req, res) => {
 
     request.scheduled_date = scheduled_date;
     request.scheduled_time = scheduled_time;
-    request.status = 'PROCESSING'; // keep standard or schedule
+    request.status = 'PROCESSING';
     await request.save();
 
     await AuditLog.create({
@@ -634,16 +1104,6 @@ const scheduleRequest = async (req, res) => {
       ip_address: req.ip || req.connection?.remoteAddress || null
     });
 
-    try {
-      await Notification.create({
-        userId: request.requested_by,
-        title: 'Stock Delivery Scheduled',
-        message: `Your stock request ${request.request_number} is scheduled for dispatch on ${scheduled_date} at ${scheduled_time}.`,
-        type: 'info',
-        link: '/products/my-requests'
-      });
-    } catch (e) {}
-
     return res.json({ message: 'Stock delivery scheduled successfully.', request });
   } catch (error) {
     console.error('[scheduleRequest Error]', error);
@@ -652,16 +1112,7 @@ const scheduleRequest = async (req, res) => {
 };
 
 /**
- * 8. Fulfill Stock Request
- * ONLY Super Admin can fulfill.
- * ATOMIC DATABASE TRANSACTION:
- * - Prevents duplicate fulfillment
- * - Validates source inventory
- * - Deducts from source (warehouse or branch)
- * - Increments destination branch inventory
- * - Records StockMovement for both source and destination
- * - Marks request as FULFILLED
- * - Records AuditLog and notifies requester
+ * 13. Fulfill Stock Request
  */
 const fulfillRequest = async (req, res) => {
   if (req.user.role !== 'super_admin') {
@@ -690,13 +1141,11 @@ const fulfillRequest = async (req, res) => {
 
     const currentStatus = (request.status || '').toUpperCase();
 
-    // 1. Check duplicate fulfillment
     if (['FULFILLED', 'COMPLETED'].includes(currentStatus)) {
       await transaction.rollback();
-      return res.status(400).json({ message: `Security violation: Stock request ${request.request_number} has ALREADY been fulfilled. Duplicate fulfillment is strictly blocked.` });
+      return res.status(400).json({ message: `Security violation: Stock request ${request.request_number} has ALREADY been fulfilled.` });
     }
 
-    // 2. Validate current status allows fulfillment
     if (!['APPROVED', 'PARTIALLY_APPROVED', 'PROCESSING', 'SCHEDULED'].includes(currentStatus)) {
       await transaction.rollback();
       return res.status(400).json({
@@ -719,7 +1168,6 @@ const fulfillRequest = async (req, res) => {
     const destBranch = request.DestinationBranch || request.Branch;
     let sourceName = 'HQ Central Warehouse';
 
-    // 3. Deduct from source branch or HQ Central Warehouse
     if (request.source_branch_id) {
       sourceName = request.SourceBranch?.name || `Branch #${request.source_branch_id}`;
       const sourceInv = await BranchProduct.findOne({
@@ -739,7 +1187,6 @@ const fulfillRequest = async (req, res) => {
       sourceInv.stock -= fulfillQty;
       await sourceInv.save({ transaction });
 
-      // Log source StockMovement
       await StockMovement.create({
         product_id: product.id,
         type: 'TRANSFER',
@@ -751,12 +1198,10 @@ const fulfillRequest = async (req, res) => {
       }, { transaction });
 
     } else {
-      // HQ Warehouse: deduct from reserved quantity
       const prevReserved = product.reserved_quantity;
       product.reserved_quantity = Math.max(0, product.reserved_quantity - fulfillQty);
       await product.save({ transaction });
 
-      // Log StockMovement for warehouse dispatch
       await StockMovement.create({
         product_id: product.id,
         type: 'TRANSFER',
@@ -768,8 +1213,7 @@ const fulfillRequest = async (req, res) => {
       }, { transaction });
     }
 
-    // 4. Add stock to destination branch inventory
-    const [destInv, created] = await BranchProduct.findOrCreate({
+    const [destInv] = await BranchProduct.findOrCreate({
       where: { product_id: product.id, branch_id: request.branch_id },
       defaults: {
         stock: 0,
@@ -784,7 +1228,6 @@ const fulfillRequest = async (req, res) => {
     destInv.stock = prevDestStock + fulfillQty;
     await destInv.save({ transaction });
 
-    // Log destination StockMovement
     await StockMovement.create({
       product_id: product.id,
       type: 'RESTOCK',
@@ -795,7 +1238,6 @@ const fulfillRequest = async (req, res) => {
       note: `Stock Requisition Fulfilled (${request.request_number}) from ${sourceName}`
     }, { transaction });
 
-    // 5. Update Request Record
     request.status = 'FULFILLED';
     request.fulfilled_by = req.user.id;
     request.fulfilled_at = new Date();
@@ -803,7 +1245,6 @@ const fulfillRequest = async (req, res) => {
     request.processed_at = new Date();
     await request.save({ transaction });
 
-    // 6. Record Audit Log
     await AuditLog.create({
       action: 'FULFILL_STOCK_REQUEST',
       user_id: req.user.id,
@@ -813,7 +1254,6 @@ const fulfillRequest = async (req, res) => {
 
     await transaction.commit();
 
-    // 7. Send In-app Notification to Requester
     try {
       await Notification.create({
         userId: request.requested_by,
@@ -840,9 +1280,7 @@ const fulfillRequest = async (req, res) => {
 };
 
 /**
- * 9. Cancel Stock Request
- * Authorized for: Requester or Branch Admin of that branch.
- * Allowed ONLY when status is PENDING.
+ * 14. Cancel Stock Request
  */
 const cancelRequest = async (req, res) => {
   const transaction = await sequelize.transaction();
@@ -856,14 +1294,13 @@ const cancelRequest = async (req, res) => {
     }
 
     const currentStatus = (request.status || '').toUpperCase();
-    if (currentStatus !== 'PENDING') {
+    if (!['PENDING', 'PENDING_ADMIN', 'PENDING_SUPERADMIN'].includes(currentStatus)) {
       await transaction.rollback();
       return res.status(400).json({
-        message: `Cannot cancel request with status '${request.status}'. Only PENDING requests can be cancelled by requester.`
+        message: `Cannot cancel request with status '${request.status}'. Only pending requests can be cancelled by requester.`
       });
     }
 
-    // Role check: requester or branch admin of branch
     if (req.user.role !== 'super_admin') {
       if (request.requested_by !== req.user.id && request.branch_id !== req.user.branch_id) {
         await transaction.rollback();
@@ -893,7 +1330,7 @@ const cancelRequest = async (req, res) => {
 };
 
 /**
- * 10. Get Audit Trail / Lifecycle History for a Request
+ * 15. Get Audit Trail
  */
 const getRequestAudit = async (req, res) => {
   try {
@@ -923,6 +1360,13 @@ const getRequestAudit = async (req, res) => {
 
 module.exports = {
   createRequest,
+  branchAdminApprove,
+  branchAdminReject,
+  batchBranchApprove,
+  batchBranchReject,
+  batchSuperAdminApprove,
+  batchSuperAdminReject,
+  getBranchSummary,
   listRequests,
   getRequest,
   approveRequest,
@@ -930,7 +1374,7 @@ module.exports = {
   processRequest,
   scheduleRequest,
   fulfillRequest,
-  completeRequest: fulfillRequest, // Backward-compatible alias
+  completeRequest: fulfillRequest,
   cancelRequest,
   getRequestAudit
 };

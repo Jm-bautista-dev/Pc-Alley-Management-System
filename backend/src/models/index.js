@@ -86,6 +86,7 @@ ProductRequest.belongsTo(Branch, { as: 'DestinationBranch', foreignKey: 'branch_
 ProductRequest.belongsTo(Branch, { as: 'SourceBranch', foreignKey: 'source_branch_id' });
 ProductRequest.belongsTo(User, { as: 'Requester', foreignKey: 'requested_by' });
 ProductRequest.belongsTo(User, { as: 'Approver', foreignKey: 'approved_by' });
+ProductRequest.belongsTo(User, { as: 'BranchApprover', foreignKey: 'branch_approved_by' });
 ProductRequest.belongsTo(User, { as: 'Fulfiller', foreignKey: 'fulfilled_by' });
 ProductRequest.belongsTo(User, { as: 'Receiver', foreignKey: 'received_by' });
 

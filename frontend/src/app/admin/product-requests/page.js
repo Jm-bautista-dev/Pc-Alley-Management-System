@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import { motion, AnimatePresence } from "framer-motion";
@@ -25,24 +25,40 @@ import {
   FileText,
   History,
   ArrowRight,
+  ArrowLeft,
   ShieldCheck,
   Check,
   X,
-  ExternalLink
+  Building2,
+  CheckSquare,
+  Square,
+  CheckCheck,
+  ChevronRight,
+  Sparkles,
+  Filter,
+  AlertTriangle
 } from "lucide-react";
 import { apiUrl } from "@/lib/api";
-import { showSuccess, showError } from "@/context/ModalContext";
+import { showSuccess, showError, showConfirm } from "@/context/ModalContext";
 
 export default function AdminProductRequestsPage() {
   const [requests, setRequests] = useState([]);
+  const [branchSummaries, setBranchSummaries] = useState([]);
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [summaryLoading, setSummaryLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("Pending");
-  const [selectedBranchFilter, setSelectedBranchFilter] = useState("");
+  const [selectedBranch, setSelectedBranch] = useState(null); // null = Cards View, Branch object = Drill-down List
   const [selectedPriorityFilter, setSelectedPriorityFilter] = useState("");
 
-  // Modals & Drawer States
+  // Batch Selection State
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [batchActionLoading, setBatchActionLoading] = useState(false);
+  const [showBatchRejectModal, setShowBatchRejectModal] = useState(false);
+  const [batchRejectReason, setBatchRejectReason] = useState("");
+
+  // Single Action Modals & Drawer States
   const [activeRequest, setActiveRequest] = useState(null);
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -60,7 +76,7 @@ export default function AdminProductRequestsPage() {
 
   const REJECTION_PRESETS = [
     "Insufficient stock at source branch / warehouse",
-    "Request quantity exceeds branch limit",
+    "Request quantity exceeds branch quota",
     "Duplicate request submitted",
     "Product unavailable or discontinued",
     "Request requires inventory correction / resubmission",
@@ -68,9 +84,30 @@ export default function AdminProductRequestsPage() {
   ];
 
   useEffect(() => {
-    fetchRequests();
-    fetchBranches();
+    fetchInitialData();
   }, []);
+
+  const fetchInitialData = async () => {
+    await Promise.all([fetchBranchSummary(), fetchRequests(), fetchBranches()]);
+  };
+
+  const fetchBranchSummary = async () => {
+    const token = localStorage.getItem("token");
+    try {
+      setSummaryLoading(true);
+      const res = await fetch(apiUrl("/api/product-requests/branch-summary"), {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setBranchSummaries(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error("Summary error:", err);
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
 
   const fetchRequests = async () => {
     const token = localStorage.getItem("token");
@@ -134,7 +171,7 @@ export default function AdminProductRequestsPage() {
     fetchAuditTrail(req.id);
   };
 
-  // ── Approval Handler ──
+  // ── Single Approval Handler ──
   const handleOpenApprove = (req) => {
     setActiveRequest(req);
     setApprovedQty(req.quantity_requested);
@@ -148,11 +185,12 @@ export default function AdminProductRequestsPage() {
       return;
     }
 
+    const isPendingAdmin = (activeRequest.status || "").toUpperCase() === "PENDING_ADMIN";
     const available = activeRequest.source_branch_id
-      ? 999 // checked server-side for source branch
+      ? 999
       : (activeRequest.Product?.available_quantity ?? 0);
 
-    if (!activeRequest.source_branch_id && available < approvedQty) {
+    if (!isPendingAdmin && !activeRequest.source_branch_id && available < approvedQty) {
       showError(`Insufficient warehouse stock. Only ${available} available.`);
       return;
     }
@@ -160,22 +198,32 @@ export default function AdminProductRequestsPage() {
     setActionLoading(true);
     const token = localStorage.getItem("token");
     try {
-      const res = await fetch(apiUrl(`/api/product-requests/${activeRequest.id}/approve`), {
+      const endpoint = isPendingAdmin
+        ? `/api/product-requests/${activeRequest.id}/branch-approve`
+        : `/api/product-requests/${activeRequest.id}/approve`;
+
+      const bodyData = isPendingAdmin
+        ? { approval_notes: approvalNotes }
+        : { quantity_approved: approvedQty, approval_notes: approvalNotes };
+
+      const res = await fetch(apiUrl(endpoint), {
         method: "PATCH",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-          quantity_approved: approvedQty,
-          approval_notes: approvalNotes
-        })
+        body: JSON.stringify(bodyData)
       });
       const data = await res.json();
       if (res.ok) {
-        showSuccess(`Stock Request ${activeRequest.request_number} approved successfully!`);
+        showSuccess(
+          isPendingAdmin
+            ? `Stock Request ${activeRequest.request_number} endorsed & forwarded to HQ!`
+            : `Stock Request ${activeRequest.request_number} approved successfully!`
+        );
         setShowApproveModal(false);
         fetchRequests();
+        fetchBranchSummary();
       } else {
         showError(data.message || "Approval failed.");
       }
@@ -186,7 +234,7 @@ export default function AdminProductRequestsPage() {
     }
   };
 
-  // ── Rejection Handler ──
+  // ── Single Rejection Handler ──
   const handleOpenReject = (req) => {
     setActiveRequest(req);
     setRejectionPreset(REJECTION_PRESETS[0]);
@@ -207,10 +255,15 @@ export default function AdminProductRequestsPage() {
       return;
     }
 
+    const isPendingAdmin = (activeRequest?.status || "").toUpperCase() === "PENDING_ADMIN";
     setActionLoading(true);
     const token = localStorage.getItem("token");
     try {
-      const res = await fetch(apiUrl(`/api/product-requests/${activeRequest.id}/reject`), {
+      const endpoint = isPendingAdmin
+        ? `/api/product-requests/${activeRequest.id}/branch-reject`
+        : `/api/product-requests/${activeRequest.id}/reject`;
+
+      const res = await fetch(apiUrl(endpoint), {
         method: "PATCH",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -223,6 +276,7 @@ export default function AdminProductRequestsPage() {
         showSuccess(`Stock Request ${activeRequest.request_number} rejected.`);
         setShowRejectModal(false);
         fetchRequests();
+        fetchBranchSummary();
       } else {
         showError(data.message || "Rejection failed.");
       }
@@ -233,7 +287,7 @@ export default function AdminProductRequestsPage() {
     }
   };
 
-  // ── Transition to Processing ──
+  // ── Single Transition to Processing ──
   const handleSetProcessing = async (req) => {
     setActionLoading(true);
     const token = localStorage.getItem("token");
@@ -246,6 +300,7 @@ export default function AdminProductRequestsPage() {
       if (res.ok) {
         showSuccess(`Request ${req.request_number} set to PROCESSING.`);
         fetchRequests();
+        fetchBranchSummary();
       } else {
         showError(data.message || "Failed to update status.");
       }
@@ -256,7 +311,7 @@ export default function AdminProductRequestsPage() {
     }
   };
 
-  // ── Fulfill Handler ──
+  // ── Single Fulfill Handler ──
   const handleOpenFulfill = (req) => {
     setActiveRequest(req);
     setShowFulfillModal(true);
@@ -272,9 +327,10 @@ export default function AdminProductRequestsPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        showSuccess(`Request ${activeRequest.request_number} fulfilled! ${data.transferred_quantity} units transferred.`);
+        showSuccess(`Request ${activeRequest.request_number} fulfilled! ${data.transferred_quantity} units transferred to ${activeRequest.Branch?.name}.`);
         setShowFulfillModal(false);
         fetchRequests();
+        fetchBranchSummary();
       } else {
         showError(data.message || "Fulfillment failed.");
       }
@@ -285,58 +341,192 @@ export default function AdminProductRequestsPage() {
     }
   };
 
-  // Stats calculation
-  const totalPending = requests.filter(r => (r.status || "").toUpperCase() === "PENDING").length;
+  // ── BATCH ACTIONS (Approve / Reject Selected) ──
+  const handleBatchApprove = async () => {
+    if (selectedIds.size === 0) return;
+    const selectedReqObjs = requests.filter(r => selectedIds.has(r.id));
+    const hasPendingAdmin = selectedReqObjs.some(r => (r.status || "").toUpperCase() === "PENDING_ADMIN");
+
+    const confirmed = await showConfirm(
+      "Batch Approve Stock Requests",
+      `Are you sure you want to approve ${selectedIds.size} stock request(s)?`,
+      { confirmLabel: `Approve ${selectedIds.size} Requests` }
+    );
+    if (!confirmed) return;
+
+    setBatchActionLoading(true);
+    const token = localStorage.getItem("token");
+    try {
+      const endpoint = hasPendingAdmin
+        ? "/api/product-requests/batch-branch-approve"
+        : "/api/product-requests/batch-approve";
+
+      const res = await fetch(apiUrl(endpoint), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          ids: Array.from(selectedIds),
+          approval_notes: hasPendingAdmin
+            ? "Endorsed via Batch Approval"
+            : "Authorized via Super Admin Batch Approval"
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showSuccess(data.message || "Batch approval successful!");
+        setSelectedIds(new Set());
+        fetchRequests();
+        fetchBranchSummary();
+      } else {
+        showError(data.message || "Batch approval encountered errors.");
+      }
+    } catch (err) {
+      showError("Network error during batch approval.");
+    } finally {
+      setBatchActionLoading(false);
+    }
+  };
+
+  const handleBatchRejectSubmit = async (e) => {
+    e.preventDefault();
+    if (selectedIds.size === 0) return;
+    if (!batchRejectReason.trim()) {
+      showError("Rejection reason is required.");
+      return;
+    }
+
+    const selectedReqObjs = requests.filter(r => selectedIds.has(r.id));
+    const hasPendingAdmin = selectedReqObjs.some(r => (r.status || "").toUpperCase() === "PENDING_ADMIN");
+
+    setBatchActionLoading(true);
+    const token = localStorage.getItem("token");
+    try {
+      const endpoint = hasPendingAdmin
+        ? "/api/product-requests/batch-branch-reject"
+        : "/api/product-requests/batch-reject";
+
+      const res = await fetch(apiUrl(endpoint), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          ids: Array.from(selectedIds),
+          reason: batchRejectReason.trim()
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showSuccess(data.message || "Batch reject completed.");
+        setShowBatchRejectModal(false);
+        setBatchRejectReason("");
+        setSelectedIds(new Set());
+        fetchRequests();
+        fetchBranchSummary();
+      } else {
+        showError(data.message || "Batch reject failed.");
+      }
+    } catch (err) {
+      showError("Network error during batch reject.");
+    } finally {
+      setBatchActionLoading(false);
+    }
+  };
+
+  // ── Checkbox Helpers for Drill-Down View ──
+  const branchRequests = useMemo(() => {
+    if (!selectedBranch) return [];
+    return requests.filter(r => r.branch_id === selectedBranch.branch_id || r.branch_id === selectedBranch.id);
+  }, [requests, selectedBranch]);
+
+  const pendingBranchRequests = useMemo(() => {
+    return branchRequests.filter(r => {
+      const s = (r.status || "").toUpperCase();
+      return s === "PENDING_SUPERADMIN" || s === "PENDING";
+    });
+  }, [branchRequests]);
+
+  const allPendingSelected = pendingBranchRequests.length > 0 && pendingBranchRequests.every(r => selectedIds.has(r.id));
+  const somePendingSelected = pendingBranchRequests.some(r => selectedIds.has(r.id));
+
+  const toggleSelectAll = () => {
+    if (allPendingSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(pendingBranchRequests.map(r => r.id)));
+    }
+  };
+
+  const toggleSelectOne = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  // Filtered requests within drill-down list
+  const filteredBranchRequests = useMemo(() => {
+    return branchRequests.filter(r => {
+      const statusUpper = (r.status || "").toUpperCase();
+      const reqNum = (r.request_number || "").toLowerCase();
+      const prodName = (r.Product?.name || "").toLowerCase();
+      const prodSku = (r.Product?.sku || "").toLowerCase();
+      const requesterName = (r.Requester?.username || "").toLowerCase();
+      const q = searchQuery.toLowerCase();
+
+      const matchesSearch =
+        !q ||
+        reqNum.includes(q) ||
+        prodName.includes(q) ||
+        prodSku.includes(q) ||
+        requesterName.includes(q);
+
+      const matchesPriority = !selectedPriorityFilter || r.priority === selectedPriorityFilter;
+
+      let matchesTab = true;
+      if (activeTab === "Pending") {
+        matchesTab = statusUpper === "PENDING_SUPERADMIN" || statusUpper === "PENDING";
+      } else if (activeTab === "Approved") {
+        matchesTab = statusUpper === "APPROVED" || statusUpper === "PARTIALLY_APPROVED";
+      } else if (activeTab === "Processing") {
+        matchesTab = statusUpper === "PROCESSING" || statusUpper === "SCHEDULED";
+      } else if (activeTab === "Fulfilled") {
+        matchesTab = statusUpper === "FULFILLED" || statusUpper === "COMPLETED";
+      } else if (activeTab === "Rejected") {
+        matchesTab = statusUpper === "REJECTED";
+      }
+
+      return matchesSearch && matchesPriority && matchesTab;
+    });
+  }, [branchRequests, searchQuery, selectedPriorityFilter, activeTab]);
+
+  // Overall Global KPI calculation
+  const totalPendingHQ = requests.filter(r => {
+    const s = (r.status || "").toUpperCase();
+    return s === "PENDING_SUPERADMIN" || s === "PENDING";
+  }).length;
   const totalApproved = requests.filter(r => ["APPROVED", "PARTIALLY_APPROVED"].includes((r.status || "").toUpperCase())).length;
   const totalProcessing = requests.filter(r => ["PROCESSING", "SCHEDULED"].includes((r.status || "").toUpperCase())).length;
   const totalFulfilled = requests.filter(r => ["FULFILLED", "COMPLETED"].includes((r.status || "").toUpperCase())).length;
-  const totalRejected = requests.filter(r => (r.status || "").toUpperCase() === "REJECTED").length;
+  const totalBranchesCount = branchSummaries.length;
 
   const tabs = ["Pending", "Approved", "Processing", "Fulfilled", "Rejected", "All"];
-
-  const filteredRequests = requests.filter(r => {
-    const statusUpper = (r.status || "").toUpperCase();
-    const reqNum = (r.request_number || "").toLowerCase();
-    const prodName = (r.Product?.name || "").toLowerCase();
-    const prodSku = (r.Product?.sku || "").toLowerCase();
-    const branchName = (r.Branch?.name || "").toLowerCase();
-    const requesterName = (r.Requester?.username || "").toLowerCase();
-    const q = searchQuery.toLowerCase();
-
-    const matchesSearch =
-      !q ||
-      reqNum.includes(q) ||
-      prodName.includes(q) ||
-      prodSku.includes(q) ||
-      branchName.includes(q) ||
-      requesterName.includes(q);
-
-    const matchesBranch = !selectedBranchFilter || String(r.branch_id) === String(selectedBranchFilter);
-    const matchesPriority = !selectedPriorityFilter || r.priority === selectedPriorityFilter;
-
-    let matchesTab = true;
-    if (activeTab === "Pending") {
-      matchesTab = statusUpper === "PENDING";
-    } else if (activeTab === "Approved") {
-      matchesTab = statusUpper === "APPROVED" || statusUpper === "PARTIALLY_APPROVED";
-    } else if (activeTab === "Processing") {
-      matchesTab = statusUpper === "PROCESSING" || statusUpper === "SCHEDULED";
-    } else if (activeTab === "Fulfilled") {
-      matchesTab = statusUpper === "FULFILLED" || statusUpper === "COMPLETED";
-    } else if (activeTab === "Rejected") {
-      matchesTab = statusUpper === "REJECTED";
-    }
-
-    return matchesSearch && matchesBranch && matchesPriority && matchesTab;
-  });
 
   const getStatusBadge = (status) => {
     const s = (status || "").toUpperCase();
     switch (s) {
+      case "PENDING_ADMIN":
+        return { label: "Pending Branch Admin", cls: "text-orange-400 border-orange-400/20 bg-orange-400/10", dot: "bg-orange-400" };
+      case "PENDING_SUPERADMIN":
       case "PENDING":
-        return { label: "Pending Review", cls: "text-amber-400 border-amber-400/20 bg-amber-400/10", dot: "bg-amber-400" };
+        return { label: "Pending HQ Review", cls: "text-amber-400 border-amber-400/20 bg-amber-400/10", dot: "bg-amber-400" };
       case "APPROVED":
-        return { label: "Approved", cls: "text-emerald-400 border-emerald-400/20 bg-emerald-400/10", dot: "bg-emerald-400" };
+        return { label: "Approved / Reserved", cls: "text-emerald-400 border-emerald-400/20 bg-emerald-400/10", dot: "bg-emerald-400" };
       case "PARTIALLY_APPROVED":
         return { label: "Partially Approved", cls: "text-lime-400 border-lime-400/20 bg-lime-400/10", dot: "bg-lime-400" };
       case "PROCESSING":
@@ -376,349 +566,588 @@ export default function AdminProductRequestsPage() {
         <div className="flex-1 overflow-y-auto custom-scrollbar relative z-10 bg-brand-bgbase text-main">
           <div className="responsive-container py-8">
 
-            {/* Header */}
-            <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            {/* Breadcrumb Navigation Header */}
+            <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                   <span className="text-[10px] font-black tracking-[3px] uppercase text-brand-neonblue bg-brand-neonblue/10 px-2.5 py-0.5 rounded">
                     Central Authority • Super Admin
                   </span>
-                  <span className="text-[10px] font-mono text-muted/60">Separation of Duties Enforced</span>
+                  {selectedBranch && (
+                    <>
+                      <span className="text-muted text-xs">/</span>
+                      <button
+                        onClick={() => { setSelectedBranch(null); setSelectedIds(new Set()); }}
+                        className="text-[10px] font-black uppercase tracking-wider text-muted hover:text-brand-neonblue transition-colors flex items-center gap-1"
+                      >
+                        <ArrowLeft size={11} /> All Branches
+                      </button>
+                      <span className="text-muted text-xs">/</span>
+                      <span className="text-[10px] font-black uppercase tracking-wider text-main bg-brand-surface border border-border px-2 py-0.5 rounded">
+                        {selectedBranch.branch_name || selectedBranch.name}
+                      </span>
+                    </>
+                  )}
                 </div>
-                <h1 className="text-2xl font-rajdhani font-black uppercase tracking-wide">
-                  STOCK REQUEST <span className="text-brand-neonblue">APPROVAL DASHBOARD</span>
+                <h1 className="text-2xl font-rajdhani font-black uppercase tracking-wide flex items-center gap-2">
+                  {selectedBranch ? (
+                    <>
+                      <span>{selectedBranch.branch_name || selectedBranch.name}</span>
+                      <span className="text-brand-neonblue">— STOCK REQUESTS</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>BRANCH RESTOCK</span>
+                      <span className="text-brand-neonblue">DASHBOARD</span>
+                    </>
+                  )}
                 </h1>
                 <p className="text-xs text-muted font-medium mt-1">
-                  Review branch requisitions, authorize full or partial quantities, reject unauthorized submissions, and atomically fulfill inventory movements.
+                  {selectedBranch
+                    ? `Reviewing requests submitted from ${selectedBranch.branch_name || selectedBranch.name}. Authorize batch or single approvals and fulfill warehouse stock.`
+                    : "Select a branch below to review its restock requests, endorse quantities, and fulfill inventory."
+                  }
                 </p>
               </div>
-              <motion.button
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                onClick={fetchRequests}
-                className="btn-ghost py-2.5 px-4 h-auto text-[10px] font-black tracking-widest uppercase flex items-center gap-1.5"
-              >
-                <RotateCcw size={13} className={loading ? "animate-spin" : ""} /> Refresh Data
-              </motion.button>
+
+              <div className="flex items-center gap-2">
+                {selectedBranch && (
+                  <motion.button
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => { setSelectedBranch(null); setSelectedIds(new Set()); }}
+                    className="btn-ghost py-2.5 px-4 h-auto text-[10px] font-black tracking-widest uppercase flex items-center gap-1.5"
+                  >
+                    <ArrowLeft size={13} /> Back to Branches
+                  </motion.button>
+                )}
+                <motion.button
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={fetchInitialData}
+                  className="btn-ghost py-2.5 px-4 h-auto text-[10px] font-black tracking-widest uppercase flex items-center gap-1.5"
+                >
+                  <RotateCcw size={13} className={loading || summaryLoading ? "animate-spin" : ""} /> Refresh
+                </motion.button>
+              </div>
             </div>
 
-            {/* KPI Metrics Dashboard */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-              {/* Pending */}
-              <div
-                onClick={() => setActiveTab("Pending")}
-                className={`cursor-pointer bg-brand-surface border p-5 rounded-2xl transition-all shadow-sm ${
-                  activeTab === "Pending" ? "border-amber-400/50 ring-1 ring-amber-400/30" : "border-border hover:border-amber-400/30"
-                }`}
-              >
+            {/* KPI Metrics Strip */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+              <div className="bg-brand-surface border border-border p-5 rounded-2xl shadow-sm">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-[10px] font-black text-main/40 uppercase tracking-widest">Pending Review</p>
-                  <div className="w-8 h-8 rounded-lg bg-amber-400/10 flex items-center justify-center text-amber-400">
+                  <p className="text-[10px] font-black text-main/40 uppercase tracking-widest">Active Branches</p>
+                  <div className="w-8 h-8 rounded-lg bg-brand-neonblue/10 flex items-center justify-center text-brand-neonblue">
+                    <Building2 size={16} />
+                  </div>
+                </div>
+                <p className="text-3xl font-rajdhani font-black text-main">{totalBranchesCount}</p>
+                <p className="text-[10px] text-muted mt-1">Branch locations registered</p>
+              </div>
+
+              <div className="bg-brand-surface border border-amber-400/30 p-5 rounded-2xl shadow-sm bg-gradient-to-br from-amber-400/5 to-transparent">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Awaiting HQ Action</p>
+                  <div className="w-8 h-8 rounded-lg bg-amber-400/15 flex items-center justify-center text-amber-500">
                     <ClipboardList size={16} />
                   </div>
                 </div>
-                <p className="text-3xl font-rajdhani font-black text-amber-400">{totalPending}</p>
-                <p className="text-[10px] text-muted mt-1">Requires Super Admin Action</p>
+                <p className="text-3xl font-rajdhani font-black text-amber-500">{totalPendingHQ}</p>
+                <p className="text-[10px] text-muted mt-1">Pending Super Admin review</p>
               </div>
 
-              {/* Approved */}
-              <div
-                onClick={() => setActiveTab("Approved")}
-                className={`cursor-pointer bg-brand-surface border p-5 rounded-2xl transition-all shadow-sm ${
-                  activeTab === "Approved" ? "border-emerald-400/50 ring-1 ring-emerald-400/30" : "border-border hover:border-emerald-400/30"
-                }`}
-              >
+              <div className="bg-brand-surface border border-border p-5 rounded-2xl shadow-sm">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-[10px] font-black text-main/40 uppercase tracking-widest">Approved / Reserved</p>
+                  <p className="text-[10px] font-black text-main/40 uppercase tracking-widest">Authorized / Reserved</p>
                   <div className="w-8 h-8 rounded-lg bg-emerald-400/10 flex items-center justify-center text-emerald-400">
                     <Box size={16} />
                   </div>
                 </div>
                 <p className="text-3xl font-rajdhani font-black text-emerald-400">{totalApproved}</p>
-                <p className="text-[10px] text-muted mt-1">Authorized for Fulfillment</p>
+                <p className="text-[10px] text-muted mt-1">Ready for fulfillment</p>
               </div>
 
-              {/* Processing */}
-              <div
-                onClick={() => setActiveTab("Processing")}
-                className={`cursor-pointer bg-brand-surface border p-5 rounded-2xl transition-all shadow-sm ${
-                  activeTab === "Processing" ? "border-cyan-400/50 ring-1 ring-cyan-400/30" : "border-border hover:border-cyan-400/30"
-                }`}
-              >
+              <div className="bg-brand-surface border border-border p-5 rounded-2xl shadow-sm">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-[10px] font-black text-main/40 uppercase tracking-widest">In Processing</p>
-                  <div className="w-8 h-8 rounded-lg bg-cyan-400/10 flex items-center justify-center text-cyan-400">
-                    <Truck size={16} />
-                  </div>
-                </div>
-                <p className="text-3xl font-rajdhani font-black text-cyan-400">{totalProcessing}</p>
-                <p className="text-[10px] text-muted mt-1">Preparing / In Transit</p>
-              </div>
-
-              {/* Fulfilled */}
-              <div
-                onClick={() => setActiveTab("Fulfilled")}
-                className={`cursor-pointer bg-brand-surface border p-5 rounded-2xl transition-all shadow-sm ${
-                  activeTab === "Fulfilled" ? "border-teal-400/50 ring-1 ring-teal-400/30" : "border-border hover:border-teal-400/30"
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-[10px] font-black text-main/40 uppercase tracking-widest">Fulfilled</p>
+                  <p className="text-[10px] font-black text-main/40 uppercase tracking-widest">Fulfilled Transferred</p>
                   <div className="w-8 h-8 rounded-lg bg-teal-400/10 flex items-center justify-center text-teal-400">
                     <CheckCircle2 size={16} />
                   </div>
                 </div>
                 <p className="text-3xl font-rajdhani font-black text-teal-400">{totalFulfilled}</p>
-                <p className="text-[10px] text-muted mt-1">Inventory Transferred</p>
-              </div>
-
-              {/* Rejected */}
-              <div
-                onClick={() => setActiveTab("Rejected")}
-                className={`cursor-pointer bg-brand-surface border p-5 rounded-2xl transition-all shadow-sm ${
-                  activeTab === "Rejected" ? "border-rose-400/50 ring-1 ring-rose-400/30" : "border-border hover:border-rose-400/30"
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-[10px] font-black text-main/40 uppercase tracking-widest">Rejected</p>
-                  <div className="w-8 h-8 rounded-lg bg-rose-400/10 flex items-center justify-center text-rose-400">
-                    <XCircle size={16} />
-                  </div>
-                </div>
-                <p className="text-3xl font-rajdhani font-black text-rose-400">{totalRejected}</p>
-                <p className="text-[10px] text-muted mt-1">Reason Recorded</p>
+                <p className="text-[10px] text-muted mt-1">Completed stock transfers</p>
               </div>
             </div>
 
-            {/* Filter Bar */}
-            <div className="bg-brand-surface border border-border rounded-2xl p-5 mb-6 flex flex-col lg:flex-row gap-4 items-center justify-between shadow-sm">
-              <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto flex-1">
-                {/* Search */}
-                <div className="relative group flex-1">
-                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-main/30 group-focus-within:text-brand-neonblue transition-colors">
-                    <Search size={16} />
-                  </div>
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search by Request #, SKU, Product, or Requester..."
-                    className="w-full bg-brand-bgbase border border-border rounded-xl py-2.5 pl-10 pr-4 text-xs font-medium text-main focus:outline-none focus:border-brand-neonblue/40 transition-all shadow-sm"
-                  />
+            {/* ═══════════════════════════════════════════════════════════════════ */}
+            {/* VIEW 1: BRANCH CARDS OVERVIEW (When no branch is selected)         */}
+            {/* ═══════════════════════════════════════════════════════════════════ */}
+            {!selectedBranch && (
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-sm font-rajdhani font-bold uppercase tracking-wider text-main flex items-center gap-2">
+                    <Building2 size={16} className="text-brand-neonblue" /> Branches Overview
+                  </h2>
+                  <span className="text-xs text-muted">Click a branch to view its stock request queue</span>
                 </div>
 
-                {/* Branch filter */}
-                <select
-                  value={selectedBranchFilter}
-                  onChange={(e) => setSelectedBranchFilter(e.target.value)}
-                  className="bg-brand-bgbase border border-border rounded-xl py-2.5 px-3 text-xs font-medium text-main focus:outline-none focus:border-brand-neonblue/40 transition-colors"
-                >
-                  <option value="">All Branches</option>
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
+                {summaryLoading ? (
+                  <div className="flex flex-col items-center justify-center py-20">
+                    <div className="w-10 h-10 border-2 border-border border-t-brand-neonblue rounded-full animate-spin mb-4" />
+                    <p className="text-xs font-black uppercase tracking-widest text-muted">Loading branch queues...</p>
+                  </div>
+                ) : branchSummaries.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-20 bg-brand-surface border border-dashed border-border rounded-2xl">
+                    <Building2 size={40} className="text-main/20 mb-3" />
+                    <h3 className="text-sm font-black uppercase tracking-wider text-main">No Branches Registered</h3>
+                    <p className="text-xs text-muted mt-1">Add branches in the Admin section to view restock requests.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                    {branchSummaries.map((b) => {
+                      const hasPending = b.pending_superadmin_count > 0;
+                      return (
+                        <motion.div
+                          key={b.branch_id}
+                          whileHover={{ y: -4, transition: { duration: 0.2 } }}
+                          onClick={() => {
+                            setSelectedBranch(b);
+                            setSelectedIds(new Set());
+                            setActiveTab("Pending");
+                          }}
+                          className={`cursor-pointer bg-brand-surface border rounded-3xl p-6 shadow-sm transition-all relative overflow-hidden flex flex-col justify-between ${
+                            hasPending
+                              ? "border-amber-400/40 hover:border-amber-400 ring-1 ring-amber-400/20"
+                              : "border-border hover:border-brand-neonblue/40"
+                          }`}
+                        >
+                          {/* Top Glow Accent for pending */}
+                          {hasPending && (
+                            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-500" />
+                          )}
 
-                {/* Priority filter */}
-                <select
-                  value={selectedPriorityFilter}
-                  onChange={(e) => setSelectedPriorityFilter(e.target.value)}
-                  className="bg-brand-bgbase border border-border rounded-xl py-2.5 px-3 text-xs font-medium text-main focus:outline-none focus:border-brand-neonblue/40 transition-colors"
-                >
-                  <option value="">All Priorities</option>
-                  <option value="urgent">Urgent</option>
-                  <option value="normal">Normal</option>
-                  <option value="low">Low</option>
-                </select>
-              </div>
+                          <div>
+                            {/* Branch Title & Location */}
+                            <div className="flex items-start justify-between gap-3 mb-4">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <h3 className="text-lg font-rajdhani font-black text-main uppercase tracking-wide truncate">
+                                    {b.branch_name}
+                                  </h3>
+                                  {b.has_urgent && (
+                                    <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-rose-500/10 border border-rose-500/20 text-rose-400 animate-pulse">
+                                      URGENT
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-muted flex items-center gap-1.5 mt-0.5">
+                                  <MapPin size={12} className="text-brand-neonblue shrink-0" />
+                                  <span className="truncate">{b.branch_location || "Location unset"}</span>
+                                </p>
+                              </div>
 
-              {/* Status Tabs */}
-              <div className="flex gap-1 overflow-x-auto no-scrollbar w-full lg:w-auto border-t lg:border-t-0 pt-3 lg:pt-0 border-border/40">
-                {tabs.map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    className={`h-9 px-3.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
-                      activeTab === tab
-                        ? "bg-brand-neonblue text-white dark:text-brand-navy shadow-sm"
-                        : "text-muted hover:text-main hover:bg-brand-bgbase"
-                    }`}
-                  >
-                    {tab}
-                  </button>
-                ))}
-              </div>
-            </div>
+                              {/* Pending Badge */}
+                              <div className={`shrink-0 px-3 py-1.5 rounded-xl border text-center ${
+                                hasPending
+                                  ? "bg-amber-400/15 border-amber-400/30 text-amber-500 font-black"
+                                  : "bg-brand-bgbase border-border text-muted font-bold"
+                              }`}>
+                                <span className="text-base font-rajdhani font-black block leading-none">
+                                  {b.pending_superadmin_count}
+                                </span>
+                                <span className="text-[8px] uppercase tracking-widest block mt-0.5">
+                                  Pending
+                                </span>
+                              </div>
+                            </div>
 
-            {/* Content List */}
-            {loading ? (
-              <div className="flex flex-col items-center justify-center py-20">
-                <div className="w-10 h-10 border-2 border-border border-t-brand-neonblue rounded-full animate-spin mb-4" />
-                <p className="text-xs font-black uppercase tracking-widest text-muted">Retrieving stock requests...</p>
-              </div>
-            ) : filteredRequests.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 bg-brand-surface border border-dashed border-border rounded-2xl">
-                <ClipboardList size={40} className="text-main/15 mb-3" />
-                <h3 className="text-sm font-black uppercase tracking-wider text-main">No Stock Requests Found</h3>
-                <p className="text-xs text-muted mt-1">Try adjusting your filters or search keywords.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-3">
-                {filteredRequests.map((req) => {
-                  const statusInfo = getStatusBadge(req.status);
-                  const statusUpper = (req.status || "").toUpperCase();
-                  const isPending = statusUpper === "PENDING";
-                  const isApproved = statusUpper === "APPROVED" || statusUpper === "PARTIALLY_APPROVED";
-                  const isProcessing = statusUpper === "PROCESSING" || statusUpper === "SCHEDULED";
-                  const isFulfilled = statusUpper === "FULFILLED" || statusUpper === "COMPLETED";
-                  const isRejected = statusUpper === "REJECTED";
+                            {/* Metrics Grid */}
+                            <div className="grid grid-cols-3 gap-2.5 py-3 border-y border-border/40 text-center my-3 bg-brand-bgbase/40 rounded-xl">
+                              <div>
+                                <span className="text-[9px] font-black uppercase text-muted tracking-wider block">Units Pending</span>
+                                <span className="text-sm font-rajdhani font-black text-main">
+                                  {b.total_pending_units || 0}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] font-black uppercase text-muted tracking-wider block">Approved</span>
+                                <span className="text-sm font-rajdhani font-black text-emerald-400">
+                                  {b.approved_count || 0}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] font-black uppercase text-muted tracking-wider block">Fulfilled</span>
+                                <span className="text-sm font-rajdhani font-black text-teal-400">
+                                  {b.fulfilled_count || 0}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
 
-                  return (
-                    <motion.div
-                      key={req.id}
-                      layoutId={`admin-req-${req.id}`}
-                      className="bg-brand-surface border border-border rounded-2xl p-5 shadow-sm hover:border-brand-neonblue/20 transition-all flex flex-col xl:flex-row gap-5 items-start xl:items-center justify-between"
+                          {/* Footer action */}
+                          <div className="flex items-center justify-between pt-3 mt-1 text-xs">
+                            <span className="text-[10px] text-muted font-medium">
+                              {b.total_requests} total request{b.total_requests === 1 ? '' : 's'}
+                            </span>
+                            <div className="flex items-center gap-1 text-brand-neonblue font-bold text-xs group-hover:translate-x-1 transition-transform">
+                              <span>Open Request List</span>
+                              <ChevronRight size={14} />
+                            </div>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ═══════════════════════════════════════════════════════════════════ */}
+            {/* VIEW 2: DRILL-DOWN BRANCH REQUESTS LIST (When a branch is selected)*/}
+            {/* ═══════════════════════════════════════════════════════════════════ */}
+            {selectedBranch && (
+              <div>
+                {/* Branch Info Header Card */}
+                <div className="bg-brand-surface border border-border rounded-3xl p-6 mb-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-brand-neonblue/10 border border-brand-neonblue/20 flex items-center justify-center text-brand-neonblue">
+                      <Building2 size={24} />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-rajdhani font-black uppercase text-main">
+                        {selectedBranch.branch_name || selectedBranch.name}
+                      </h2>
+                      <p className="text-xs text-muted flex items-center gap-1.5 mt-0.5">
+                        <MapPin size={12} className="text-brand-neonblue" />
+                        <span>{selectedBranch.branch_location || selectedBranch.location || "Branch Location"}</span>
+                        {selectedBranch.phone && <span>• {selectedBranch.phone}</span>}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 self-stretch md:self-auto justify-end">
+                    <div className="px-4 py-2 bg-amber-400/10 border border-amber-400/20 rounded-2xl text-center">
+                      <span className="text-lg font-rajdhani font-black text-amber-500 block leading-none">
+                        {pendingBranchRequests.length}
+                      </span>
+                      <span className="text-[9px] font-black uppercase tracking-wider text-amber-500/80">
+                        Pending HQ Review
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Filter and Tab Bar */}
+                <div className="bg-brand-surface border border-border rounded-2xl p-4 mb-4 flex flex-col lg:flex-row gap-4 items-center justify-between shadow-sm">
+                  <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto flex-1">
+                    {/* Search */}
+                    <div className="relative group flex-1">
+                      <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-main/30 group-focus-within:text-brand-neonblue transition-colors">
+                        <Search size={16} />
+                      </div>
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search product, SKU, request #..."
+                        className="w-full bg-brand-bgbase border border-border rounded-xl py-2 pl-10 pr-4 text-xs font-medium text-main focus:outline-none focus:border-brand-neonblue/40 transition-all"
+                      />
+                    </div>
+
+                    {/* Priority filter */}
+                    <select
+                      value={selectedPriorityFilter}
+                      onChange={(e) => setSelectedPriorityFilter(e.target.value)}
+                      className="bg-brand-bgbase border border-border rounded-xl py-2 px-3 text-xs font-medium text-main focus:outline-none focus:border-brand-neonblue/40 transition-colors"
                     >
-                      {/* Left: Ref, Destination, Requester */}
-                      <div className="flex flex-col gap-1.5 min-w-[220px]">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs font-black text-brand-neonblue bg-brand-neonblue/10 px-2 py-0.5 rounded">
-                            {req.request_number}
-                          </span>
-                          <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded border ${getPriorityBadge(req.priority)}`}>
-                            {req.priority}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-xs font-bold text-main mt-1">
-                          <MapPin size={13} className="text-brand-neonblue shrink-0" />
-                          <span>To: {req.Branch?.name || "Branch"}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-[11px] text-muted">
-                          <User size={12} className="shrink-0" />
-                          <span>Req by: {req.Requester?.username} ({req.Requester?.role || "Staff"})</span>
-                        </div>
+                      <option value="">All Priorities</option>
+                      <option value="urgent">Urgent</option>
+                      <option value="normal">Normal</option>
+                      <option value="low">Low</option>
+                    </select>
+                  </div>
+
+                  {/* Status Tabs */}
+                  <div className="flex gap-1 overflow-x-auto no-scrollbar w-full lg:w-auto border-t lg:border-t-0 pt-3 lg:pt-0 border-border/40">
+                    {tabs.map((tab) => (
+                      <button
+                        key={tab}
+                        onClick={() => setActiveTab(tab)}
+                        className={`h-8 px-3 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+                          activeTab === tab
+                            ? "bg-brand-neonblue text-white dark:text-brand-navy shadow-sm"
+                            : "text-muted hover:text-main hover:bg-brand-bgbase"
+                        }`}
+                      >
+                        {tab}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ── BATCH ACTION BAR (Shown when 1 or more items are selected) ── */}
+                <AnimatePresence>
+                  {selectedIds.size > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="mb-4 flex items-center justify-between gap-4 px-5 py-3 bg-brand-neonblue/10 border border-brand-neonblue/30 rounded-2xl shadow-sm"
+                    >
+                      <div className="flex items-center gap-3">
+                        <CheckSquare size={18} className="text-brand-neonblue" />
+                        <span className="text-xs font-bold text-main">
+                          <strong className="text-brand-neonblue font-black">{selectedIds.size}</strong> request{selectedIds.size > 1 ? 's' : ''} selected
+                        </span>
                       </div>
 
-                      {/* Middle: Product & Source Stock */}
-                      <div className="flex flex-col gap-1 flex-1 min-w-[260px]">
-                        <h4 className="text-sm font-rajdhani font-black text-main leading-snug">
-                          {req.Product?.name || "Product"}
-                        </h4>
-                        <div className="flex items-center gap-2 text-[11px] text-muted font-mono">
-                          <span>SKU: {req.Product?.sku || "N/A"}</span>
-                          <span>•</span>
-                          <span>Source: {req.SourceBranch ? req.SourceBranch.name : "HQ Central Warehouse"}</span>
-                        </div>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-[10px] font-bold text-muted uppercase">Warehouse Available:</span>
-                          <span className={`text-xs font-black ${(req.Product?.available_quantity || 0) < req.quantity_requested ? "text-rose-400" : "text-emerald-400"}`}>
-                            {req.Product?.available_quantity ?? 0} in stock
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Quantities Column */}
-                      <div className="text-left xl:text-center min-w-[140px]">
-                        <div className="text-[10px] uppercase font-black text-muted tracking-wider mb-0.5">Quantities</div>
-                        <div className="text-xs font-bold text-main">
-                          Requested: <span className="font-black text-sm">{req.quantity_requested}</span>
-                        </div>
-                        {req.quantity_approved !== null && (
-                          <div className="text-[11px] font-bold text-brand-neonblue">
-                            Approved: {req.quantity_approved}
-                          </div>
-                        )}
-                        {req.quantity_fulfilled !== null && (
-                          <div className="text-[11px] font-bold text-teal-400">
-                            Fulfilled: {req.quantity_fulfilled}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Status and Actions Column */}
-                      <div className="flex flex-col sm:flex-row xl:flex-col items-start xl:items-end gap-2.5 w-full xl:w-auto shrink-0">
-                        {/* Status Badge */}
-                        <div className={`text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full border flex items-center gap-1.5 ${statusInfo.cls}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dot}`} />
-                          {statusInfo.label}
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex flex-wrap gap-1.5 mt-1">
-                          {/* Details Drawer Button */}
-                          <button
-                            onClick={() => handleOpenDetails(req)}
-                            className="text-[10px] font-black tracking-wider uppercase px-2.5 py-1.5 rounded-lg border border-border bg-brand-bgbase hover:border-brand-neonblue/40 transition-colors flex items-center gap-1 text-main"
-                          >
-                            <FileText size={12} /> Details
-                          </button>
-
-                          {/* PENDING Actions: Approve / Reject */}
-                          {isPending && (
-                            <>
-                              <button
-                                onClick={() => handleOpenApprove(req)}
-                                className="text-[10px] font-black tracking-wider uppercase px-3 py-1.5 rounded-lg bg-brand-neonblue text-white dark:text-brand-navy hover:opacity-90 transition-opacity flex items-center gap-1 shadow-sm"
-                              >
-                                <ThumbsUp size={12} /> Approve
-                              </button>
-                              <button
-                                onClick={() => handleOpenReject(req)}
-                                className="text-[10px] font-black tracking-wider uppercase px-2.5 py-1.5 rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-colors flex items-center gap-1"
-                              >
-                                <ThumbsDown size={12} /> Reject
-                              </button>
-                            </>
-                          )}
-
-                          {/* APPROVED Actions: Process / Fulfill */}
-                          {isApproved && (
-                            <>
-                              <button
-                                onClick={() => handleSetProcessing(req)}
-                                className="text-[10px] font-black tracking-wider uppercase px-2.5 py-1.5 rounded-lg border border-cyan-500/20 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 transition-colors flex items-center gap-1"
-                              >
-                                <Truck size={12} /> Process
-                              </button>
-                              <button
-                                onClick={() => handleOpenFulfill(req)}
-                                className="text-[10px] font-black tracking-wider uppercase px-3 py-1.5 rounded-lg bg-teal-500 text-white dark:text-brand-navy hover:opacity-90 transition-opacity flex items-center gap-1 shadow-sm"
-                              >
-                                <CheckCircle2 size={12} /> Fulfill
-                              </button>
-                              <button
-                                onClick={() => handleOpenReject(req)}
-                                className="text-[10px] font-black tracking-wider uppercase px-2.5 py-1.5 rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-colors"
-                              >
-                                Reject
-                              </button>
-                            </>
-                          )}
-
-                          {/* PROCESSING Actions: Fulfill */}
-                          {isProcessing && (
-                            <>
-                              <button
-                                onClick={() => handleOpenFulfill(req)}
-                                className="text-[10px] font-black tracking-wider uppercase px-3 py-1.5 rounded-lg bg-teal-500 text-white dark:text-brand-navy hover:opacity-90 transition-opacity flex items-center gap-1 shadow-sm"
-                              >
-                                <CheckCircle2 size={12} /> Complete Fulfillment
-                              </button>
-                              <button
-                                onClick={() => handleOpenReject(req)}
-                                className="text-[10px] font-black tracking-wider uppercase px-2.5 py-1.5 rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-colors"
-                              >
-                                Reject
-                              </button>
-                            </>
-                          )}
-                        </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={handleBatchApprove}
+                          disabled={batchActionLoading}
+                          className="h-8 px-4 rounded-xl bg-emerald-500 text-white text-xs font-bold hover:bg-emerald-600 disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+                        >
+                          <CheckCheck size={14} /> Approve Selected
+                        </button>
+                        <button
+                          onClick={() => setShowBatchRejectModal(true)}
+                          disabled={batchActionLoading}
+                          className="h-8 px-4 rounded-xl bg-rose-500 text-white text-xs font-bold hover:bg-rose-600 disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+                        >
+                          <XCircle size={14} /> Reject Selected
+                        </button>
+                        <button
+                          onClick={() => setSelectedIds(new Set())}
+                          className="h-8 px-3 rounded-xl border border-border text-xs font-medium text-muted hover:text-main"
+                        >
+                          Clear
+                        </button>
                       </div>
                     </motion.div>
-                  );
-                })}
+                  )}
+                </AnimatePresence>
+
+                {/* Requests Table */}
+                <div className="bg-brand-surface border border-border rounded-3xl overflow-hidden shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="border-b border-border bg-brand-bgbase/60 text-[10px] font-black text-muted uppercase tracking-wider">
+                          {/* Checkbox Column for Select All */}
+                          <th className="py-3.5 px-4 w-12 text-center">
+                            <button
+                              onClick={toggleSelectAll}
+                              title={allPendingSelected ? "Deselect all pending" : "Select all pending"}
+                              className="text-muted hover:text-main transition-colors"
+                            >
+                              {allPendingSelected ? (
+                                <CheckSquare size={16} className="text-brand-neonblue" />
+                              ) : somePendingSelected ? (
+                                <CheckSquare size={16} className="text-brand-neonblue/50" />
+                              ) : (
+                                <Square size={16} />
+                              )}
+                            </button>
+                          </th>
+                          <th className="py-3.5 px-4">Request # & Date</th>
+                          <th className="py-3.5 px-4">Product Details</th>
+                          <th className="py-3.5 px-4">Requester / Endorser</th>
+                          <th className="py-3.5 px-4 text-center">Qty Requested</th>
+                          <th className="py-3.5 px-4">Stock Available</th>
+                          <th className="py-3.5 px-4">Status</th>
+                          <th className="py-3.5 px-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {loading ? (
+                          <tr>
+                            <td colSpan="8" className="py-16 text-center text-xs font-bold text-muted animate-pulse">
+                              Loading branch requests...
+                            </td>
+                          </tr>
+                        ) : filteredBranchRequests.length === 0 ? (
+                          <tr>
+                            <td colSpan="8" className="py-16 text-center">
+                              <ClipboardList size={32} className="mx-auto text-main/20 mb-2" />
+                              <p className="text-sm font-bold text-main">No Stock Requests in this view</p>
+                              <p className="text-xs text-muted mt-0.5">Try selecting another tab or clearing search filters.</p>
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredBranchRequests.map((req) => {
+                            const statusInfo = getStatusBadge(req.status);
+                            const statusUpper = (req.status || "").toUpperCase();
+                            const isPendingHQ = statusUpper === "PENDING_SUPERADMIN" || statusUpper === "PENDING";
+                            const isApproved = statusUpper === "APPROVED" || statusUpper === "PARTIALLY_APPROVED";
+                            const isProcessing = statusUpper === "PROCESSING" || statusUpper === "SCHEDULED";
+                            const isSelected = selectedIds.has(req.id);
+                            const warehouseAvailable = req.Product?.available_quantity ?? 0;
+                            const isStockSufficient = warehouseAvailable >= req.quantity_requested;
+
+                            return (
+                              <tr
+                                key={req.id}
+                                className={`transition-colors ${
+                                  isSelected ? "bg-brand-neonblue/5" : "hover:bg-brand-bgbase/40"
+                                }`}
+                              >
+                                {/* Checkbox */}
+                                <td className="py-4 px-4 text-center">
+                                  {isPendingHQ ? (
+                                    <button
+                                      onClick={() => toggleSelectOne(req.id)}
+                                      className="text-muted hover:text-brand-neonblue transition-colors"
+                                    >
+                                      {isSelected ? (
+                                        <CheckSquare size={16} className="text-brand-neonblue" />
+                                      ) : (
+                                        <Square size={16} />
+                                      )}
+                                    </button>
+                                  ) : (
+                                    <span className="text-muted/30">—</span>
+                                  )}
+                                </td>
+
+                                {/* Request # & Date */}
+                                <td className="py-4 px-4">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-mono text-xs font-black text-brand-neonblue">
+                                      {req.request_number}
+                                    </span>
+                                    <span className={`text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border ${getPriorityBadge(req.priority)}`}>
+                                      {req.priority}
+                                    </span>
+                                  </div>
+                                  <div className="text-[10px] text-muted mt-0.5">
+                                    {new Date(req.createdAt).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}
+                                  </div>
+                                </td>
+
+                                {/* Product Details */}
+                                <td className="py-4 px-4 max-w-[220px]">
+                                  <p className="text-xs font-black text-main truncate" title={req.Product?.name}>
+                                    {req.Product?.name}
+                                  </p>
+                                  <p className="text-[10px] text-muted font-mono">
+                                    SKU: {req.Product?.sku || "N/A"}
+                                  </p>
+                                  {req.notes && (
+                                    <p className="text-[10px] text-muted/70 italic truncate mt-0.5" title={req.notes}>
+                                      "{req.notes}"
+                                    </p>
+                                  )}
+                                </td>
+
+                                {/* Requester / Endorser */}
+                                <td className="py-4 px-4 text-xs">
+                                  <div className="text-main font-bold">
+                                    @{req.Requester?.username} <span className="text-[10px] text-muted">({req.Requester?.role === 'employee' ? 'Staff' : 'Admin'})</span>
+                                  </div>
+                                  {req.BranchApprover && (
+                                    <div className="text-[10px] text-emerald-500 font-medium flex items-center gap-1 mt-0.5">
+                                      <ShieldCheck size={11} /> Endorsed by @{req.BranchApprover.username}
+                                    </div>
+                                  )}
+                                </td>
+
+                                {/* Qty Requested / Approved */}
+                                <td className="py-4 px-4 text-center">
+                                  <span className="text-sm font-rajdhani font-black text-main">
+                                    {req.quantity_requested}
+                                  </span>
+                                  {req.quantity_approved && req.quantity_approved !== req.quantity_requested && (
+                                    <span className="block text-[10px] text-brand-neonblue font-bold">
+                                      Appr: {req.quantity_approved}
+                                    </span>
+                                  )}
+                                </td>
+
+                                {/* Stock Available */}
+                                <td className="py-4 px-4 text-xs">
+                                  <span className={`font-black ${isStockSufficient ? "text-emerald-400" : "text-rose-400"}`}>
+                                    {warehouseAvailable} in HQ
+                                  </span>
+                                  {!isStockSufficient && (
+                                    <span className="block text-[9px] text-rose-400/80 font-bold">Low WH Stock</span>
+                                  )}
+                                </td>
+
+                                {/* Status */}
+                                <td className="py-4 px-4">
+                                  <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border ${statusInfo.cls}`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dot}`} />
+                                    {statusInfo.label}
+                                  </span>
+                                </td>
+
+                                {/* Actions */}
+                                <td className="py-4 px-4 text-right">
+                                  <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                    {/* Details Button */}
+                                    <button
+                                      onClick={() => handleOpenDetails(req)}
+                                      className="px-2 py-1 rounded-lg border border-border text-[10px] font-bold text-muted hover:text-main hover:bg-brand-bgbase transition-colors"
+                                      title="View Details & Audit Trail"
+                                    >
+                                      Details
+                                    </button>
+
+                                    {/* PENDING HQ Actions */}
+                                    {isPendingHQ && (
+                                      <>
+                                        <button
+                                          onClick={() => handleOpenApprove(req)}
+                                          className="px-2.5 py-1 rounded-lg bg-brand-neonblue text-white dark:text-brand-navy text-[10px] font-black uppercase tracking-wider hover:opacity-90 transition-opacity"
+                                        >
+                                          Approve
+                                        </button>
+                                        <button
+                                          onClick={() => handleOpenReject(req)}
+                                          className="px-2 py-1 rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-400 text-[10px] font-black uppercase tracking-wider hover:bg-rose-500/20 transition-colors"
+                                        >
+                                          Reject
+                                        </button>
+                                      </>
+                                    )}
+
+                                    {/* APPROVED Actions */}
+                                    {isApproved && (
+                                      <>
+                                        <button
+                                          onClick={() => handleSetProcessing(req)}
+                                          className="px-2 py-1 rounded-lg border border-cyan-500/20 bg-cyan-500/10 text-cyan-400 text-[10px] font-black uppercase tracking-wider hover:bg-cyan-500/20 transition-colors"
+                                        >
+                                          Dispatch
+                                        </button>
+                                        <button
+                                          onClick={() => handleOpenFulfill(req)}
+                                          className="px-2.5 py-1 rounded-lg bg-teal-500 text-white dark:text-brand-navy text-[10px] font-black uppercase tracking-wider hover:opacity-90 transition-opacity"
+                                        >
+                                          Fulfill
+                                        </button>
+                                      </>
+                                    )}
+
+                                    {/* PROCESSING Actions */}
+                                    {isProcessing && (
+                                      <button
+                                        onClick={() => handleOpenFulfill(req)}
+                                        className="px-2.5 py-1 rounded-lg bg-teal-500 text-white dark:text-brand-navy text-[10px] font-black uppercase tracking-wider hover:opacity-90 transition-opacity"
+                                      >
+                                        Complete
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -726,7 +1155,7 @@ export default function AdminProductRequestsPage() {
         </div>
       </main>
 
-      {/* ── APPROVE MODAL ── */}
+      {/* ── SINGLE APPROVE MODAL ── */}
       <AnimatePresence>
         {showApproveModal && activeRequest && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -736,7 +1165,6 @@ export default function AdminProductRequestsPage() {
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               className="bg-brand-surface border border-border rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl relative text-main"
             >
-              {/* Modal Header */}
               <div className="p-6 border-b border-border flex items-center justify-between">
                 <div>
                   <span className="text-[10px] font-black uppercase tracking-widest text-brand-neonblue bg-brand-neonblue/10 px-2.5 py-0.5 rounded">
@@ -755,9 +1183,7 @@ export default function AdminProductRequestsPage() {
                 </button>
               </div>
 
-              {/* Modal Content */}
               <div className="p-6 space-y-5">
-                {/* Request Overview */}
                 <div className="bg-brand-bgbase border border-border p-4 rounded-2xl space-y-2 text-xs">
                   <div className="flex justify-between">
                     <span className="text-muted">Destination Branch:</span>
@@ -769,17 +1195,16 @@ export default function AdminProductRequestsPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted">Requested Quantity:</span>
-                    <span className="font-black font-rajdhani text-sm text-main">{activeRequest.quantity_requested}</span>
+                    <span className="font-black font-rajdhani text-sm text-main">{activeRequest.quantity_requested} units</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted">Warehouse Available:</span>
+                    <span className="text-muted">HQ Warehouse Available:</span>
                     <span className={`font-black font-rajdhani text-sm ${(activeRequest.Product?.available_quantity || 0) < activeRequest.quantity_requested ? "text-rose-400" : "text-emerald-400"}`}>
-                      {activeRequest.Product?.available_quantity ?? 0}
+                      {activeRequest.Product?.available_quantity ?? 0} units
                     </span>
                   </div>
                 </div>
 
-                {/* Approved Quantity Input (Partial Approval) */}
                 <div>
                   <div className="flex justify-between items-center mb-1.5">
                     <label className="text-xs font-bold uppercase tracking-wider text-muted">
@@ -798,54 +1223,47 @@ export default function AdminProductRequestsPage() {
                       const val = parseInt(e.target.value, 10) || 1;
                       setApprovedQty(Math.min(activeRequest.quantity_requested, Math.max(1, val)));
                     }}
-                    className="w-full bg-brand-bgbase border border-border rounded-xl py-3 px-4 text-base font-rajdhani font-black text-main focus:outline-none focus:border-brand-neonblue"
+                    className="w-full bg-brand-bgbase border border-border rounded-xl px-4 py-3 text-sm font-bold text-main focus:outline-none focus:border-brand-neonblue"
                   />
-                  <p className="text-[10px] text-muted mt-1">
-                    Super Admin can authorize a lower quantity than requested based on available stock.
-                  </p>
                 </div>
 
-                {/* Optional Approval Notes */}
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-muted mb-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted block mb-1.5">
                     Approval Notes (Optional)
                   </label>
                   <textarea
-                    rows="2"
-                    maxLength={500}
+                    rows={2}
                     value={approvalNotes}
                     onChange={(e) => setApprovalNotes(e.target.value)}
-                    placeholder="E.g. Approved 6 units; remaining 4 units will be fulfilled on next shipment..."
-                    className="w-full bg-brand-bgbase border border-border rounded-xl py-2.5 px-3 text-xs text-main focus:outline-none focus:border-brand-neonblue"
+                    placeholder="Instructions for packaging or warehouse dispatch..."
+                    className="w-full bg-brand-bgbase border border-border rounded-xl px-4 py-3 text-xs text-main focus:outline-none focus:border-brand-neonblue resize-none"
                   />
                 </div>
+              </div>
 
-                {/* Action Buttons */}
-                <div className="flex gap-3 pt-2">
-                  <button
-                    type="button"
-                    disabled={actionLoading}
-                    onClick={() => setShowApproveModal(false)}
-                    className="flex-1 py-3 rounded-xl border border-border text-xs font-black uppercase tracking-wider text-main hover:bg-brand-bgbase"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    disabled={actionLoading || (activeRequest.Product?.available_quantity || 0) < approvedQty}
-                    onClick={handleApprove}
-                    className="flex-1 py-3 rounded-xl bg-brand-neonblue text-white dark:text-brand-navy text-xs font-black uppercase tracking-wider hover:opacity-90 disabled:opacity-40 shadow-sm"
-                  >
-                    {actionLoading ? "Authorizing..." : "Approve & Reserve Stock"}
-                  </button>
-                </div>
+              <div className="p-6 border-t border-border flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowApproveModal(false)}
+                  className="flex-1 py-3 border border-border rounded-2xl text-xs font-bold text-muted hover:text-main"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={actionLoading}
+                  onClick={handleApprove}
+                  className="flex-1 py-3 bg-brand-neonblue text-white dark:text-brand-navy rounded-2xl text-xs font-black uppercase tracking-wider hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-1.5"
+                >
+                  {actionLoading ? "Processing..." : "Authorize Stock"}
+                </button>
               </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      {/* ── REJECT MODAL ── */}
+      {/* ── SINGLE REJECT MODAL ── */}
       <AnimatePresence>
         {showRejectModal && activeRequest && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -855,13 +1273,9 @@ export default function AdminProductRequestsPage() {
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               className="bg-brand-surface border border-border rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl relative text-main"
             >
-              {/* Modal Header */}
               <div className="p-6 border-b border-border flex items-center justify-between">
                 <div>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-rose-400 bg-rose-400/10 px-2.5 py-0.5 rounded">
-                    Super Admin Action
-                  </span>
-                  <h3 className="text-lg font-rajdhani font-black text-main mt-1">
+                  <h3 className="text-lg font-rajdhani font-black text-rose-400">
                     REJECT STOCK REQUEST
                   </h3>
                   <p className="text-xs font-mono text-muted">{activeRequest.request_number}</p>
@@ -874,65 +1288,110 @@ export default function AdminProductRequestsPage() {
                 </button>
               </div>
 
-              {/* Modal Content */}
               <div className="p-6 space-y-4">
-                <p className="text-xs text-muted">
-                  A rejection reason is strictly required and will be permanently recorded in the audit trail and visible to the requester.
-                </p>
-
-                {/* Preset Reason Selector */}
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-muted mb-1.5">
-                    Select Rejection Reason Template
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted block mb-1.5">
+                    Preset Rejection Reason
                   </label>
                   <select
                     value={rejectionPreset}
                     onChange={(e) => setRejectionPreset(e.target.value)}
-                    className="w-full bg-brand-bgbase border border-border rounded-xl py-3 px-3 text-xs font-medium text-main focus:outline-none focus:border-rose-400"
+                    className="w-full bg-brand-bgbase border border-border rounded-xl px-4 py-3 text-xs font-medium text-main focus:outline-none focus:border-brand-neonblue"
                   >
                     {REJECTION_PRESETS.map((p) => (
-                      <option key={p} value={p}>
-                        {p}
-                      </option>
+                      <option key={p} value={p}>{p}</option>
                     ))}
                   </select>
                 </div>
 
-                {/* Additional Explanation */}
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-muted mb-1.5">
-                    Additional Explanation / Instructions
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted block mb-1.5">
+                    Custom Notes / Details *
                   </label>
                   <textarea
-                    rows="3"
-                    maxLength={500}
+                    rows={3}
+                    required
                     value={rejectionCustomText}
                     onChange={(e) => setRejectionCustomText(e.target.value)}
-                    placeholder="Add specific details or instructions for the requesting branch manager..."
-                    className="w-full bg-brand-bgbase border border-border rounded-xl py-2.5 px-3 text-xs text-main focus:outline-none focus:border-rose-400"
+                    placeholder="Provide specific details for the requester..."
+                    className="w-full bg-brand-bgbase border border-border rounded-xl px-4 py-3 text-xs text-main focus:outline-none focus:border-rose-400 resize-none"
+                  />
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-border flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowRejectModal(false)}
+                  className="flex-1 py-3 border border-border rounded-2xl text-xs font-bold text-muted hover:text-main"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={actionLoading}
+                  onClick={handleReject}
+                  className="flex-1 py-3 bg-rose-500 text-white rounded-2xl text-xs font-black uppercase tracking-wider hover:bg-rose-600 disabled:opacity-50"
+                >
+                  {actionLoading ? "Processing..." : "Confirm Rejection"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── BATCH REJECT MODAL ── */}
+      <AnimatePresence>
+        {showBatchRejectModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-brand-surface border border-border rounded-3xl w-full max-w-md overflow-hidden shadow-2xl relative text-main"
+            >
+              <div className="p-6 border-b border-border">
+                <h3 className="text-lg font-rajdhani font-black text-rose-400">
+                  BATCH REJECT ({selectedIds.size} REQUESTS)
+                </h3>
+                <p className="text-xs text-muted mt-1">
+                  This rejection reason will apply to all selected items from this branch.
+                </p>
+              </div>
+
+              <form onSubmit={handleBatchRejectSubmit} className="p-6 space-y-4">
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted block mb-1.5">
+                    Reason for rejection *
+                  </label>
+                  <textarea
+                    required
+                    rows={3}
+                    value={batchRejectReason}
+                    onChange={(e) => setBatchRejectReason(e.target.value)}
+                    placeholder="Enter comprehensive rejection reason..."
+                    className="w-full bg-brand-bgbase border border-border rounded-xl px-4 py-3 text-xs text-main focus:outline-none focus:border-rose-400 resize-none"
                   />
                 </div>
 
-                {/* Action Buttons */}
                 <div className="flex gap-3 pt-2">
                   <button
                     type="button"
-                    disabled={actionLoading}
-                    onClick={() => setShowRejectModal(false)}
-                    className="flex-1 py-3 rounded-xl border border-border text-xs font-black uppercase tracking-wider text-main hover:bg-brand-bgbase"
+                    onClick={() => { setShowBatchRejectModal(false); setBatchRejectReason(""); }}
+                    className="flex-1 py-3 border border-border rounded-2xl text-xs font-bold text-muted hover:text-main"
                   >
                     Cancel
                   </button>
                   <button
-                    type="button"
-                    disabled={actionLoading}
-                    onClick={handleReject}
-                    className="flex-1 py-3 rounded-xl bg-rose-500 text-white text-xs font-black uppercase tracking-wider hover:opacity-90 disabled:opacity-40 shadow-sm"
+                    type="submit"
+                    disabled={batchActionLoading}
+                    className="flex-1 py-3 bg-rose-500 text-white rounded-2xl text-xs font-black uppercase tracking-wider hover:bg-rose-600 disabled:opacity-50"
                   >
-                    {actionLoading ? "Rejecting..." : "Confirm Rejection"}
+                    {batchActionLoading ? "Processing..." : `Reject ${selectedIds.size} Items`}
                   </button>
                 </div>
-              </div>
+              </form>
             </motion.div>
           </div>
         )}
@@ -946,259 +1405,170 @@ export default function AdminProductRequestsPage() {
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className="bg-brand-surface border border-border rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl relative text-main"
+              className="bg-brand-surface border border-border rounded-3xl w-full max-w-md overflow-hidden shadow-2xl relative text-main"
             >
-              {/* Modal Header */}
-              <div className="p-6 border-b border-border flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-teal-400 bg-teal-400/10 px-2.5 py-0.5 rounded">
-                    Atomic Inventory Transfer
-                  </span>
-                  <h3 className="text-lg font-rajdhani font-black text-main mt-1">
-                    CONFIRM STOCK FULFILLMENT
-                  </h3>
-                  <p className="text-xs font-mono text-muted">{activeRequest.request_number}</p>
-                </div>
-                <button
-                  onClick={() => setShowFulfillModal(false)}
-                  className="w-8 h-8 rounded-full border border-border flex items-center justify-center text-muted hover:text-main"
-                >
-                  <X size={16} />
-                </button>
+              <div className="p-6 border-b border-border">
+                <span className="text-[10px] font-black uppercase tracking-widest text-teal-400 bg-teal-400/10 px-2.5 py-0.5 rounded">
+                  Physical Inventory Movement
+                </span>
+                <h3 className="text-lg font-rajdhani font-black text-main mt-1">
+                  CONFIRM STOCK FULFILLMENT
+                </h3>
+                <p className="text-xs font-mono text-muted">{activeRequest.request_number}</p>
               </div>
 
-              {/* Modal Content */}
-              <div className="p-6 space-y-4">
-                <div className="bg-brand-bgbase border border-border p-4 rounded-2xl space-y-2 text-xs">
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted">Source:</span>
-                    <span className="font-bold text-main">
-                      {activeRequest.SourceBranch?.name || "HQ Central Warehouse"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted">Destination:</span>
-                    <span className="font-bold text-main">{activeRequest.Branch?.name}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
+              <div className="p-6 space-y-3 text-xs">
+                <div className="p-4 bg-brand-bgbase border border-border rounded-2xl space-y-2">
+                  <div className="flex justify-between">
                     <span className="text-muted">Product:</span>
                     <span className="font-bold text-main">{activeRequest.Product?.name}</span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted">Approved Quantity:</span>
-                    <span className="font-black text-sm text-teal-400">
-                      {activeRequest.quantity_approved || activeRequest.quantity_requested} units
-                    </span>
+                  <div className="flex justify-between">
+                    <span className="text-muted">Quantity to Transfer:</span>
+                    <span className="font-black text-brand-neonblue">{activeRequest.quantity_approved || activeRequest.quantity_requested} units</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted">Destination:</span>
+                    <span className="font-bold text-main">{activeRequest.Branch?.name}</span>
                   </div>
                 </div>
+                <p className="text-muted text-[11px] leading-relaxed">
+                  Executing fulfillment will immediately deduct reserved units from HQ Central Warehouse and credit them to {activeRequest.Branch?.name}'s live branch inventory.
+                </p>
+              </div>
 
-                <div className="p-3 bg-teal-500/10 border border-teal-500/20 rounded-xl text-xs text-teal-400">
-                  <p className="font-bold flex items-center gap-1.5 mb-1">
-                    <ShieldCheck size={15} /> Inventory Integrity Guaranteed
-                  </p>
-                  <p className="text-[11px] leading-relaxed text-teal-300/80">
-                    Executing fulfillment will atomically deduct {activeRequest.quantity_approved || activeRequest.quantity_requested} units from the source inventory and add them to the destination branch inventory.
-                  </p>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex gap-3 pt-2">
-                  <button
-                    type="button"
-                    disabled={actionLoading}
-                    onClick={() => setShowFulfillModal(false)}
-                    className="flex-1 py-3 rounded-xl border border-border text-xs font-black uppercase tracking-wider text-main hover:bg-brand-bgbase"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    disabled={actionLoading}
-                    onClick={handleConfirmFulfill}
-                    className="flex-1 py-3 rounded-xl bg-teal-500 text-white dark:text-brand-navy text-xs font-black uppercase tracking-wider hover:opacity-90 disabled:opacity-40 shadow-sm"
-                  >
-                    {actionLoading ? "Transferring..." : "Fulfill & Update Stock"}
-                  </button>
-                </div>
+              <div className="p-6 border-t border-border flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowFulfillModal(false)}
+                  className="flex-1 py-3 border border-border rounded-2xl text-xs font-bold text-muted hover:text-main"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={actionLoading}
+                  onClick={handleConfirmFulfill}
+                  className="flex-1 py-3 bg-teal-500 text-white dark:text-brand-navy rounded-2xl text-xs font-black uppercase tracking-wider hover:opacity-90 disabled:opacity-50"
+                >
+                  {actionLoading ? "Transferring..." : "Complete Transfer"}
+                </button>
               </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      {/* ── DETAILS DOSSIER DRAWER ── */}
+      {/* ── DETAILS & AUDIT DRAWER ── */}
       <AnimatePresence>
         {showDetailsDrawer && activeRequest && (
-          <div className="fixed inset-0 z-[100] flex justify-end bg-black/50 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[110] flex justify-end bg-black/50 backdrop-blur-sm">
             <motion.div
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
-              transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="w-full max-w-xl bg-brand-surface border-l border-border h-full flex flex-col shadow-2xl overflow-hidden"
+              transition={{ type: "tween", duration: 0.25 }}
+              className="bg-brand-surface border-l border-border w-full max-w-lg h-full overflow-y-auto custom-scrollbar p-6 flex flex-col justify-between shadow-2xl text-main"
             >
-              {/* Drawer Header */}
-              <div className="p-6 border-b border-border flex items-center justify-between shrink-0 bg-brand-surface">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-black text-brand-neonblue bg-brand-neonblue/10 px-2 py-0.5 rounded">
+              <div>
+                <div className="flex items-center justify-between pb-4 border-b border-border">
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-brand-neonblue">
+                      Stock Request Lifecycle
+                    </span>
+                    <h3 className="text-lg font-rajdhani font-black text-main">
                       {activeRequest.request_number}
-                    </span>
-                    <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded border ${getStatusBadge(activeRequest.status).cls}`}>
-                      {getStatusBadge(activeRequest.status).label}
-                    </span>
+                    </h3>
                   </div>
-                  <h3 className="text-lg font-rajdhani font-black text-main mt-1 uppercase">
-                    Stock Request Dossier
-                  </h3>
+                  <button
+                    onClick={() => setShowDetailsDrawer(false)}
+                    className="w-8 h-8 rounded-full border border-border flex items-center justify-center text-muted hover:text-main"
+                  >
+                    <X size={16} />
+                  </button>
                 </div>
-                <button
-                  onClick={() => setShowDetailsDrawer(false)}
-                  className="w-8 h-8 rounded-full border border-border flex items-center justify-center text-muted hover:text-main"
-                >
-                  <X size={16} />
-                </button>
-              </div>
 
-              {/* Drawer Body */}
-              <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6 text-main">
-                {/* 1. Request Overview */}
-                <div className="bg-brand-bgbase border border-border rounded-2xl p-5 space-y-3">
-                  <h4 className="text-xs font-black uppercase tracking-wider text-muted flex items-center gap-1.5">
-                    <ClipboardList size={14} className="text-brand-neonblue" /> Request Information
-                  </h4>
-                  <div className="grid grid-cols-2 gap-3 text-xs">
-                    <div>
-                      <span className="text-muted block text-[10px]">Destination Branch</span>
+                {/* Details Breakdown */}
+                <div className="py-5 space-y-4 text-xs">
+                  <div className="p-4 bg-brand-bgbase border border-border rounded-2xl space-y-2.5">
+                    <div className="flex justify-between">
+                      <span className="text-muted">Destination Branch:</span>
                       <span className="font-bold text-main">{activeRequest.Branch?.name}</span>
                     </div>
-                    <div>
-                      <span className="text-muted block text-[10px]">Source Branch / Warehouse</span>
-                      <span className="font-bold text-main">{activeRequest.SourceBranch?.name || "HQ Central Warehouse"}</span>
+                    <div className="flex justify-between">
+                      <span className="text-muted">Product SKU:</span>
+                      <span className="font-mono text-main">{activeRequest.Product?.sku || "N/A"}</span>
                     </div>
-                    <div>
-                      <span className="text-muted block text-[10px]">Requester</span>
-                      <span className="font-bold text-main">{activeRequest.Requester?.username} ({activeRequest.Requester?.role})</span>
+                    <div className="flex justify-between">
+                      <span className="text-muted">Requested By:</span>
+                      <span className="font-bold text-main">@{activeRequest.Requester?.username}</span>
                     </div>
-                    <div>
-                      <span className="text-muted block text-[10px]">Date Submitted</span>
-                      <span className="font-bold text-main">{new Date(activeRequest.createdAt).toLocaleDateString()}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted block text-[10px]">Priority</span>
+                    {activeRequest.BranchApprover && (
+                      <div className="flex justify-between">
+                        <span className="text-muted">Endorsed By Admin:</span>
+                        <span className="font-bold text-emerald-500">@{activeRequest.BranchApprover?.username}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="text-muted">Priority:</span>
                       <span className="font-bold uppercase text-main">{activeRequest.priority}</span>
                     </div>
-                    <div>
-                      <span className="text-muted block text-[10px]">Current Status</span>
-                      <span className="font-bold uppercase text-main">{activeRequest.status}</span>
-                    </div>
                   </div>
+
                   {activeRequest.notes && (
-                    <div className="mt-2 pt-2 border-t border-border/60 text-xs">
-                      <span className="text-muted block text-[10px]">Requester Notes</span>
-                      <p className="italic text-main/80 mt-0.5">{activeRequest.notes}</p>
+                    <div className="p-4 bg-brand-bgbase border border-border rounded-2xl">
+                      <span className="text-[10px] font-black uppercase text-muted tracking-wider block mb-1">Requester Notes</span>
+                      <p className="text-main leading-relaxed">{activeRequest.notes}</p>
                     </div>
                   )}
-                </div>
 
-                {/* 2. Item & Quantities */}
-                <div className="bg-brand-bgbase border border-border rounded-2xl p-5 space-y-3">
-                  <h4 className="text-xs font-black uppercase tracking-wider text-muted flex items-center gap-1.5">
-                    <Package size={14} className="text-brand-neonblue" /> Requested Product
-                  </h4>
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-brand-surface border border-border flex items-center justify-center shrink-0">
-                      <Package size={22} className="text-brand-neonblue" />
+                  {activeRequest.rejection_reason && (
+                    <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl">
+                      <span className="text-[10px] font-black uppercase text-rose-400 tracking-wider block mb-1">Rejection Reason</span>
+                      <p className="text-rose-400 leading-relaxed">{activeRequest.rejection_reason}</p>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <h5 className="font-bold text-sm text-main truncate">{activeRequest.Product?.name}</h5>
-                      <p className="text-xs text-muted font-mono">SKU: {activeRequest.Product?.sku}</p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border/60 text-center">
-                    <div className="bg-brand-surface p-2.5 rounded-xl border border-border">
-                      <p className="text-[9px] uppercase font-black text-muted">Requested</p>
-                      <p className="text-base font-rajdhani font-black text-main">{activeRequest.quantity_requested}</p>
-                    </div>
-                    <div className="bg-brand-surface p-2.5 rounded-xl border border-border">
-                      <p className="text-[9px] uppercase font-black text-muted">Approved</p>
-                      <p className="text-base font-rajdhani font-black text-brand-neonblue">{activeRequest.quantity_approved ?? "—"}</p>
-                    </div>
-                    <div className="bg-brand-surface p-2.5 rounded-xl border border-border">
-                      <p className="text-[9px] uppercase font-black text-muted">Fulfilled</p>
-                      <p className="text-base font-rajdhani font-black text-teal-400">{activeRequest.quantity_fulfilled ?? "—"}</p>
-                    </div>
-                  </div>
-                </div>
+                  )}
 
-                {/* 3. Approval / Rejection Info */}
-                {(activeRequest.approved_by || activeRequest.rejection_reason || activeRequest.approval_notes) && (
-                  <div className="bg-brand-bgbase border border-border rounded-2xl p-5 space-y-2.5 text-xs">
-                    <h4 className="text-xs font-black uppercase tracking-wider text-muted flex items-center gap-1.5">
-                      <ShieldCheck size={14} className="text-brand-neonblue" /> Review Details
+                  {/* Audit Trail Timeline */}
+                  <div className="pt-3">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-muted mb-3 flex items-center gap-1.5">
+                      <History size={14} className="text-brand-neonblue" /> Audit Trail Ledger
                     </h4>
-                    {activeRequest.Approver && (
-                      <div className="flex justify-between">
-                        <span className="text-muted">Reviewed By:</span>
-                        <span className="font-bold text-main">{activeRequest.Approver.username} (Super Admin)</span>
-                      </div>
-                    )}
-                    {activeRequest.approved_at && (
-                      <div className="flex justify-between">
-                        <span className="text-muted">Approved At:</span>
-                        <span className="font-bold text-main">{new Date(activeRequest.approved_at).toLocaleString()}</span>
-                      </div>
-                    )}
-                    {activeRequest.approval_notes && (
-                      <div className="pt-2 border-t border-border/60">
-                        <span className="text-muted block text-[10px]">Approval Notes</span>
-                        <p className="text-main mt-0.5">{activeRequest.approval_notes}</p>
-                      </div>
-                    )}
-                    {activeRequest.rejection_reason && (
-                      <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-400 mt-2">
-                        <span className="text-[10px] uppercase font-black tracking-wider block">Rejection Reason</span>
-                        <p className="font-medium mt-0.5">{activeRequest.rejection_reason}</p>
+                    {auditLoading ? (
+                      <p className="text-xs text-muted animate-pulse">Loading audit trail...</p>
+                    ) : requestAuditTrail.length === 0 ? (
+                      <p className="text-xs text-muted">No audit logs recorded yet.</p>
+                    ) : (
+                      <div className="space-y-3 pl-3 border-l-2 border-brand-neonblue/20">
+                        {requestAuditTrail.map((log) => (
+                          <div key={log.id} className="relative text-xs">
+                            <div className="absolute -left-[19px] top-1 w-2.5 h-2.5 rounded-full bg-brand-neonblue" />
+                            <p className="font-bold text-main">{log.action.replace(/_/g, " ")}</p>
+                            <p className="text-[11px] text-muted">{log.details}</p>
+                            <span className="text-[9px] text-muted/60 font-mono">
+                              {new Date(log.createdAt).toLocaleString()}
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
-                )}
-
-                {/* 4. Activity & Audit Trail Timeline */}
-                <div className="bg-brand-bgbase border border-border rounded-2xl p-5 space-y-4">
-                  <h4 className="text-xs font-black uppercase tracking-wider text-muted flex items-center gap-1.5">
-                    <History size={14} className="text-brand-neonblue" /> Lifecycle Activity Trail
-                  </h4>
-
-                  {auditLoading ? (
-                    <div className="py-6 flex justify-center">
-                      <div className="w-6 h-6 border-2 border-border border-t-brand-neonblue rounded-full animate-spin" />
-                    </div>
-                  ) : requestAuditTrail.length === 0 ? (
-                    <p className="text-xs text-muted italic">No audit trail logged yet.</p>
-                  ) : (
-                    <div className="space-y-4 relative before:absolute before:left-3.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-border/60">
-                      {requestAuditTrail.map((log) => (
-                        <div key={log.id} className="relative pl-8 text-xs">
-                          <div className="absolute left-2 top-1 w-3.5 h-3.5 rounded-full bg-brand-surface border-2 border-brand-neonblue -translate-x-1/2" />
-                          <div className="flex items-center justify-between text-[10px] text-muted">
-                            <span className="font-black font-mono text-brand-neonblue uppercase">{log.action}</span>
-                            <span>{new Date(log.createdAt).toLocaleString()}</span>
-                          </div>
-                          <p className="text-main font-medium mt-0.5">{log.details}</p>
-                          <span className="text-[10px] text-muted/70 block mt-0.5">
-                            By {log.User ? `${log.User.username} [${log.User.role}]` : "System"}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
+              </div>
+
+              <div className="pt-4 border-t border-border">
+                <button
+                  onClick={() => setShowDetailsDrawer(false)}
+                  className="w-full py-3 bg-brand-bgbase border border-border rounded-2xl text-xs font-bold text-main hover:bg-brand-surface"
+                >
+                  Close Drawer
+                </button>
               </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
+
     </div>
   );
 }
