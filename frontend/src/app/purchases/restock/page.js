@@ -54,10 +54,8 @@ export default function ProcurementPage() {
 
   // Super Admin: Selected Branch for Modal
   const [activeBranchModal, setActiveBranchModal] = useState(null);
-  const [branchModalTab, setBranchModalTab] = useState("requests"); // "requests" | "inventory"
   const [branchModalSearch, setBranchModalSearch] = useState("");
   const [branchModalReqStatus, setBranchModalReqStatus] = useState("Pending"); // Pending | Approved | Fulfilled | Rejected | All
-  const [branchModalPriority, setBranchModalPriority] = useState("");
 
   // Checkbox Selection State for Branch Modal
   const [selectedRequestIds, setSelectedRequestIds] = useState(new Set());
@@ -146,8 +144,7 @@ export default function ProcurementPage() {
     setSelectedRequestIds(new Set());
     setBranchModalSearch("");
     setBranchModalReqStatus("Pending");
-    setBranchModalPriority("");
-  }, [activeBranchModal, branchModalTab]);
+  }, [activeBranchModal]);
 
   const isSuperAdmin = currentUser?.role === "super_admin";
 
@@ -155,14 +152,12 @@ export default function ProcurementPage() {
   const branchPillData = useMemo(() => {
     return branches.map(branch => {
       const bInv = inventory.filter(i => i.branch_id === branch.id && i.Product && !i.Product.is_bundle);
-      const criticalCount = bInv.filter(i => i.quantity <= i.low_stock_threshold).length;
       const bReqs = requests.filter(r => r.branch_id === branch.id);
       const pendingRequestsCount = bReqs.filter(r => ["PENDING_SUPERADMIN", "PENDING", "PENDING_ADMIN"].includes((r.status || "").toUpperCase())).length;
 
       return {
         ...branch,
         totalItems: bInv.length,
-        criticalCount,
         pendingRequestsCount,
         requests: bReqs,
         inventory: bInv
@@ -171,7 +166,6 @@ export default function ProcurementPage() {
   }, [branches, inventory, requests]);
 
   // Overall Totals
-  const totalCriticalStock = inventory.filter(i => i.Product && !i.Product.is_bundle && i.quantity <= i.low_stock_threshold).length;
   const totalPendingRequests = requests.filter(r => ["PENDING_SUPERADMIN", "PENDING", "PENDING_ADMIN"].includes((r.status || "").toUpperCase())).length;
 
   // ── Branch Admin: Flat Inventory Filter ──
@@ -204,7 +198,6 @@ export default function ProcurementPage() {
       const requester = (r.User?.first_name ? `${r.User.first_name} ${r.User.last_name || ''}` : (r.User?.username || "")).toLowerCase();
 
       const matchesSearch = !q || reqNum.includes(q) || prodName.includes(q) || prodSku.includes(q) || requester.includes(q);
-      const matchesPriority = !branchModalPriority || r.priority === branchModalPriority;
 
       const st = (r.status || "").toUpperCase();
       let matchesTab = true;
@@ -218,22 +211,9 @@ export default function ProcurementPage() {
         matchesTab = st === "REJECTED";
       }
 
-      return matchesSearch && matchesPriority && matchesTab;
+      return matchesSearch && matchesTab;
     });
-  }, [activeBranchModal, requests, branchModalSearch, branchModalReqStatus, branchModalPriority]);
-
-  // ── Super Admin: Filtered Inventory Inside Active Branch Modal ──
-  const activeBranchInventory = useMemo(() => {
-    if (!activeBranchModal) return [];
-    const bInv = inventory.filter(i => i.branch_id === activeBranchModal.id && i.Product && !i.Product.is_bundle);
-
-    return bInv.filter(i => {
-      const q = branchModalSearch.trim().toLowerCase();
-      const prodName = (i.Product?.name || "").toLowerCase();
-      const prodSku = (i.Product?.sku || "").toLowerCase();
-      return !q || prodName.includes(q) || prodSku.includes(q);
-    });
-  }, [activeBranchModal, inventory, branchModalSearch]);
+  }, [activeBranchModal, requests, branchModalSearch, branchModalReqStatus]);
 
   // ── Checkbox Selection Handlers in Modal ──
   const isPendingStatus = (st) => ["PENDING_SUPERADMIN", "PENDING", "PENDING_ADMIN"].includes((st || "").toUpperCase());
@@ -516,10 +496,7 @@ export default function ProcurementPage() {
                           key={branch.id}
                           whileHover={{ scale: 1.02, y: -2 }}
                           whileTap={{ scale: 0.98 }}
-                          onClick={() => {
-                            setActiveBranchModal(branch);
-                            setBranchModalTab("requests");
-                          }}
+                          onClick={() => setActiveBranchModal(branch)}
                           className="w-full text-left bg-brand-surface border border-border hover:border-brand-neonblue/40 rounded-2xl p-5 shadow-sm transition-all group relative overflow-hidden flex flex-col justify-between"
                         >
                           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-brand-neonblue/0 group-hover:via-brand-neonblue/80 to-transparent transition-all duration-300" />
