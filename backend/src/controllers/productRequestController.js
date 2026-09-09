@@ -185,7 +185,8 @@ const createRequest = async (req, res) => {
         if (superAdmins.length > 0) {
           const notifications = superAdmins.map(admin => ({
             userId: admin.id,
-            title: 'New Branch Stock Request Pending HQ Review',
+            branchId: branch_id,
+            title: `${destBranch.name} Request Restock`,
             message: `Branch '${destBranch.name}' submitted stock request (${summaryNumbers}) for ${items.length} item(s).`,
             type: 'stock_request',
             link: `/purchases/restock?branch_id=${branch_id}`
@@ -268,11 +269,13 @@ const branchAdminApprove = async (req, res) => {
     // 1. Notify Super Admins that branch approved request is ready for HQ review
     try {
       const superAdmins = await User.findAll({ where: { role: 'super_admin' } });
+      const bName = request.Branch?.name || 'Branch';
       if (superAdmins.length > 0) {
         const notifications = superAdmins.map(admin => ({
           userId: admin.id,
-          title: 'Branch-Endorsed Stock Request Awaiting HQ',
-          message: `Branch Admin ${req.user.username} approved request ${request.request_number} for '${request.Product?.name}' (${request.quantity_requested} units). Ready for HQ review.`,
+          branchId: request.branch_id,
+          title: `${bName} Request Restock`,
+          message: `Branch '${bName}' approved and endorsed request ${request.request_number} for '${request.Product?.name}' (${request.quantity_requested} units). Ready for HQ review.`,
           type: 'stock_request',
           link: `/purchases/restock?branch_id=${request.branch_id}`
         }));
@@ -281,10 +284,11 @@ const branchAdminApprove = async (req, res) => {
       // 2. Notify Requester (Staff)
       await Notification.create({
         userId: request.requested_by,
-        title: 'Restock Request Endorsed by Branch Admin',
+        branchId: request.branch_id,
+        title: `${bName} Request Endorsed`,
         message: `Your restock request ${request.request_number} was endorsed by your Branch Admin and forwarded to Super Admin for fulfillment.`,
         type: 'info',
-        link: '/products/my-requests'
+        link: '/purchases/restock'
       });
     } catch (notifErr) {
       console.warn('[Notification Warning]', notifErr.message);
@@ -359,10 +363,11 @@ const branchAdminReject = async (req, res) => {
     try {
       await Notification.create({
         userId: request.requested_by,
-        title: 'Restock Request Rejected by Branch Admin',
+        branchId: request.branch_id,
+        title: `${request.Branch?.name || 'Branch'} Request Rejected`,
         message: `Your restock request ${request.request_number} for '${request.Product?.name}' was rejected by Branch Admin. Reason: ${request.rejection_reason}`,
         type: 'error',
-        link: '/products/my-requests'
+        link: '/purchases/restock'
       });
     } catch (notifErr) {}
 
@@ -406,6 +411,27 @@ const batchBranchApprove = async (req, res) => {
         }
       } catch (err) {
         errors.push({ id, error: err.message });
+      }
+    }
+
+    if (approvedCount > 0) {
+      try {
+        const branch = await Branch.findByPk(req.user.branch_id);
+        const bName = branch ? branch.name : 'Branch';
+        const superAdmins = await User.findAll({ where: { role: 'super_admin' } });
+        if (superAdmins.length > 0) {
+          const notifications = superAdmins.map(admin => ({
+            userId: admin.id,
+            branchId: req.user.branch_id,
+            title: `${bName} Request Restock`,
+            message: `Branch '${bName}' endorsed ${approvedCount} stock request(s). Ready for HQ review.`,
+            type: 'stock_request',
+            link: `/purchases/restock?branch_id=${req.user.branch_id}`
+          }));
+          await Notification.bulkCreate(notifications);
+        }
+      } catch (notifErr) {
+        console.warn('[Notification Warning]', notifErr.message);
       }
     }
 
@@ -907,10 +933,11 @@ const approveRequest = async (req, res) => {
     try {
       await Notification.create({
         userId: request.requested_by,
-        title: isPartial ? 'Stock Request Partially Approved' : 'Stock Request Approved',
+        branchId: request.branch_id,
+        title: isPartial ? `${request.Branch?.name || 'Stock'} Request Partially Approved` : `${request.Branch?.name || 'Stock'} Request Approved`,
         message: `Your stock request ${request.request_number} for '${product.name}' was approved for ${approvedQty} unit(s) by HQ Super Admin.`,
         type: 'success',
-        link: '/products/my-requests'
+        link: '/purchases/restock'
       });
     } catch (notifErr) {
       console.warn('[Notification Warning]', notifErr.message);
@@ -992,10 +1019,11 @@ const rejectRequest = async (req, res) => {
     try {
       await Notification.create({
         userId: request.requested_by,
-        title: 'Stock Request Rejected',
+        branchId: request.branch_id,
+        title: `${request.Branch?.name || 'Stock'} Request Rejected`,
         message: `Your stock request ${request.request_number} for '${request.Product?.name}' was rejected by HQ Super Admin. Reason: ${request.rejection_reason}`,
         type: 'error',
-        link: '/products/my-requests'
+        link: '/purchases/restock'
       });
     } catch (notifErr) {
       console.warn('[Notification Warning]', notifErr.message);
@@ -1054,10 +1082,11 @@ const processRequest = async (req, res) => {
     try {
       await Notification.create({
         userId: request.requested_by,
-        title: 'Stock Request Processing',
+        branchId: request.branch_id,
+        title: `${request.Branch?.name || 'Stock'} Request Processing`,
         message: `Stock request ${request.request_number} for '${request.Product?.name}' is now being prepared and packed for transit.`,
         type: 'info',
-        link: '/products/my-requests'
+        link: '/purchases/restock'
       });
     } catch (notifErr) {}
 
@@ -1263,10 +1292,11 @@ const fulfillRequest = async (req, res) => {
     try {
       await Notification.create({
         userId: request.requested_by,
-        title: 'Stock Request Fulfilled',
+        branchId: request.branch_id,
+        title: `${destBranch.name || 'Stock'} Request Fulfilled`,
         message: `Your stock request ${request.request_number} for '${product.name}' (${fulfillQty} units) has been fulfilled and delivered to your branch inventory.`,
         type: 'success',
-        link: '/products/my-requests'
+        link: '/purchases/restock'
       });
     } catch (notifErr) {
       console.warn('[Notification Warning]', notifErr.message);

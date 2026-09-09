@@ -77,10 +77,10 @@ const createRequest = async (req, res) => {
       await notifyUsers({
         users: recipients,
         branchId: branch_id,
-        title: 'New Restock Request',
+        title: `${branch.name} Request Restock`,
         message: `${req.user.username} requested ${quantity} units of ${product.name} for ${branch.name}.`,
         type: 'restock_request',
-        link: isEmployee ? `/purchases/restock?staff_id=${req.user.id}` : `/purchases/restock`,
+        link: isEmployee ? `/purchases/restock?staff_id=${req.user.id}` : `/purchases/restock?branch_id=${branch_id}`,
         emailDetails: {
           details: {
             'Product': product.name,

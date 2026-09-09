@@ -103,7 +103,14 @@ export default function NotificationsPanel({ isOpen, onClose }) {
   };
 
   const handleNavigate = (note) => {
-    if (note.link) router.push(note.link);
+    let targetLink = note.link || "/purchases/restock";
+    if (targetLink.includes("/products/my-requests") || targetLink.includes("/admin/product-requests")) {
+      targetLink = "/purchases/restock";
+    }
+    if (currentUserRole === "super_admin" && note.branchId && targetLink.startsWith("/purchases/restock") && !targetLink.includes("branch_id")) {
+      targetLink = `/purchases/restock?branch_id=${note.branchId}`;
+    }
+    router.push(targetLink);
     markAsRead(note.id);
     onClose();
   };

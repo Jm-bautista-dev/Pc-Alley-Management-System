@@ -259,7 +259,12 @@ export default function ProcurementPage() {
     // 1. SUPER ADMIN FLOW: Auto-open Branch Modal
     if (isSuperAdmin && branches.length > 0) {
       if (branchIdParam) {
-        const targetBranch = branches.find(b => String(b.id) === String(branchIdParam));
+        const cleanParam = String(branchIdParam).trim().toLowerCase();
+        const targetBranch = branches.find(b => 
+          String(b.id) === String(branchIdParam) || 
+          b.name?.toLowerCase() === cleanParam ||
+          b.name?.toLowerCase().includes(cleanParam)
+        );
         if (targetBranch) {
           setActiveBranchModal(targetBranch);
           return;
@@ -267,7 +272,10 @@ export default function ProcurementPage() {
       }
 
       if (reqIdParam && requests.length > 0) {
-        const targetReq = requests.find(r => String(r.id) === String(reqIdParam));
+        const targetReq = requests.find(r => 
+          String(r.id) === String(reqIdParam) || 
+          String(r.request_number).toLowerCase() === String(reqIdParam).toLowerCase()
+        );
         if (targetReq) {
           const targetBranch = branches.find(b => b.id === targetReq.branch_id);
           if (targetBranch) {

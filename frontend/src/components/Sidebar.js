@@ -56,7 +56,7 @@ const Sidebar = () => {
         { title: "Dashboard",       icon: LayoutDashboard, path: "/dashboard",        group: "MAIN" },
         { title: "Sales Terminal",  icon: Upload,          path: "/sales",            group: "MAIN" },
         { title: "Contacts",        icon: Users,           path: "#contacts",         group: "SALES", subItems: [{ title: "Customer List", path: "/customers" }] },
-        { title: "Products",        icon: Package,         path: "#products",         group: "SALES", subItems: [{ title: "Product List", path: "/products" }, { title: "Manage Stock", path: "/reports/stock" }, { title: "Stock Requisitions", path: "/products/my-requests" }] },
+        { title: "Products",        icon: Package,         path: "#products",         group: "SALES", subItems: [{ title: "Product List", path: "/products" }, { title: "Manage Stock", path: "/reports/stock" }] },
         { title: "Services",        icon: Wrench,          path: "#services",         group: "SALES", subItems: [{ title: "Service Catalog", path: "/services" }, { title: "Work Orders / Jobs", path: "/services/jobs" }] },
         { title: "Sales",           icon: FileText,        path: "#sell",             group: "SALES", subItems: [{ title: "All Sales", path: "/sell/all" }, { title: "Warranties", path: "/sell/quotations" }, { title: "Saved Drafts", path: "/sell/drafts" }] },
       ];
@@ -75,8 +75,7 @@ const Sidebar = () => {
           { title: "Manage Stock", path: "/reports/stock" },
           { title: "Categories", path: "/products/categories" },
           { title: "Brands", path: "/products/brands" },
-          { title: "Import Products", path: "/products/import" },
-          { title: "Product Requests", path: "/admin/product-requests" }
+          { title: "Import Products", path: "/products/import" }
         ] },
         { title: "Services",        icon: Wrench,          path: "#services",         group: "SALES", subItems: [
           { title: "Service Catalog", path: "/services" },
@@ -122,8 +121,7 @@ const Sidebar = () => {
         { title: "Product List", path: "/products" },
         { title: "Manage Stock", path: "/reports/stock" },
         { title: "Categories", path: "/products/categories" },
-        { title: "Brands", path: "/products/brands" },
-        { title: "My Requests", path: "/products/my-requests" }
+        { title: "Brands", path: "/products/brands" }
       ] },
       { title: "Services",        icon: Wrench,          path: "#services",         group: "SALES", subItems: [
         { title: "Service Catalog", path: "/services" },
