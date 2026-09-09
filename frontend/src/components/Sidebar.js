@@ -24,14 +24,19 @@ const Sidebar = () => {
   const [openMenus, setOpenMenus] = useState(() => {
     const initial = {};
     const paths = {
+      "Contacts":        ["/customers", "/suppliers"],
       "Customers":       ["/customers", "/suppliers"],
       "Sales":           ["/sell"],
       "Services":        ["/services"],
+      "Products":        ["/products", "/reports/stock"],
       "Inventory":       ["/products", "/reports/stock"],
+      "Buy Stock":       ["/purchases", "/admin/product-requests", "/products/my-requests"],
       "Procurement":     ["/purchases", "/admin/product-requests", "/products/my-requests"],
       "Reports":         ["/reports"],
       "Analytics":       ["/forecasting", "/prescriptive-analytics"],
       "Administration":  ["/staff", "/roles", "/admin"],
+      "Staff":           ["/staff", "/roles"],
+      "Our Staff":       ["/staff", "/roles"],
     };
     Object.entries(paths).forEach(([key, matches]) => {
       if (matches.some((p) => pathname.startsWith(p))) initial[key] = true;
@@ -50,110 +55,107 @@ const Sidebar = () => {
       return [
         { title: "Dashboard",       icon: LayoutDashboard, path: "/dashboard",        group: "MAIN" },
         { title: "Sales Terminal",  icon: Upload,          path: "/sales",            group: "MAIN" },
-        { title: "Sales",           icon: FileText,        path: "#sell",             group: "SALES & SERVICES", subItems: [{ title: "All Sales", path: "/sell/all" }, { title: "Warranties", path: "/sell/quotations" }, { title: "Saved Drafts", path: "/sell/drafts" }] },
-        { title: "Services",        icon: Wrench,          path: "#services",         group: "SALES & SERVICES", subItems: [{ title: "Service Catalog", path: "/services" }, { title: "Work Orders", path: "/services/jobs" }] },
-        { title: "Customers",       icon: Users,           path: "/customers",        group: "SALES & SERVICES" },
-        { title: "Products",        icon: Package,         path: "/products",         group: "INVENTORY" },
-        { title: "Manage Stock",    icon: ClipboardList,   path: "/reports/stock",    group: "INVENTORY" },
-        { title: "Stock Requisitions", icon: ClipboardList, path: "/products/my-requests", group: "INVENTORY" },
+        { title: "Contacts",        icon: Users,           path: "#contacts",         group: "SALES", subItems: [{ title: "Customer List", path: "/customers" }] },
+        { title: "Products",        icon: Package,         path: "#products",         group: "SALES", subItems: [{ title: "Product List", path: "/products" }, { title: "Manage Stock", path: "/reports/stock" }, { title: "Stock Requisitions", path: "/products/my-requests" }] },
+        { title: "Services",        icon: Wrench,          path: "#services",         group: "SALES", subItems: [{ title: "Service Catalog", path: "/services" }, { title: "Work Orders / Jobs", path: "/services/jobs" }] },
+        { title: "Sales",           icon: FileText,        path: "#sell",             group: "SALES", subItems: [{ title: "All Sales", path: "/sell/all" }, { title: "Warranties", path: "/sell/quotations" }, { title: "Saved Drafts", path: "/sell/drafts" }] },
       ];
     }
 
     if (role === "super_admin") {
       return [
         { title: "Dashboard",       icon: LayoutDashboard, path: "/dashboard",        group: "MAIN" },
-        { title: "Sales Terminal",  icon: Upload,          path: "/sales",            group: "MAIN" },
 
-        { title: "Sales",           icon: FileText,        path: "#sell",             group: "OPERATIONS", subItems: [
-          { title: "All Sales", path: "/sell/all" },
-          { title: "Warranties", path: "/sell/quotations" },
-          { title: "Returns", path: "/sell/returns" },
-          { title: "Shipments", path: "/sell/shipments" },
-          { title: "Discounts", path: "/sell/discounts" },
-        ] },
-        { title: "Services",        icon: Wrench,          path: "#services",         group: "OPERATIONS", subItems: [
-          { title: "Service Catalog", path: "/services" },
-          { title: "Work Orders / Jobs", path: "/services/jobs" }
-        ] },
-        { title: "Customers",       icon: Users,           path: "#contacts",         group: "OPERATIONS", subItems: [
+        { title: "Contacts",        icon: Users,           path: "#contacts",         group: "SALES", subItems: [
           { title: "Customer Registry", path: "/customers" },
           { title: "Suppliers", path: "/suppliers" }
         ] },
-
-        { title: "Products",        icon: Package,         path: "#products",         group: "INVENTORY & PROCUREMENT", subItems: [
+        { title: "Products",        icon: Package,         path: "#products",         group: "SALES", subItems: [
           { title: "Product Catalog", path: "/products" },
+          { title: "Manage Stock", path: "/reports/stock" },
           { title: "Categories", path: "/products/categories" },
           { title: "Brands", path: "/products/brands" },
           { title: "Import Products", path: "/products/import" },
+          { title: "Product Requests", path: "/admin/product-requests" }
         ] },
-        { title: "Stock Management",icon: ClipboardList,   path: "#stock",            group: "INVENTORY & PROCUREMENT", subItems: [
-          { title: "Stock Levels", path: "/reports/stock" },
-          { title: "Restock Orders", path: "/purchases/restock" },
-          { title: "Product Requisitions", path: "/admin/product-requests" },
+        { title: "Services",        icon: Wrench,          path: "#services",         group: "SALES", subItems: [
+          { title: "Service Catalog", path: "/services" },
+          { title: "Work Orders / Jobs", path: "/services/jobs" }
+        ] },
+        { title: "Sales",           icon: Upload,          path: "#sell",             group: "SALES", subItems: [
+          { title: "All Sales", path: "/sell/all" },
+          { title: "Warranties", path: "/sell/quotations" },
+          { title: "Saved Drafts", path: "/sell/drafts" },
+          { title: "Returns", path: "/sell/returns" },
+          { title: "Shipments", path: "/sell/shipments" },
+          { title: "Discounts", path: "/sell/discounts" },
+          { title: "Import Sales", path: "/sell/import" }
+        ] },
+        { title: "Buy Stock",       icon: Download,        path: "#purchases",        group: "SALES", subItems: [
           { title: "Stock Purchases", path: "/purchases" },
+          { title: "Order Stock", path: "/purchases/restock" }
         ] },
 
-        { title: "Financial Reports",icon: DollarSign,     path: "#reports",          group: "REPORTS & ANALYTICS", subItems: [
+        { title: "Reports",         icon: ClipboardList,   path: "#reports",          group: "SYSTEM", subItems: [
           { title: "Profit & Loss", path: "/reports/profit-loss" },
           { title: "Stock Activity", path: "/reports/purchase-sale" },
           { title: "Brand Reports", path: "/reports/brands" }
         ] },
-        { title: "Analytics",       icon: Activity,        path: "#analytics",        group: "REPORTS & ANALYTICS", subItems: [
+        { title: "Analytics",       icon: Activity,        path: "#analytics",        group: "SYSTEM", subItems: [
           { title: "Sales Forecasting", path: "/forecasting" },
           { title: "Model Benchmarking", path: "/forecasting/benchmark" },
-          { title: "Prescriptive Insights", path: "/prescriptive-analytics" }
+          { title: "Prescriptive Analytics", path: "/prescriptive-analytics" }
         ] },
-
-        { title: "User Management", icon: UserPlus,        path: "#user-management",  group: "ADMINISTRATION", subItems: [
-          { title: "Staff Registry", path: "/staff" },
-          { title: "Roles & Permissions", path: "/roles" },
-        ] },
-        { title: "System Admin",    icon: ShieldCheck,     path: "/admin",            group: "ADMINISTRATION" },
+        { title: "System Admin",    icon: ShieldCheck,     path: "/admin",            group: "SYSTEM" },
       ];
     }
 
     // Default / Branch Admin
+    const personnelTitle = role === "branch_admin" ? "Staff" : "Our Staff";
     return [
       { title: "Dashboard",       icon: LayoutDashboard, path: "/dashboard",        group: "MAIN" },
-      { title: "Sales Terminal",  icon: Upload,          path: "/sales",            group: "MAIN" },
 
-      { title: "Sales",           icon: FileText,        path: "#sell",             group: "OPERATIONS", subItems: [
+      { title: "Contacts",        icon: Users,           path: "#contacts",         group: "SALES", subItems: [
+        { title: "Customer List", path: "/customers" }
+      ] },
+      { title: "Products",        icon: Package,         path: "#products",         group: "SALES", subItems: [
+        { title: "Product List", path: "/products" },
+        { title: "Manage Stock", path: "/reports/stock" },
+        { title: "Categories", path: "/products/categories" },
+        { title: "Brands", path: "/products/brands" },
+        { title: "My Requests", path: "/products/my-requests" }
+      ] },
+      { title: "Services",        icon: Wrench,          path: "#services",         group: "SALES", subItems: [
+        { title: "Service Catalog", path: "/services" },
+        { title: "Work Orders / Jobs", path: "/services/jobs" }
+      ] },
+      { title: "Sales",           icon: Upload,          path: "#sell",             group: "SALES", subItems: [
         { title: "All Sales", path: "/sell/all" },
         { title: "Warranties", path: "/sell/quotations" },
         { title: "Returns", path: "/sell/returns" },
         { title: "Saved Drafts", path: "/sell/drafts" },
+        { title: "Shipments", path: "/sell/shipments" },
+        { title: "Discounts", path: "/sell/discounts" },
+        { title: "Import Sales", path: "/sell/import" }
       ] },
-      { title: "Services",        icon: Wrench,          path: "#services",         group: "OPERATIONS", subItems: [
-        { title: "Service Catalog", path: "/services" },
-        { title: "Work Orders / Jobs", path: "/services/jobs" }
-      ] },
-      { title: "Customers",       icon: Users,           path: "/customers",        group: "OPERATIONS" },
-
-      { title: "Products",        icon: Package,         path: "#products",         group: "INVENTORY & PROCUREMENT", subItems: [
-        { title: "Product Catalog", path: "/products" },
-        { title: "Categories", path: "/products/categories" },
-        { title: "Brands", path: "/products/brands" },
-      ] },
-      { title: "Stock Management",icon: ClipboardList,   path: "#stock",            group: "INVENTORY & PROCUREMENT", subItems: [
-        { title: "Stock Levels", path: "/reports/stock" },
-        { title: "Restock Orders", path: "/purchases/restock" },
-        { title: "My Requisitions", path: "/products/my-requests" },
+      { title: "Buy Stock",       icon: Download,        path: "#purchases",        group: "SALES", subItems: [
+        { title: "Stock Purchases", path: "/purchases" },
+        { title: "Order Stock", path: "/purchases/restock" }
       ] },
 
-      { title: "Reports",         icon: DollarSign,      path: "#reports",          group: "REPORTS", subItems: [
+      { title: personnelTitle,    icon: UserPlus,        path: "#user-management",  group: "SYSTEM", subItems: [
+        { title: "Staff List", path: "/staff" },
+        { title: "Roles & Permissions", path: "/roles" }
+      ] },
+      { title: "Reports",         icon: ClipboardList,   path: "#reports",          group: "SYSTEM", subItems: [
         { title: "Profit & Loss", path: "/reports/profit-loss" },
         { title: "Stock Activity", path: "/reports/purchase-sale" }
-      ] },
-
-      { title: "Team Management", icon: UserPlus,        path: "#user-management",  group: "ADMINISTRATION", subItems: [
-        { title: "Staff Registry", path: "/staff" },
-        { title: "Roles & Permissions", path: "/roles" },
       ] },
     ];
   };
 
   const navItems = getNavItems();
-  const menuGroups = Array.from(new Set(navItems.map(i => i.group)));
+  const menuGroups = ["MAIN", "SALES", "SYSTEM"];
 
   const toggleMenu = (title, e) => {
     if (e) e.preventDefault();
@@ -303,10 +305,12 @@ const Sidebar = () => {
                 if (!items.length) return null;
                 return (
                   <div key={group}>
-                    {/* Group label */}
-                    <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted/60 select-none">
-                      {group}
-                    </p>
+                    {/* Group label - remove only the sales text with white mark */}
+                    {group !== "SALES" && (
+                      <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted/60 select-none">
+                        {group}
+                      </p>
+                    )}
 
                     <div className="space-y-0.5">
                       {items.map((item) => {
