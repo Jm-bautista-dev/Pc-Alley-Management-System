@@ -121,7 +121,6 @@ const Sidebar = () => {
       { title: "Products",        icon: Package,         path: "#products",         group: "SALES", subItems: [
         { title: "Product List", path: "/products" },
         { title: "Manage Stock", path: "/reports/stock" },
-        { title: "Staff Requests", path: "/purchases/restock?tab=requests" },
         { title: "Categories", path: "/products/categories" },
         { title: "Brands", path: "/products/brands" },
         { title: "My Requests", path: "/products/my-requests" }
@@ -141,8 +140,7 @@ const Sidebar = () => {
       ] },
       { title: "Buy Stock",       icon: Download,        path: "#purchases",        group: "SALES", subItems: [
         { title: "Stock Purchases", path: "/purchases" },
-        { title: "Order Stock", path: "/purchases/restock" },
-        { title: "Staff Restock Requests", path: "/purchases/restock?tab=requests" }
+        { title: "Order Stock", path: "/purchases/restock" }
       ] },
 
       { title: personnelTitle,    icon: UserPlus,        path: "#user-management",  group: "SYSTEM", subItems: [
