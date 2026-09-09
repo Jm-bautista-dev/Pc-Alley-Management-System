@@ -10,11 +10,21 @@ const ProductRequest = sequelize.define('ProductRequest', {
   quantity_approved: { type: DataTypes.INTEGER, allowNull: true },
   notes: { type: DataTypes.TEXT, allowNull: true },
   priority: { type: DataTypes.ENUM('low','normal','urgent'), defaultValue: 'normal' },
-  status: { type: DataTypes.ENUM('Pending','Approved','Partially Approved','Rejected','Scheduled','Completed','Cancelled'), defaultValue: 'Pending' },
+  status: { 
+    type: DataTypes.STRING(50), 
+    defaultValue: 'PENDING' 
+  },
+  source_branch_id: { type: DataTypes.INTEGER, allowNull: true, references: { model: 'branches', key: 'id' } },
   requested_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
   approved_at: { type: DataTypes.DATE, allowNull: true },
+  approval_notes: { type: DataTypes.TEXT, allowNull: true },
   processed_at: { type: DataTypes.DATE, allowNull: true },
-  approved_by: { type: DataTypes.INTEGER, allowNull: true },
+  approved_by: { type: DataTypes.INTEGER, allowNull: true, references: { model: 'users', key: 'id' } },
+  fulfilled_by: { type: DataTypes.INTEGER, allowNull: true, references: { model: 'users', key: 'id' } },
+  fulfilled_at: { type: DataTypes.DATE, allowNull: true },
+  quantity_fulfilled: { type: DataTypes.INTEGER, allowNull: true },
+  received_by: { type: DataTypes.INTEGER, allowNull: true, references: { model: 'users', key: 'id' } },
+  received_at: { type: DataTypes.DATE, allowNull: true },
   scheduled_date: { type: DataTypes.DATEONLY, allowNull: true },
   scheduled_time: { type: DataTypes.TIME, allowNull: true },
   rejection_reason: { type: DataTypes.TEXT, allowNull: true },
@@ -26,7 +36,10 @@ const ProductRequest = sequelize.define('ProductRequest', {
         const datePart = new Date().toISOString().slice(0,10).replace(/-/g,'');
         const count = await ProductRequest.count({ where: { createdAt: { [sequelize.Op.gte]: new Date().setHours(0,0,0,0) } } });
         const seq = String(count + 1).padStart(4, '0');
-        request.request_number = `PR-${datePart}-${seq}`;
+        request.request_number = `SR-${datePart}-${seq}`;
+      }
+      if (request.status) {
+        request.status = request.status.toUpperCase();
       }
     }
   }

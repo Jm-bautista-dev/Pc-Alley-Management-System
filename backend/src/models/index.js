@@ -28,6 +28,8 @@ const Attendance = require('./Attendance');
 const Warranty = require('./Warranty');
 const Service = require('./Service');
 const ServiceJob = require('./ServiceJob');
+const BenchmarkRun = require('./BenchmarkRun');
+const BenchmarkResult = require('./BenchmarkResult');
 
 // ── Existing Associations ──
 Branch.hasMany(User, { foreignKey: 'branch_id' });
@@ -80,8 +82,12 @@ RestockRequest.belongsTo(User, { as: 'Admin', foreignKey: 'admin_id' });
 // ProductRequest associations
 ProductRequest.belongsTo(Product, { foreignKey: 'product_id' });
 ProductRequest.belongsTo(Branch, { foreignKey: 'branch_id' });
+ProductRequest.belongsTo(Branch, { as: 'DestinationBranch', foreignKey: 'branch_id' });
+ProductRequest.belongsTo(Branch, { as: 'SourceBranch', foreignKey: 'source_branch_id' });
 ProductRequest.belongsTo(User, { as: 'Requester', foreignKey: 'requested_by' });
 ProductRequest.belongsTo(User, { as: 'Approver', foreignKey: 'approved_by' });
+ProductRequest.belongsTo(User, { as: 'Fulfiller', foreignKey: 'fulfilled_by' });
+ProductRequest.belongsTo(User, { as: 'Receiver', foreignKey: 'received_by' });
 
 Notification.belongsTo(User, { foreignKey: 'userId' });
 Notification.belongsTo(Branch, { foreignKey: 'branchId' });
@@ -180,6 +186,12 @@ ServiceJob.belongsTo(Sale, { foreignKey: 'sale_id' });
 ServiceJob.hasMany(SaleItem, { foreignKey: 'serviceJobId' });
 SaleItem.belongsTo(ServiceJob, { foreignKey: 'serviceJobId' });
 
+// Benchmark associations
+BenchmarkRun.hasMany(BenchmarkResult, { foreignKey: 'benchmark_run_id', as: 'results' });
+BenchmarkResult.belongsTo(BenchmarkRun, { foreignKey: 'benchmark_run_id' });
+BenchmarkRun.belongsTo(Branch, { foreignKey: 'branch_id', as: 'branch' });
+BenchmarkRun.belongsTo(User, { foreignKey: 'created_by', as: 'Creator' });
+
 module.exports = {
   Branch,
   User,
@@ -211,5 +223,7 @@ module.exports = {
   Attendance,
   Warranty,
   Service,
-  ServiceJob
+  ServiceJob,
+  BenchmarkRun,
+  BenchmarkResult
 };

@@ -66,8 +66,13 @@ export default function ExpensesPage() {
     setForm({ description: "", amount: "", category: "Rent", date: new Date().toISOString().split("T")[0], note: "" });
   };
 
-  const handleDelete = (id) => {
-    if (!confirm("Delete this expense entry?")) return;
+  const handleDelete = async (id) => {
+    const confirmed = await showConfirm(
+      "Delete Expense",
+      "Are you sure you want to delete this expense entry?",
+      { danger: true, confirmLabel: "Delete" }
+    );
+    if (!confirmed) return;
     saveExpenses(expenses.filter(e => e.id !== id));
     showSuccess("Entry removed");
   };

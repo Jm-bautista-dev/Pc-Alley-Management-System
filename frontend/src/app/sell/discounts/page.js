@@ -53,18 +53,38 @@ export default function DiscountsPage() {
 
   const handleCreate = (e) => {
     e.preventDefault();
-    if (!form.name || !form.code || !form.value) return showError("Fill in all required fields");
+    const cleanName = (form.name || "").trim();
+    const cleanCode = (form.code || "").trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
+    const val = parseFloat(form.value);
+
+    if (!cleanName || !cleanCode || isNaN(val) || val <= 0) {
+      return showError("Please fill in all required fields with valid values.");
+    }
+    if (cleanName.length < 2 || cleanName.length > 100) {
+      return showError("Discount name must be between 2 and 100 characters.");
+    }
+    if (cleanCode.length < 2 || cleanCode.length > 30) {
+      return showError("Discount code must be between 2 and 30 characters.");
+    }
+    if (form.type === DISCOUNT_TYPES[0] && (val < 0.1 || val > 100)) {
+      return showError("Percentage discount must be between 0.1% and 100%.");
+    }
+    if (form.type === DISCOUNT_TYPES[1] && (val < 0.01 || val > 99999999.99)) {
+      return showError("Fixed discount amount must be between ₱0.01 and ₱99,999,999.99.");
+    }
+
     // Check for duplicate codes
-    if (discounts.some(d => d.code.toUpperCase() === form.code.toUpperCase())) {
+    if (discounts.some(d => d.code.toUpperCase() === cleanCode)) {
       return showError("Coupon code already exists");
     }
     const newDiscount = {
       id: Date.now(),
       ...form,
-      code: form.code.toUpperCase(),
-      value: parseFloat(form.value),
-      min_purchase: parseFloat(form.min_purchase) || 0,
-      max_uses: parseInt(form.max_uses) || null,
+      name: cleanName,
+      code: cleanCode,
+      value: val,
+      min_purchase: Math.min(99999999, Math.max(0, parseFloat(form.min_purchase) || 0)),
+      max_uses: form.max_uses ? Math.min(1000000, Math.max(1, parseInt(form.max_uses) || 1)) : null,
       uses: 0,
       active: true,
       createdAt: new Date().toISOString()
@@ -183,9 +203,9 @@ export default function DiscountsPage() {
                       <motion.tr key={d.id} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: idx * 0.03 }}
                         className="border-b border-border/30 hover:bg-brand-bgbase/30 transition-colors group">
-                        <td className="py-4 px-6 text-sm font-bold text-main">{d.name}</td>
+                        <td className="py-4 px-6 text-sm font-bold text-main max-w-[200px] truncate" title={d.name}>{d.name}</td>
                         <td className="py-4 px-6">
-                          <code className="px-2.5 py-1 bg-brand-bgbase border border-border rounded-lg text-[11px] font-mono font-black text-yellow-500">
+                          <code className="px-2.5 py-1 bg-brand-bgbase border border-border rounded-lg text-[11px] font-mono font-black text-yellow-500 max-w-[150px] inline-block truncate" title={d.code}>
                             {d.code}
                           </code>
                         </td>
@@ -238,12 +258,18 @@ export default function DiscountsPage() {
             </div>
             {totalPages > 1 && (
               <div className="border-t border-border/50 p-4 flex items-center justify-between bg-brand-bgbase/20">
-                <span className="text-[10px] font-black uppercase tracking-widest text-muted">Page {currentPage} of {totalPages}</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-muted">
+                  Page {currentPage} of {totalPages}
+                </span>
                 <div className="flex gap-2">
-                  <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1}
-                    className="p-2 rounded-lg border border-border text-muted hover:text-main disabled:opacity-40 disabled:cursor-not-allowed transition-all"><ChevronLeft size={14} /></button>
-                  <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages}
-                    className="p-2 rounded-lg border border-border text-muted hover:text-main disabled:opacity-40 disabled:cursor-not-allowed transition-all"><ChevronRight size={14} /></button>
+                  <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
+                    className="p-2 rounded-lg border border-border disabled:opacity-30 hover:bg-brand-bgbase text-muted hover:text-main transition-all">
+                    <ChevronLeft size={14} />
+                  </button>
+                  <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
+                    className="p-2 rounded-lg border border-border disabled:opacity-30 hover:bg-brand-bgbase text-muted hover:text-main transition-all">
+                    <ChevronRight size={14} />
+                  </button>
                 </div>
               </div>
             )}
@@ -269,13 +295,13 @@ export default function DiscountsPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-[9px] font-black uppercase tracking-[3px] text-muted ml-1">Name *</label>
-                    <input type="text" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
+                    <input type="text" required maxLength={100} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
                       placeholder="e.g. Summer Sale"
                       className="w-full mt-1.5 bg-brand-bgbase border border-border rounded-2xl py-3 px-4 text-sm text-main focus:outline-none focus:border-brand-neonblue transition-all" />
                   </div>
                   <div>
                     <label className="text-[9px] font-black uppercase tracking-[3px] text-muted ml-1">Coupon Code *</label>
-                    <input type="text" required value={form.code} onChange={e => setForm({ ...form, code: e.target.value.toUpperCase() })}
+                    <input type="text" required maxLength={30} value={form.code} onChange={e => setForm({ ...form, code: e.target.value.toUpperCase() })}
                       placeholder="e.g. SAVE20"
                       className="w-full mt-1.5 bg-brand-bgbase border border-border rounded-2xl py-3 px-4 text-sm text-main font-mono focus:outline-none focus:border-yellow-500 transition-all uppercase" />
                   </div>
@@ -290,7 +316,7 @@ export default function DiscountsPage() {
                   </div>
                   <div>
                     <label className="text-[9px] font-black uppercase tracking-[3px] text-muted ml-1">Value *</label>
-                    <input type="number" required min="0" step="0.01" value={form.value} onChange={e => setForm({ ...form, value: e.target.value })}
+                    <input type="number" required min="0.01" max={form.type === DISCOUNT_TYPES[0] ? "100" : "99999999"} step={form.type === DISCOUNT_TYPES[0] ? "0.1" : "0.01"} value={form.value} onChange={e => setForm({ ...form, value: e.target.value })}
                       placeholder={form.type === DISCOUNT_TYPES[0] ? "20" : "100"}
                       className="w-full mt-1.5 bg-brand-bgbase border border-border rounded-2xl py-3 px-4 text-sm text-main focus:outline-none focus:border-yellow-500 transition-all" />
                   </div>
@@ -298,13 +324,13 @@ export default function DiscountsPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-[9px] font-black uppercase tracking-[3px] text-muted ml-1">Min Purchase (₱)</label>
-                    <input type="number" min="0" value={form.min_purchase} onChange={e => setForm({ ...form, min_purchase: e.target.value })}
+                    <input type="number" min="0" max="99999999" step="0.01" value={form.min_purchase} onChange={e => setForm({ ...form, min_purchase: e.target.value })}
                       placeholder="0 = no minimum"
                       className="w-full mt-1.5 bg-brand-bgbase border border-border rounded-2xl py-3 px-4 text-sm text-main focus:outline-none focus:border-brand-neonblue transition-all" />
                   </div>
                   <div>
                     <label className="text-[9px] font-black uppercase tracking-[3px] text-muted ml-1">Max Uses</label>
-                    <input type="number" min="1" value={form.max_uses} onChange={e => setForm({ ...form, max_uses: e.target.value })}
+                    <input type="number" min="1" max="1000000" value={form.max_uses} onChange={e => setForm({ ...form, max_uses: e.target.value })}
                       placeholder="Unlimited"
                       className="w-full mt-1.5 bg-brand-bgbase border border-border rounded-2xl py-3 px-4 text-sm text-main focus:outline-none focus:border-brand-neonblue transition-all" />
                   </div>

@@ -17,9 +17,12 @@ router.get('/', authenticateToken, cacheMiddleware(300, 'categories'), async (re
 // Create new category
 router.post('/', [authenticateToken, authorizeRoles('super_admin')], async (req, res) => {
   try {
-    const { name } = req.body;
+    const name = typeof req.body.name === 'string' ? req.body.name.trim() : '';
     if (!name) {
       return res.status(400).json({ error: 'Category name is required.' });
+    }
+    if (name.length < 2 || name.length > 50) {
+      return res.status(400).json({ error: 'Category name must be between 2 and 50 characters.' });
     }
     const category = await Category.create({ name });
     invalidateCache('categories');

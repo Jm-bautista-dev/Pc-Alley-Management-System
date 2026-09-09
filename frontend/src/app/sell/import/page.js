@@ -179,8 +179,13 @@ export default function ImportPage() {
     setCurrentLogStep(0);
   };
 
-  const deleteHistoryItem = (id) => {
-    if (confirm("Delete this import record from log history?")) {
+  const deleteHistoryItem = async (id) => {
+    const confirmed = await showConfirm(
+      "Delete Import Record",
+      "Delete this import record from log history?",
+      { danger: true, confirmLabel: "Delete" }
+    );
+    if (confirmed) {
       saveHistory(history.filter(h => h.id !== id));
       showSuccess("Import log deleted");
     }

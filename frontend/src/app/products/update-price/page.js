@@ -4,6 +4,7 @@ import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import { Tag } from "lucide-react";
 import { motion } from "framer-motion";
+import { showInfo } from "@/context/ModalContext";
 
 export default function UpdatePricePage() {
   return (
@@ -30,7 +31,7 @@ export default function UpdatePricePage() {
             </p>
             <div className="mt-10 flex gap-4">
               <button 
-                onClick={() => alert("System Notice: Price Adjuster Matrix Not Enabled")} 
+                onClick={() => showInfo("Price Adjustments", "Price Adjustment Matrix is currently in preview mode.")} 
                 className="btn-premium px-8"
               >
                 Sync Valuations

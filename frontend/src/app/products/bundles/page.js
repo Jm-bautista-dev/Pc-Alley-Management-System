@@ -14,6 +14,7 @@ import {
   ShoppingBag
 } from "lucide-react";
 import { apiUrl } from "@/lib/api";
+import { showSuccess, showError, showInfo, showWarning, showConfirm, showModal } from "@/context/ModalContext";
 
 export default function BundlesPage() {
   const [products, setProducts] = useState([]);
@@ -49,17 +50,29 @@ export default function BundlesPage() {
     e.preventDefault();
     const token = localStorage.getItem("token");
     
+    const name = bundleName.trim();
+    if (!name || name.length < 2 || name.length > 200) {
+      showError("Bundle name must be between 2 and 200 characters.");
+      return;
+    }
+
+    const price = Number(bundlePrice);
+    if (isNaN(price) || price < 0.01 || price > 99999999.99) {
+      showError("Bundle price must be between ₱0.01 and ₱99,999,999.99.");
+      return;
+    }
+
     if (selectedItems.length === 0) {
-      alert("Please add at least one item to the bundle.");
+      showError("Please add at least one item to the bundle.");
       return;
     }
 
     const payload = {
-      name: bundleName,
-      price: Number(bundlePrice),
+      name,
+      price,
       items: selectedItems.map(item => ({
         product_id: item.product.id,
-        quantity: item.quantity
+        quantity: Math.min(100000, Math.max(1, parseInt(item.quantity, 10) || 1))
       }))
     };
 
@@ -78,13 +91,15 @@ export default function BundlesPage() {
         setBundleName("");
         setBundlePrice("");
         setSelectedItems([]);
+        showSuccess("Bundle created successfully!");
         fetchProducts(); // Refresh list
       } else {
-        const err = await res.json();
-        alert(err.error || "Failed to create bundle");
+        const err = await res.json().catch(() => ({}));
+        showError(err.error || err.message || "Failed to create bundle");
       }
     } catch (err) {
       console.error("Error creating bundle:", err);
+      showError("Network connection error");
     }
   };
 

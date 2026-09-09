@@ -347,40 +347,40 @@ export default function SuppliersPage() {
                           transition={{ delay: i * 0.04 }}
                           className="border-b border-main/5 hover:bg-brand-surface/30 transition-all group"
                         >
-                          <td className="py-6 pr-4 font-mono text-[10px] text-muted/40 group-hover:text-brand-neonblue transition-colors uppercase tracking-[2px]">
+                          <td className="py-6 pr-4 font-mono text-[10px] text-muted/40 group-hover:text-brand-neonblue transition-colors uppercase tracking-[2px] whitespace-nowrap">
                             SU-{supplier.id?.toString?.().padStart(3, "0") || "---"}
                           </td>
-                          <td className="py-6 px-4">
+                          <td className="py-6 px-4 max-w-[220px]">
                             <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-xl bg-brand-surface border border-border flex items-center justify-center font-black text-[11px] text-muted group-hover:border-brand-neonblue/20 group-hover:text-brand-neonblue transition-all">
+                              <div className="w-10 h-10 rounded-xl bg-brand-surface border border-border flex items-center justify-center font-black text-[11px] text-muted group-hover:border-brand-neonblue/20 group-hover:text-brand-neonblue transition-all shrink-0">
                                 {supplier.name?.slice(0, 2).toUpperCase()}
                               </div>
-                              <div>
-                                <p className="text-[13px] font-black text-main group-hover:text-brand-neonblue transition-colors">{supplier.name}</p>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[13px] font-black text-main group-hover:text-brand-neonblue transition-colors truncate" title={supplier.name}>{supplier.name}</p>
                               </div>
                             </div>
                           </td>
-                          <td className="py-6 px-4 font-semibold text-[13px] text-main/80">
+                          <td className="py-6 px-4 font-semibold text-[13px] text-main/80 max-w-[180px] truncate" title={supplier.contact_person || ""}>
                             {supplier.contact_person || "—"}
                           </td>
-                          <td className="py-6 px-4">
+                          <td className="py-6 px-4 max-w-[220px]">
                             <div className="space-y-1.5">
                               {supplier.email && (
-                                <div className="flex items-center gap-2 text-[11px] font-bold text-muted/60">
-                                  <Mail size={11} className="opacity-40" /> {supplier.email}
+                                <div className="flex items-center gap-2 text-[11px] font-bold text-muted/60 truncate" title={supplier.email}>
+                                  <Mail size={11} className="opacity-40 shrink-0" /> <span className="truncate">{supplier.email}</span>
                                 </div>
                               )}
                               {supplier.phone && (
-                                <div className="flex items-center gap-2 text-[11px] font-bold text-muted/60">
-                                  <Phone size={11} className="opacity-40" /> {supplier.phone}
+                                <div className="flex items-center gap-2 text-[11px] font-bold text-muted/60 truncate" title={supplier.phone}>
+                                  <Phone size={11} className="opacity-40 shrink-0" /> <span>{supplier.phone}</span>
                                 </div>
                               )}
                             </div>
                           </td>
-                          <td className="py-6 pl-4 text-[11px] font-semibold text-muted/50 max-w-[200px] truncate">
+                          <td className="py-6 pl-4 text-[11px] font-semibold text-muted/50 max-w-[200px] truncate" title={supplier.address || ""}>
                             {supplier.address ? (
-                              <span className="flex items-center gap-1.5">
-                                <MapPin size={11} className="opacity-30" /> {supplier.address}
+                              <span className="flex items-center gap-1.5 truncate">
+                                <MapPin size={11} className="opacity-30 shrink-0" /> <span className="truncate">{supplier.address}</span>
                               </span>
                             ) : "—"}
                           </td>

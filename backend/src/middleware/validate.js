@@ -7,12 +7,22 @@ const validate = (req, res, next) => {
   }
   
   const extractedErrors = [];
-  errors.array().map(err => extractedErrors.push({ [err.path]: err.msg }));
+  errors.array().forEach(err => {
+    extractedErrors.push({
+      [err.path]: err.msg,
+      path: err.path,
+      msg: err.msg
+    });
+  });
+
+  const errorMessages = errors.array().map(err => err.msg).filter(Boolean);
 
   return res.status(400).json({
-    message: "Validation Failed",
+    message: errorMessages.length > 0 ? errorMessages.join(', ') : "Validation Failed",
+    error: errorMessages.length > 0 ? errorMessages.join(', ') : "Validation Failed",
     errors: extractedErrors,
   });
 };
 
 module.exports = validate;
+

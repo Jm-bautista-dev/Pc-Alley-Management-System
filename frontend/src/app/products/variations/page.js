@@ -4,6 +4,7 @@ import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import { Scissors } from "lucide-react";
 import { motion } from "framer-motion";
+import { showInfo } from "@/context/ModalContext";
 
 export default function VariationsPage() {
   return (
@@ -30,7 +31,7 @@ export default function VariationsPage() {
             </p>
             <div className="mt-10 flex gap-4">
               <button 
-                onClick={() => alert("System Notice: Variation Core Not Enabled")} 
+                onClick={() => showInfo("Variation Core Not Enabled", "This preview feature is currently pending attribute schema configuration.")} 
                 className="btn-premium px-8"
               >
                 Add Variation

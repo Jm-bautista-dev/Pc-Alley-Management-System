@@ -4,6 +4,7 @@ import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import { ShieldCheck } from "lucide-react";
 import { motion } from "framer-motion";
+import { showInfo } from "@/context/ModalContext";
 
 export default function WarrantiesPage() {
   return (
@@ -30,7 +31,7 @@ export default function WarrantiesPage() {
             </p>
             <div className="mt-10 flex gap-4">
               <button 
-                onClick={() => alert("System Notice: Warranty Definition Matrix Not Enabled")} 
+                onClick={() => showInfo("Warranties", "Warranty definition module is currently in preview mode.")} 
                 className="btn-premium px-8"
               >
                 Add Warranty

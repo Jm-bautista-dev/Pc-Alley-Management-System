@@ -4,6 +4,7 @@ import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import { Zap } from "lucide-react";
 import { motion } from "framer-motion";
+import { showInfo } from "@/context/ModalContext";
 
 export default function TrendingProductsPage() {
   return (
@@ -30,7 +31,7 @@ export default function TrendingProductsPage() {
             </p>
             <div className="mt-10 flex gap-4">
               <button 
-                onClick={() => alert("System Notice: Velocity Matrix Not Enabled")} 
+                onClick={() => showInfo("Velocity Matrix Not Enabled", "This preview feature is currently pending real-time telemetry synchronization.")} 
                 className="btn-premium px-8"
               >
                 Sync Performance

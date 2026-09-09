@@ -245,7 +245,12 @@ export default function StockReportPage() {
   for (let i = 1; i <= totalPages; i++) pageNumbers.push(i);
 
   const handleDeleteProduct = async (product) => {
-    if (!window.confirm(`Are you sure you want to delete "${product.name}"?`)) return;
+    const confirmed = await showConfirm(
+      "Delete Product",
+      `Are you sure you want to delete "${product.name}"? This action cannot be undone.`,
+      { danger: true, confirmLabel: "Delete" }
+    );
+    if (!confirmed) return;
     const token = localStorage.getItem('token');
     try {
       const res = await fetch(apiUrl(`/api/products/${product.id}`), {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Bell, User, ChevronDown, LogOut, Sun, Moon, Menu } from "lucide-react";
+import { Bell, User, ChevronDown, LogOut, Sun, Moon, Menu, Settings } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import NotificationsPanel from "./NotificationsPanel";
@@ -154,6 +154,13 @@ const TopBar = ({ title }) => {
                   >
                     <User size={14} className="shrink-0" />
                     Profile
+                  </button>
+                  <button
+                    onClick={() => { setIsProfileOpen(false); router.push("/settings"); }}
+                    className="w-full flex items-center gap-2.5 px-3 h-9 rounded-lg text-sm font-medium text-muted hover:text-main hover:bg-brand-bgbase"
+                  >
+                    <Settings size={14} className="shrink-0" />
+                    Settings
                   </button>
                   <div className="h-px bg-border my-1" />
                   <button

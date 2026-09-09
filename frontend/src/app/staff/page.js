@@ -131,7 +131,7 @@ export default function StaffPage() {
     const token = localStorage.getItem("token");
 
     if (!branches.length) {
-      alert("No branches available yet. Create a branch first before registering staff.");
+      showError("No branches available yet. Create a branch first before registering staff.");
       return;
     }
 
@@ -147,47 +147,51 @@ export default function StaffPage() {
     };
 
     if (!payload.first_name) {
-      alert("Please enter the staff member's first name.");
+      showError("Please enter the staff member's first name.");
       return;
     }
     if (/\d/.test(payload.first_name) || !/^[A-Za-z\s.\'-]+$/.test(payload.first_name) || payload.first_name.length < 2 || payload.first_name.length > 50) {
-      alert("First name can only contain letters, spaces, hyphens, apostrophes, and dots (2-50 chars, no numbers).");
+      showError("First name can only contain letters, spaces, hyphens, apostrophes, and dots (2-50 chars, no numbers).");
       return;
     }
 
     if (!payload.last_name) {
-      alert("Please enter the staff member's last name.");
+      showError("Please enter the staff member's last name.");
       return;
     }
     if (/\d/.test(payload.last_name) || !/^[A-Za-z\s.\'-]+$/.test(payload.last_name) || payload.last_name.length < 2 || payload.last_name.length > 50) {
-      alert("Last name can only contain letters, spaces, hyphens, apostrophes, and dots (2-50 chars, no numbers).");
+      showError("Last name can only contain letters, spaces, hyphens, apostrophes, and dots (2-50 chars, no numbers).");
       return;
     }
 
     if (!payload.username) {
-      alert("Please enter a username for the staff account.");
+      showError("Please enter a username for the staff account.");
+      return;
+    }
+    if (payload.username.length < 3 || payload.username.length > 50) {
+      showError("Username must be between 3 and 50 characters.");
       return;
     }
 
     if (provisionData.password !== provisionData.confirmPassword) {
-      alert("Passwords do not match.");
+      showError("Passwords do not match.");
       return;
     }
 
     if (!payload.password || payload.password.length < 6) {
-      alert("Password must be at least 6 characters.");
+      showError("Password must be at least 6 characters.");
       return;
     }
 
     if (!payload.branch_id || Number.isNaN(payload.branch_id)) {
-      alert("Please assign a branch for the staff account.");
+      showError("Please assign a branch for the staff account.");
       return;
     }
 
     try {
       const res = await fetch(apiUrl("/api/auth/register"), {
         method: "POST",
-        headers: {
+        headers: { 
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
@@ -208,13 +212,13 @@ export default function StaffPage() {
         showSuccess(`${payload.role === "branch_admin" ? "Manager" : "Staff"} account created`);
         fetchData();
       } else if (data.errors && Array.isArray(data.errors)) {
-        const msgs = data.errors.map((entry) => Object.values(entry)[0]).join("\n");
+        const msgs = data.errors.map((entry) => entry.msg || Object.values(entry)[0]).filter(Boolean).join("\n");
         addNotification({
           type: "alert",
           title: "Registration Validation Failed",
           message: msgs,
         });
-        showError("Validation failed");
+        showError(msgs || "Validation failed");
       } else {
         addNotification({
           type: "alert",
@@ -235,7 +239,12 @@ export default function StaffPage() {
   };
 
   const handleDeleteUser = async (userId) => {
-    if (!confirm("Are you sure you want to terminate this personnel account?")) return;
+    const confirmed = await showConfirm(
+      "Terminate Account",
+      "Are you sure you want to terminate this personnel account? This action cannot be undone.",
+      { danger: true, confirmLabel: "Terminate" }
+    );
+    if (!confirmed) return;
     const token = localStorage.getItem("token");
     try {
       const res = await fetch(apiUrl(`/api/auth/users/${userId}`), {
@@ -450,6 +459,7 @@ export default function StaffPage() {
                     <input
                       type="text"
                       required
+                      maxLength={50}
                       value={provisionData.first_name}
                       onChange={(e) => setProvisionData({ ...provisionData, first_name: e.target.value })}
                       className="w-full bg-brand-bgbase border border-border rounded-2xl py-4 px-6 text-sm text-main focus:outline-none focus:border-brand-neonblue transition-all"
@@ -461,6 +471,7 @@ export default function StaffPage() {
                     <input
                       type="text"
                       required
+                      maxLength={50}
                       value={provisionData.last_name}
                       onChange={(e) => setProvisionData({ ...provisionData, last_name: e.target.value })}
                       className="w-full bg-brand-bgbase border border-border rounded-2xl py-4 px-6 text-sm text-main focus:outline-none focus:border-brand-neonblue transition-all"
@@ -474,6 +485,7 @@ export default function StaffPage() {
                   <input
                     type="text"
                     required
+                    maxLength={50}
                     value={provisionData.username}
                     onChange={(e) => setProvisionData({ ...provisionData, username: e.target.value })}
                     className="w-full bg-brand-bgbase border border-border rounded-2xl py-4 px-6 text-sm text-main focus:outline-none focus:border-brand-neonblue transition-all"
@@ -487,6 +499,7 @@ export default function StaffPage() {
                     <input
                       type={showPassword ? "text" : "password"}
                       required
+                      maxLength={100}
                       value={provisionData.password}
                       onChange={(e) => setProvisionData({ ...provisionData, password: e.target.value })}
                       className="w-full bg-brand-bgbase border border-border rounded-2xl py-4 pl-6 pr-12 text-sm text-main focus:outline-none focus:border-brand-crimson transition-all"
@@ -508,6 +521,7 @@ export default function StaffPage() {
                     <input
                       type={showConfirmPassword ? "text" : "password"}
                       required
+                      maxLength={100}
                       value={provisionData.confirmPassword || ""}
                       onChange={(e) => setProvisionData({ ...provisionData, confirmPassword: e.target.value })}
                       className="w-full bg-brand-bgbase border border-border rounded-2xl py-4 pl-6 pr-12 text-sm text-main focus:outline-none focus:border-brand-crimson transition-all"

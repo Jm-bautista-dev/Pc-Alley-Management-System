@@ -1045,6 +1045,25 @@ const getForecastingAnalytics = async (req, res) => {
       insights.push(`Demand is expected to peak next period with ${nextMonthProj.predictedDemand} projected transactions.`);
     }
 
+    let benchmarkRecommendation = null;
+    try {
+      const BenchmarkingService = require('../services/forecasting/BenchmarkingService');
+      const latestBench = await BenchmarkingService.getLatestRecommendation({ branchId });
+      if (latestBench) {
+        benchmarkRecommendation = {
+          runId: latestBench.id,
+          bestModel: latestBench.best_model,
+          wape: latestBench.best_wape,
+          mae: latestBench.best_mae,
+          reliability: latestBench.reliability,
+          recommendationNotes: latestBench.recommendation_notes,
+          evaluatedAt: latestBench.createdAt,
+        };
+      }
+    } catch (bErr) {
+      console.warn('[FORECAST_BENCHMARK_REC_WARN]', bErr.message);
+    }
+
     res.json({
       mae,
       rmse,
@@ -1059,7 +1078,8 @@ const getForecastingAnalytics = async (req, res) => {
       tableData,
       branchRankings: branchForecasts,
       accuracyComparison,
-      insights
+      insights,
+      benchmarkRecommendation
     });
 
   } catch (error) {
@@ -1224,22 +1244,59 @@ const getPrescriptiveAnalytics = async (req, res) => {
 
 const getForecastingBenchmark = async (req, res) => {
   try {
-    const { runModelBenchmark } = require('../services/forecastBenchmarkService');
+    const BenchmarkingService = require('../services/forecasting/BenchmarkingService');
     const branchId = req.user.role !== 'super_admin' ? req.user.branch_id : req.query.branchId;
-    const { startDate, endDate, productId, groupBy, minTrainingPoints } = req.query;
-
-    const result = await runModelBenchmark({
+    const {
+      scopeType = 'all',
+      scopeId,
+      categoryId,
+      productId,
       startDate,
       endDate,
+      frequency,
+      horizon,
+      metric,
+      forceRefresh
+    } = req.query;
+
+    const result = await BenchmarkingService.runBenchmark({
+      scopeType: scopeType || (branchId ? 'branch' : 'all'),
+      scopeId: scopeId || branchId || null,
       branchId,
+      categoryId,
       productId,
-      groupBy: groupBy || 'monthly',
-      minTrainingPoints: minTrainingPoints ? parseInt(minTrainingPoints) : 3
+      startDate,
+      endDate,
+      frequency: frequency || 'monthly',
+      horizon: horizon || '30d',
+      metric: metric || 'revenue',
+      userId: req.user?.id,
+      forceRefresh: forceRefresh === 'true' || forceRefresh === true,
     });
 
     res.json(result);
   } catch (error) {
     console.error('[FORECAST_BENCHMARK_ERROR]', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const getBenchmarkHistory = async (req, res) => {
+  try {
+    const BenchmarkingService = require('../services/forecasting/BenchmarkingService');
+    const branchId = req.user.role !== 'super_admin' ? req.user.branch_id : req.query.branchId;
+    const { limit, offset, scopeType } = req.query;
+
+    const history = await BenchmarkingService.getBenchmarkHistory({
+      limit,
+      offset,
+      scopeType,
+      branchId
+    });
+
+    res.json(history);
+  } catch (error) {
+    console.error('[BENCHMARK_HISTORY_ERROR]', error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -1638,6 +1695,7 @@ module.exports = {
   getForecastingAnalytics,
   getPrescriptiveAnalytics,
   getForecastingBenchmark,
+  getBenchmarkHistory,
   getBrandAnalytics,
   getProfitLossAnalytics
 };

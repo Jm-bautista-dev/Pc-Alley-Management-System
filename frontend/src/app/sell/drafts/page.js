@@ -44,8 +44,13 @@ export default function DraftsPage() {
     localStorage.setItem("pc_alley_pos_drafts", JSON.stringify(updated));
   };
 
-  const handleDelete = (id) => {
-    if (!confirm("Delete this saved draft?")) return;
+  const handleDelete = async (id) => {
+    const confirmed = await showConfirm(
+      "Delete Draft",
+      "Are you sure you want to delete this saved draft?",
+      { danger: true, confirmLabel: "Delete" }
+    );
+    if (!confirmed) return;
     saveDrafts(drafts.filter(d => d.id !== id));
     showSuccess("Draft removed");
   };

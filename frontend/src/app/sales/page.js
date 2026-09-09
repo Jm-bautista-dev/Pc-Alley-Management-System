@@ -634,10 +634,15 @@ export default function SalesPage() {
     }
   };
 
-  const handleBranchChange = (e) => {
+  const handleBranchChange = async (e) => {
     const newBranchId = e.target.value;
     if (cart.length > 0) {
-      if (window.confirm("Changing branches will clear your current cart. Proceed?")) {
+      const confirmed = await showConfirm(
+        "Change Branch",
+        "Changing branches will clear your current cart. Proceed?",
+        { warning: true, confirmLabel: "Clear & Switch" }
+      );
+      if (confirmed) {
         setCart([]);
         setSelectedBranchId(newBranchId);
       }

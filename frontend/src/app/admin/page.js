@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiUrl } from "@/lib/api";
+import { showSuccess, showError, showInfo, showWarning, showConfirm, showModal } from "@/context/ModalContext";
 import RestockManagement from "@/components/restock/RestockManagement";
 
 function AdminPageContent() {
@@ -194,7 +195,7 @@ function AdminPageContent() {
     const token = localStorage.getItem("token");
 
     if (!branches.length) {
-      alert("No branches available yet. Create a branch first before registering staff.");
+      showError("No branches available yet. Create a branch first before registering staff.");
       return;
     }
     
@@ -207,17 +208,21 @@ function AdminPageContent() {
     };
 
     if (!payload.username) {
-      alert("Please enter a username for the new account.");
+      showError("Please enter a username for the new account.");
+      return;
+    }
+    if (payload.username.length < 3 || payload.username.length > 50) {
+      showError("Username must be between 3 and 50 characters.");
       return;
     }
 
     if (!payload.password || payload.password.length < 6) {
-      alert("Password must be at least 6 characters.");
+      showError("Password must be at least 6 characters.");
       return;
     }
 
     if (!payload.branch_id || Number.isNaN(payload.branch_id)) {
-      alert("Please assign a branch for the new account.");
+      showError("Please assign a branch for the new account.");
       return;
     }
 
@@ -234,24 +239,35 @@ function AdminPageContent() {
       if (res.ok) {
         setIsModalOpen(false);
         resetProvisionForm();
+        showSuccess("Staff account created successfully!");
         fetchData();
       } else {
-        const errData = await res.json();
+        const errData = await res.json().catch(() => ({}));
         if (errData.errors && Array.isArray(errData.errors)) {
-          const msgs = errData.errors.map(e => Object.values(e)[0]).join('\n');
-          alert(`Validation Failed:\n${msgs}`);
+          const msgs = errData.errors.map(e => e.msg || Object.values(e)[0]).filter(Boolean).join('\n');
+          showError(msgs || "Validation failed");
         } else {
-          alert(errData.message || "Failed to create staff account");
+          showError(errData.message || errData.error || "Failed to create staff account");
         }
       }
     } catch (err) {
        console.error("Provisioning Error:", err);
-       alert("Network connection error");
+       showError("Network connection error");
     }
   };
 
   const handleCreateBranch = async (e) => {
     e.preventDefault();
+    const name = branchData.name.trim();
+    if (!name) {
+      showError("Branch name is required.");
+      return;
+    }
+    if (name.length < 2 || name.length > 100) {
+      showError("Branch name must be between 2 and 100 characters.");
+      return;
+    }
+
     const token = localStorage.getItem("token");
     try {
       const res = await fetch(apiUrl("/api/branches"), {
@@ -260,21 +276,40 @@ function AdminPageContent() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify(branchData)
+        body: JSON.stringify({
+          name,
+          location: branchData.location ? branchData.location.trim() : "",
+          phone: branchData.phone ? branchData.phone.trim() : ""
+        })
       });
       
       if (res.ok) {
         setIsBranchModalOpen(false);
         setBranchData({ name: "", location: "", phone: "" });
+        showSuccess("Branch created successfully!");
         fetchData(); // Refresh branch list
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showError(err.message || err.error || "Failed to create branch.");
       }
     } catch (err) {
       console.error("Branch Creation Error:", err);
+      showError("Network connection error");
     }
   };
 
   const handleUpdateBranch = async (e) => {
     e.preventDefault();
+    const name = branchData.name.trim();
+    if (!name) {
+      showError("Branch name is required.");
+      return;
+    }
+    if (name.length < 2 || name.length > 100) {
+      showError("Branch name must be between 2 and 100 characters.");
+      return;
+    }
+
     const token = localStorage.getItem("token");
     try {
       const res = await fetch(apiUrl(`/api/branches/${editingBranch.id}`), {
@@ -283,17 +318,26 @@ function AdminPageContent() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify(branchData)
+        body: JSON.stringify({
+          name,
+          location: branchData.location ? branchData.location.trim() : "",
+          phone: branchData.phone ? branchData.phone.trim() : ""
+        })
       });
       
       if (res.ok) {
         setIsEditModalOpen(false);
         setEditingBranch(null);
         setBranchData({ name: "", location: "", phone: "" });
+        showSuccess("Branch updated successfully!");
         fetchData();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showError(err.message || err.error || "Failed to update branch.");
       }
     } catch (err) {
       console.error("Branch Update Error:", err);
+      showError("Network connection error");
     }
   };
 
@@ -307,32 +351,54 @@ function AdminPageContent() {
     setIsEditModalOpen(true);
   };
   const handleDeleteUser = async (userId) => {
-    if (!confirm("Are you sure you want to delete this staff account?")) return;
+    const confirmed = await showConfirm(
+      "Delete Staff Account",
+      "Are you sure you want to delete this staff account? This cannot be undone.",
+      { danger: true, confirmLabel: "Delete" }
+    );
+    if (!confirmed) return;
     const token = localStorage.getItem("token");
     try {
       const res = await fetch(apiUrl(`/api/auth/users/${userId}`), {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (res.ok) fetchData();
-      else alert("Failed to delete user");
+      if (res.ok) {
+        showSuccess("User deleted successfully.");
+        fetchData();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showError(err.message || err.error || "Failed to delete user.");
+      }
     } catch (err) {
       console.error(err);
+      showError("Network error");
     }
   };
 
   const handleDeleteBranch = async (branchId) => {
-    if (!confirm("Are you sure you want to delete this branch? This cannot be undone.")) return;
+    const confirmed = await showConfirm(
+      "Delete Branch",
+      "Are you sure you want to delete this branch? This action cannot be undone.",
+      { danger: true, confirmLabel: "Delete" }
+    );
+    if (!confirmed) return;
     const token = localStorage.getItem("token");
     try {
       const res = await fetch(apiUrl(`/api/branches/${branchId}`), {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (res.ok) fetchData();
-      else alert("Failed to delete branch");
+      if (res.ok) {
+        showSuccess("Branch deleted successfully.");
+        fetchData();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showError(err.message || err.error || "Failed to delete branch.");
+      }
     } catch (err) {
       console.error(err);
+      showError("Network error");
     }
   };
 

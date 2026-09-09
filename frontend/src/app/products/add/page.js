@@ -90,20 +90,34 @@ export default function AddPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.name || !formData.price) {
+    if (!formData.name || !formData.name.trim() || !formData.price) {
       showError("Please fill in Product Name and Price.");
       return;
+    }
+
+    const priceNum = parseFloat(formData.price);
+    if (isNaN(priceNum) || priceNum < 0.01 || priceNum > 99999999.99) {
+      showError("Price must be a positive number between ₱0.01 and ₱99,999,999.99.");
+      return;
+    }
+
+    if (formData.initial_stock !== undefined && formData.initial_stock !== "") {
+      const stockNum = parseInt(formData.initial_stock, 10);
+      if (isNaN(stockNum) || stockNum < 0 || stockNum > 1000000) {
+        showError("Initial stock must be an integer between 0 and 1,000,000.");
+        return;
+      }
     }
 
     setLoading(true);
     const token = localStorage.getItem("token");
     const submitData = new FormData();
-    submitData.append("name", formData.name);
-    submitData.append("description", formData.description);
+    submitData.append("name", formData.name.trim());
+    submitData.append("description", formData.description ? formData.description.trim() : "");
     submitData.append("price", formData.price);
     if (formData.category_id) submitData.append("category_id", formData.category_id);
     if (formData.brand_id) submitData.append("brand_id", formData.brand_id);
-    if (formData.barcode) submitData.append("barcode", formData.barcode);
+    if (formData.barcode) submitData.append("barcode", formData.barcode.trim());
     if (formData.specifications) submitData.append("specifications", formData.specifications);
     if (formData.supplier_id) submitData.append("supplier_id", formData.supplier_id);
     if (formData.branch_id) submitData.append("branch_id", formData.branch_id);
@@ -121,10 +135,13 @@ export default function AddPage() {
         showSuccess("Product created successfully!");
         setTimeout(() => router.push("/products"), 1500);
       } else {
-        const errorData = await res.json();
+        const errorData = await res.json().catch(() => ({}));
         // Handle both express-validator error arrays and plain error strings
         if (errorData.errors && Array.isArray(errorData.errors)) {
-          showError(errorData.errors.map(e => e.msg).join(", "));
+          const messages = errorData.errors
+            .map(err => err.msg || Object.values(err)[0])
+            .filter(Boolean);
+          showError(messages.length > 0 ? messages.join(", ") : errorData.message || errorData.error || "Failed to create product.");
         } else {
           showError(errorData.error || errorData.message || "Failed to create product.");
         }
@@ -184,6 +201,7 @@ export default function AddPage() {
                     <input 
                       type="text" 
                       name="name"
+                      maxLength={200}
                       value={formData.name}
                       onChange={handleChange}
                       placeholder="e.g. NVIDIA RTX 4090 Founders Edition" 
@@ -201,7 +219,8 @@ export default function AddPage() {
                       onChange={handleChange}
                       placeholder="0.00" 
                       step="0.01"
-                      min="0"
+                      min="0.01"
+                      max="99999999.99"
                       className="w-full bg-brand-bgbase border border-border/50 rounded-xl px-4 py-3 text-sm text-main font-bold outline-none focus:border-brand-neonblue transition-colors"
                       required
                     />
@@ -211,6 +230,7 @@ export default function AddPage() {
                     <label className="block text-[10px] font-black text-muted uppercase tracking-[2px] mb-2">Product Description</label>
                     <textarea 
                       name="description"
+                      maxLength={2000}
                       value={formData.description}
                       onChange={handleChange}
                       placeholder="Write a detailed description..." 
@@ -304,6 +324,7 @@ export default function AddPage() {
                     <input 
                       type="text"
                       name="barcode"
+                      maxLength={100}
                       value={formData.barcode}
                       onChange={handleChange}
                       placeholder="e.g. 4902778123456"
@@ -335,6 +356,7 @@ export default function AddPage() {
                       onChange={handleChange}
                       placeholder="0"
                       min="0"
+                      max="1000000"
                       className="w-full bg-brand-bgbase border border-border/50 rounded-xl px-4 py-3 text-sm text-main font-bold outline-none focus:border-brand-neonblue transition-colors"
                     />
                   </div>

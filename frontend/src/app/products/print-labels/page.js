@@ -4,6 +4,7 @@ import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import { Printer } from "lucide-react";
 import { motion } from "framer-motion";
+import { showInfo } from "@/context/ModalContext";
 
 export default function PrintLabelsPage() {
   return (
@@ -30,7 +31,7 @@ export default function PrintLabelsPage() {
             </p>
             <div className="mt-10 flex gap-4">
               <button 
-                onClick={() => alert("System Notice: Printing Protocol Not Enabled")} 
+                onClick={() => showInfo("Printing Protocol Not Enabled", "This preview feature is currently awaiting authorized printer hardware link.")} 
                 className="btn-premium px-8"
               >
                 Add Products

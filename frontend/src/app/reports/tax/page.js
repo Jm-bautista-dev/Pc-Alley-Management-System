@@ -4,6 +4,7 @@ import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import { FileBarChart } from "lucide-react";
 import { motion } from "framer-motion";
+import { showInfo } from "@/context/ModalContext";
 
 export default function TaxReportPage() {
   return (
@@ -30,7 +31,7 @@ export default function TaxReportPage() {
             </p>
             <div className="mt-10 flex gap-4">
               <button 
-                onClick={() => alert("System Notice: Compliance Matrix Not Enabled")} 
+                onClick={() => showInfo("Compliance Matrix Not Enabled", "This preview feature is currently pending final tax compliance matrix activation.")} 
                 className="btn-premium px-8"
               >
                 Generate Tax PDF

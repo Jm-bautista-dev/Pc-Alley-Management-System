@@ -55,6 +55,7 @@ const Sidebar = () => {
         { title: "Customers",       icon: Users,           path: "/customers",        group: "SALES & SERVICES" },
         { title: "Products",        icon: Package,         path: "/products",         group: "INVENTORY" },
         { title: "Manage Stock",    icon: ClipboardList,   path: "/reports/stock",    group: "INVENTORY" },
+        { title: "Stock Requisitions", icon: ClipboardList, path: "/products/my-requests", group: "INVENTORY" },
       ];
     }
 
@@ -99,6 +100,7 @@ const Sidebar = () => {
         ] },
         { title: "Analytics",       icon: Activity,        path: "#analytics",        group: "REPORTS & ANALYTICS", subItems: [
           { title: "Sales Forecasting", path: "/forecasting" },
+          { title: "Model Benchmarking", path: "/forecasting/benchmark" },
           { title: "Prescriptive Insights", path: "/prescriptive-analytics" }
         ] },
 
@@ -412,13 +414,16 @@ const Sidebar = () => {
 
           {/* Settings row */}
           <div className="pt-3 mt-3 border-t border-border">
-            <button
-              onClick={handleOpenSettings}
+            <Link
+              href="/settings"
               className={`
                 w-full flex items-center gap-3
                 h-10 px-3 rounded-lg
-                text-sm font-medium text-muted
-                hover:text-main hover:bg-brand-bgbase
+                text-sm font-medium transition-colors
+                ${pathname === "/settings"
+                  ? "bg-brand-crimson/10 text-brand-crimson font-semibold"
+                  : "text-muted hover:text-main hover:bg-brand-bgbase"
+                }
                 ${!isExpanded ? "justify-center" : ""}
               `}
             >
@@ -426,7 +431,7 @@ const Sidebar = () => {
                 <Settings size={15} strokeWidth={1.8} />
               </span>
               {isExpanded && <span>Settings</span>}
-            </button>
+            </Link>
           </div>
         </nav>
 

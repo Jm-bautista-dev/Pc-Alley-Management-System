@@ -17,7 +17,11 @@ router.post('/', [
   body('price').isFloat({ min: 0.01, max: 99999999.99 }).withMessage('Price must be a positive number between ₱0.01 and ₱99,999,999.99.'),
   body('description').optional({ checkFalsy: true }).isString().trim().isLength({ max: 2000 }).withMessage('Description cannot exceed 2000 characters.'),
   body('category_id').optional({ checkFalsy: true }).isInt().withMessage('Category ID must be an integer.'),
+  body('brand_id').optional({ checkFalsy: true }).isInt().withMessage('Brand ID must be an integer.'),
   body('supplier_id').optional({ checkFalsy: true }).isInt().withMessage('Supplier ID must be an integer.'),
+  body('branch_id').optional({ checkFalsy: true }).isInt().withMessage('Branch ID must be an integer.'),
+  body('barcode').optional({ checkFalsy: true }).trim().isLength({ max: 100 }).withMessage('Barcode cannot exceed 100 characters.'),
+  body('initial_stock').optional({ checkFalsy: true }).isInt({ min: 0, max: 1000000 }).withMessage('Initial stock must be an integer between 0 and 1,000,000.'),
   validate
 ], createProduct);
 

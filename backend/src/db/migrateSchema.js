@@ -431,6 +431,117 @@ const migrateSchema = async () => {
     } catch (wErr) {
       console.warn('DATABASE: Warranties table migration warning:', wErr.message);
     }
+
+    // 7. Product Requests Workflow columns migration
+    try {
+      await addColumnIfMissing(queryInterface, 'product_requests', 'source_branch_id', {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: { model: 'branches', key: 'id' }
+      });
+      await addColumnIfMissing(queryInterface, 'product_requests', 'approval_notes', {
+        type: DataTypes.TEXT,
+        allowNull: true
+      });
+      await addColumnIfMissing(queryInterface, 'product_requests', 'fulfilled_by', {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: { model: 'users', key: 'id' }
+      });
+      await addColumnIfMissing(queryInterface, 'product_requests', 'fulfilled_at', {
+        type: DataTypes.DATE,
+        allowNull: true
+      });
+      await addColumnIfMissing(queryInterface, 'product_requests', 'quantity_fulfilled', {
+        type: DataTypes.INTEGER,
+        allowNull: true
+      });
+      await addColumnIfMissing(queryInterface, 'product_requests', 'received_by', {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: { model: 'users', key: 'id' }
+      });
+      await addColumnIfMissing(queryInterface, 'product_requests', 'received_at', {
+        type: DataTypes.DATE,
+        allowNull: true
+      });
+
+      // Alter status to VARCHAR(50) so it supports modern PENDING, APPROVED, PROCESSING, FULFILLED, REJECTED, CANCELLED
+      try {
+        await sequelize.query("ALTER TABLE `product_requests` MODIFY COLUMN `status` VARCHAR(50) NOT NULL DEFAULT 'PENDING'");
+        console.log('DATABASE: Updated product_requests.status column to VARCHAR(50).');
+      } catch (alterErr) {
+        console.warn('DATABASE: Status column alter skipped/warning:', alterErr.message);
+      }
+
+      // Ensure stockmovements type includes TRANSFER
+      try {
+        await sequelize.query("ALTER TABLE `stockmovements` MODIFY COLUMN `type` ENUM('RESTOCK', 'SALE', 'ADJUSTMENT', 'TRANSFER') NOT NULL");
+        console.log('DATABASE: Ensured stockmovements.type ENUM includes TRANSFER.');
+      } catch (smErr) {
+        console.warn('DATABASE: Stockmovements type alter skipped/warning:', smErr.message);
+      }
+    } catch (prErr) {
+      console.warn('DATABASE: Product requests migration warning:', prErr.message);
+    }
+
+    // 8. Benchmark Runs & Results Tables Migration
+    try {
+      await sequelize.query(`
+        CREATE TABLE IF NOT EXISTS \`benchmark_runs\` (
+          \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+          \`scope_type\` ENUM('all', 'branch', 'category', 'product') NOT NULL DEFAULT 'all',
+          \`scope_id\` INT NULL,
+          \`branch_id\` INT NULL,
+          \`start_date\` DATE NOT NULL,
+          \`end_date\` DATE NOT NULL,
+          \`frequency\` VARCHAR(20) NOT NULL DEFAULT 'monthly',
+          \`horizon\` VARCHAR(20) DEFAULT '30d',
+          \`validation_method\` VARCHAR(50) NOT NULL DEFAULT 'walk_forward',
+          \`validation_windows\` INT NOT NULL DEFAULT 0,
+          \`status\` ENUM('completed', 'insufficient_data', 'failed') NOT NULL DEFAULT 'completed',
+          \`best_model\` VARCHAR(100) NULL,
+          \`best_wape\` DECIMAL(6, 2) NULL,
+          \`best_mae\` DECIMAL(12, 2) NULL,
+          \`best_rmse\` DECIMAL(12, 2) NULL,
+          \`best_bias\` DECIMAL(12, 2) NULL,
+          \`reliability\` VARCHAR(20) DEFAULT 'Moderate',
+          \`recommendation_notes\` TEXT NULL,
+          \`created_by\` INT NULL,
+          \`createdAt\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          \`updatedAt\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          FOREIGN KEY (\`branch_id\`) REFERENCES \`branches\` (\`id\`) ON DELETE SET NULL ON UPDATE CASCADE,
+          FOREIGN KEY (\`created_by\`) REFERENCES \`users\` (\`id\`) ON DELETE SET NULL ON UPDATE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+
+      await sequelize.query(`
+        CREATE TABLE IF NOT EXISTS \`benchmark_results\` (
+          \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+          \`benchmark_run_id\` INT NOT NULL,
+          \`model_id\` VARCHAR(50) NOT NULL,
+          \`model_name\` VARCHAR(100) NOT NULL,
+          \`model_version\` VARCHAR(20) NOT NULL DEFAULT 'v1.0',
+          \`mae\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+          \`rmse\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+          \`mape\` DECIMAL(6, 2) NULL,
+          \`wape\` DECIMAL(6, 2) NOT NULL DEFAULT 0.00,
+          \`bias\` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+          \`accuracy\` DECIMAL(5, 2) NULL,
+          \`reliability\` VARCHAR(20) NOT NULL DEFAULT 'Moderate',
+          \`rank\` INT NOT NULL DEFAULT 1,
+          \`validation_windows\` INT NOT NULL DEFAULT 0,
+          \`status\` VARCHAR(20) NOT NULL DEFAULT 'evaluated',
+          \`failure_reason\` VARCHAR(255) NULL,
+          \`createdAt\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          \`updatedAt\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          FOREIGN KEY (\`benchmark_run_id\`) REFERENCES \`benchmark_runs\` (\`id\`) ON DELETE CASCADE ON UPDATE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+      console.log('DATABASE: Verified benchmark_runs and benchmark_results tables.');
+    } catch (bmErr) {
+      console.warn('DATABASE: Benchmark tables migration warning:', bmErr.message);
+    }
   } catch (error) {
     console.warn(`DATABASE: Schema migration skipped or failed: ${error.message}`);
   }

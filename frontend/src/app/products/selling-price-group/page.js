@@ -3,6 +3,7 @@
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import { motion } from "framer-motion";
+import { showInfo } from "@/context/ModalContext";
 
 export default function SellingPriceGroupPage() {
   return (
@@ -29,7 +30,7 @@ export default function SellingPriceGroupPage() {
             </p>
             <div className="mt-10 flex gap-4">
               <button 
-                onClick={() => alert("System Notice: Price Group Core Not Enabled")} 
+                onClick={() => showInfo("Price Groups", "Price Group configuration is currently in preview mode.")} 
                 className="btn-premium px-8"
               >
                 Add Price Group

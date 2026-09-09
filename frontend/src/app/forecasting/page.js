@@ -678,6 +678,12 @@ function ForecastingPageContent() {
               {/* Action buttons */}
               <div className="flex gap-2">
                 <button 
+                  onClick={() => router.push('/forecasting/benchmark')}
+                  className="h-8 px-3 bg-brand-neonblue/10 border border-brand-neonblue/30 rounded-lg flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-wider hover:bg-brand-neonblue/20 transition-all text-brand-neonblue"
+                >
+                  <Sliders size={13} /> Model Benchmarking
+                </button>
+                <button 
                   onClick={() => window.print()}
                   className="h-8 px-3 bg-brand-surface border border-border rounded-lg flex items-center justify-center gap-2 text-[9px] font-black uppercase tracking-wider hover:bg-brand-hover transition-all text-muted hover:text-main"
                 >
@@ -691,6 +697,37 @@ function ForecastingPageContent() {
                 </button>
               </div>
             </div>
+
+            {/* Benchmark Recommendation Banner (when available) */}
+            {data?.benchmarkRecommendation && (
+              <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-brand-neonblue/10 via-purple-500/10 to-brand-surface border border-brand-neonblue/30 backdrop-blur-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 no-print shadow-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-brand-neonblue/20 flex items-center justify-center text-brand-neonblue shrink-0">
+                    <Sparkles size={18} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold text-main">Recommended Model by Backtesting:</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-neonblue/20 text-brand-neonblue border border-brand-neonblue/40">
+                        {data.benchmarkRecommendation.bestModel}
+                      </span>
+                      <span className="text-[10px] text-muted font-semibold">
+                        (WAPE: {data.benchmarkRecommendation.wape}%, {data.benchmarkRecommendation.reliability} Reliability)
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-muted mt-0.5">
+                      {data.benchmarkRecommendation.recommendationNotes}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => router.push('/forecasting/benchmark')}
+                  className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-brand-neonblue text-slate-950 font-bold rounded-xl text-xs hover:bg-brand-neonblue/90 transition shadow-sm"
+                >
+                  Benchmark Details <ArrowUpRight size={14} />
+                </button>
+              </div>
+            )}
 
             {/* ── STICKY COMPACT FILTER BAR (no-print) ──────────────── */}
             <div className="sticky top-0 z-[100] bg-brand-surface/90 backdrop-blur-md border border-border/80 rounded-2xl p-3 mb-6 flex flex-wrap items-center justify-between gap-3 shadow-md filter-bar no-print">

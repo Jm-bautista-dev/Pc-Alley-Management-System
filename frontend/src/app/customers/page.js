@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useState, useCallback } from "react";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
@@ -385,7 +387,7 @@ export default function CustomersPage() {
                                 <div className="w-8 h-8 rounded-lg bg-brand-surface border border-border flex items-center justify-center font-bold text-xs text-muted">
                                   {client.name?.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
                                 </div>
-                                <span className="font-bold text-xs text-main group-hover:text-brand-neonblue transition-colors">
+                                <span className="font-bold text-xs text-main group-hover:text-brand-neonblue transition-colors max-w-[200px] truncate" title={client.name}>
                                   {client.name}
                                 </span>
                               </div>
@@ -396,9 +398,9 @@ export default function CustomersPage() {
                               </span>
                             </td>
                             <td className="py-4 px-4">
-                              <div className="space-y-0.5 text-xs text-muted font-medium">
-                                {client.email && <div className="flex items-center gap-1.5"><Mail size={11} className="opacity-40" /> {client.email}</div>}
-                                {client.phone && <div className="flex items-center gap-1.5"><Phone size={11} className="opacity-40" /> {client.phone}</div>}
+                              <div className="space-y-0.5 text-xs text-muted font-medium max-w-[220px]">
+                                {client.email && <div className="flex items-center gap-1.5 truncate" title={client.email}><Mail size={11} className="opacity-40 flex-shrink-0" /> <span className="truncate">{client.email}</span></div>}
+                                {client.phone && <div className="flex items-center gap-1.5 truncate" title={client.phone}><Phone size={11} className="opacity-40 flex-shrink-0" /> <span className="truncate">{client.phone}</span></div>}
                               </div>
                             </td>
                             <td className="py-4 px-4">

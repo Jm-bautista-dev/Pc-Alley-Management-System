@@ -67,12 +67,22 @@ export default function BrandsPage() {
   };
 
   const handleSave = async () => {
-    if (!formData.name.trim()) { showError("Brand name is required."); return; }
+    const cleanName = formData.name.trim();
+    if (!cleanName) { showError("Brand name is required."); return; }
+    if (cleanName.length < 2 || cleanName.length > 50) {
+      showError("Brand name must be between 2 and 50 characters.");
+      return;
+    }
+    if (formData.description && formData.description.length > 255) {
+      showError("Description cannot exceed 255 characters.");
+      return;
+    }
+
     setSaving(true);
     const token = localStorage.getItem("token");
     const fd = new FormData();
-    fd.append("name", formData.name.trim());
-    fd.append("description", formData.description);
+    fd.append("name", cleanName);
+    fd.append("description", (formData.description || "").trim());
     fd.append("status", formData.status);
     if (logoFile) fd.append("logo", logoFile);
     if (editingBrand && !logoFile && !logoPreview) fd.append("remove_logo", "true");
@@ -97,28 +107,29 @@ export default function BrandsPage() {
   };
 
   const handleDelete = async (brand) => {
-    showConfirm(
+    const confirmed = await showConfirm(
       `Delete "${brand.name}"?`,
       `This will permanently remove the brand. Products linked to this brand will NOT be deleted, but their brand association will be lost.`,
-      async () => {
-        const token = localStorage.getItem("token");
-        try {
-          const res = await fetch(apiUrl(`/api/brands/${brand.id}`), {
-            method: "DELETE",
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (res.ok) {
-            showSuccess("Brand deleted.");
-            fetchBrands();
-          } else {
-            const data = await res.json();
-            showError(data.error || "Delete failed.");
-          }
-        } catch {
-          showError("Network error.");
-        }
-      }
+      { confirmLabel: "Delete Brand", danger: true }
     );
+    if (!confirmed) return;
+
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(apiUrl(`/api/brands/${brand.id}`), {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        showSuccess("Brand deleted.");
+        fetchBrands();
+      } else {
+        const data = await res.json();
+        showError(data.error || "Delete failed.");
+      }
+    } catch {
+      showError("Network error.");
+    }
   };
 
   const handleToggleStatus = async (brand) => {
@@ -300,6 +311,7 @@ export default function BrandsPage() {
                   <label className="block text-[10px] font-black text-muted uppercase tracking-[2px] mb-2">Brand Name *</label>
                   <input
                     type="text"
+                    maxLength={50}
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="e.g. NVIDIA, AMD, Corsair"
@@ -311,6 +323,7 @@ export default function BrandsPage() {
                 <div>
                   <label className="block text-[10px] font-black text-muted uppercase tracking-[2px] mb-2">Description</label>
                   <textarea
+                    maxLength={255}
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     placeholder="Brief description of this brand..."

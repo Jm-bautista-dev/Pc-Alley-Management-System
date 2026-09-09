@@ -70,13 +70,20 @@ router.get('/active', authenticateToken, async (req, res) => {
 router.post('/', [authenticateToken, authorizeRoles('super_admin'), upload.single('logo')], async (req, res) => {
   try {
     const { name, description, status } = req.body;
-    if (!name) {
+    const cleanName = (name || '').trim();
+    if (!cleanName) {
       return res.status(400).json({ error: 'Brand name is required.' });
     }
+    if (cleanName.length < 2 || cleanName.length > 50) {
+      return res.status(400).json({ error: 'Brand name must be between 2 and 50 characters.' });
+    }
+    if (description && description.length > 255) {
+      return res.status(400).json({ error: 'Description cannot exceed 255 characters.' });
+    }
 
-    const slug = slugify(name);
+    const slug = slugify(cleanName);
     // Check duplicate
-    const existing = await Brand.findOne({ where: { [Op.or]: [{ name }, { slug }] } });
+    const existing = await Brand.findOne({ where: { [Op.or]: [{ name: cleanName }, { slug }] } });
     if (existing) {
       return res.status(400).json({ error: 'Brand name or slug already exists.' });
     }
@@ -91,10 +98,10 @@ router.post('/', [authenticateToken, authorizeRoles('super_admin'), upload.singl
     }
 
     const brand = await Brand.create({
-      name,
+      name: cleanName,
       slug,
       logo,
-      description,
+      description: (description || '').trim() || null,
       status: status || 'active'
     });
 
@@ -115,17 +122,31 @@ router.patch('/:id', [authenticateToken, authorizeRoles('super_admin', 'branch_a
       return res.status(404).json({ error: 'Brand not found.' });
     }
 
-    if (name && name !== brand.name) {
-      const slug = slugify(name);
-      const existing = await Brand.findOne({ where: { [Op.and]: [{ id: { [Op.ne]: id } }, { [Op.or]: [{ name }, { slug }] }] } });
-      if (existing) {
-        return res.status(400).json({ error: 'Brand name or slug already exists.' });
+    if (name !== undefined) {
+      const cleanName = (name || '').trim();
+      if (!cleanName) {
+        return res.status(400).json({ error: 'Brand name cannot be empty.' });
       }
-      brand.name = name;
-      brand.slug = slug;
+      if (cleanName.length < 2 || cleanName.length > 50) {
+        return res.status(400).json({ error: 'Brand name must be between 2 and 50 characters.' });
+      }
+      if (cleanName !== brand.name) {
+        const slug = slugify(cleanName);
+        const existing = await Brand.findOne({ where: { [Op.and]: [{ id: { [Op.ne]: id } }, { [Op.or]: [{ name: cleanName }, { slug }] }] } });
+        if (existing) {
+          return res.status(400).json({ error: 'Brand name or slug already exists.' });
+        }
+        brand.name = cleanName;
+        brand.slug = slug;
+      }
     }
 
-    if (description !== undefined) brand.description = description;
+    if (description !== undefined) {
+      if (description && description.length > 255) {
+        return res.status(400).json({ error: 'Description cannot exceed 255 characters.' });
+      }
+      brand.description = (description || '').trim() || null;
+    }
     if (status !== undefined) brand.status = status;
 
     if (req.file) {

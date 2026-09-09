@@ -72,6 +72,18 @@ export default function RestockRequestModal({ inventoryItem, product: legacyProd
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    const qty = parseInt(quantity);
+    if (isNaN(qty) || qty < 1 || qty > 1000000) {
+      showError("Please enter a valid restock quantity between 1 and 1,000,000.");
+      return;
+    }
+
+    const branchId = parseInt(targetBranchId);
+    if (isNaN(branchId) || branchId < 1) {
+      showError("Please select a target branch for restock.");
+      return;
+    }
+
     setLoading(true);
     const token = localStorage.getItem('token');
 
@@ -84,9 +96,9 @@ export default function RestockRequestModal({ inventoryItem, product: legacyProd
         },
         body: JSON.stringify({
           product_id: product.id,
-          branch_id: parseInt(targetBranchId),
-          quantity: parseInt(quantity),
-          notes,
+          branch_id: branchId,
+          quantity: qty,
+          notes: (notes || "").trim().slice(0, 255),
           cost_price: parseFloat(product?.last_purchase_price || product?.price || 0),
           supplier_id: product?.supplier_id || undefined
         })
@@ -180,6 +192,7 @@ export default function RestockRequestModal({ inventoryItem, product: legacyProd
                 <input
                   type="number"
                   min="1"
+                  max="1000000"
                   required
                   value={quantity}
                   onChange={(e) => setQuantity(e.target.value)}

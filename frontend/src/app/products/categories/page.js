@@ -54,8 +54,13 @@ export default function CategoriesPage() {
 
   const handleCreateCategory = async (e) => {
     e.preventDefault();
-    if (!newCategoryName.trim()) {
+    const name = newCategoryName.trim();
+    if (!name) {
       showError("Category name cannot be empty.");
+      return;
+    }
+    if (name.length < 2 || name.length > 50) {
+      showError("Category name must be between 2 and 50 characters.");
       return;
     }
 
@@ -68,7 +73,7 @@ export default function CategoriesPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ name: newCategoryName.trim() })
+        body: JSON.stringify({ name })
       });
 
       if (res.ok) {
@@ -93,9 +98,12 @@ export default function CategoriesPage() {
       return;
     }
 
-    if (!window.confirm(`Are you sure you want to delete category "${name}"?`)) {
-      return;
-    }
+    const confirmed = await showConfirm(
+      "Delete Category",
+      `Are you sure you want to delete category "${name}"? This action cannot be undone.`,
+      { danger: true, confirmLabel: "Delete" }
+    );
+    if (!confirmed) return;
 
     const token = localStorage.getItem("token");
     try {
@@ -154,6 +162,7 @@ export default function CategoriesPage() {
                         <label className="block text-[10px] font-black text-muted uppercase tracking-[2px] mb-2">Category Name *</label>
                         <input 
                           type="text" 
+                          maxLength={50}
                           value={newCategoryName}
                           onChange={e => setNewCategoryName(e.target.value)}
                           placeholder="e.g. Graphics Cards" 
@@ -219,10 +228,10 @@ export default function CategoriesPage() {
                                   className="border-b border-border/20 text-sm font-bold text-main/90 hover:bg-brand-bgbase/30 transition-colors"
                                 >
                                   <td className="py-4 text-xs font-mono text-muted">#{category.id}</td>
-                                  <td className="py-4">
-                                    <span className="flex items-center gap-2">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-brand-neonblue"></span>
-                                      {category.name}
+                                  <td className="py-4 max-w-xs">
+                                    <span className="flex items-center gap-2 truncate">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-brand-neonblue shrink-0"></span>
+                                      <span className="truncate" title={category.name}>{category.name}</span>
                                     </span>
                                   </td>
                                   <td className="py-4 text-xs text-muted font-normal">

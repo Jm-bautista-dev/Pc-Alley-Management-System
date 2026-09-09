@@ -4,6 +4,7 @@ import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import { Scaling } from "lucide-react";
 import { motion } from "framer-motion";
+import { showInfo } from "@/context/ModalContext";
 
 export default function UnitsPage() {
   return (
@@ -30,7 +31,7 @@ export default function UnitsPage() {
             </p>
             <div className="mt-10 flex gap-4">
               <button 
-                onClick={() => alert("System Notice: Unit Matrix Not Enabled")} 
+                onClick={() => showInfo("Units Registry", "Unit measurement definition is currently in preview mode.")} 
                 className="btn-premium px-8"
               >
                 Define Unit

@@ -12,6 +12,7 @@ const {
   getForecastingAnalytics,
   getPrescriptiveAnalytics,
   getForecastingBenchmark,
+  getBenchmarkHistory,
   getBrandAnalytics,
   getProfitLossAnalytics
 } = require('../controllers/analyticsController');
@@ -28,9 +29,10 @@ router.get('/customers', getCustomerAnalytics);
 router.get('/brands', getBrandAnalytics);
 router.get('/profit-loss', getProfitLossAnalytics);
 
-// Refactored Super Admin & Branch Admin restricted analytics routes
+// Refactored Super Admin restricted analytics routes
 router.get('/forecasting', authorizeRoles('super_admin'), getForecastingAnalytics);
 router.get('/prescriptive', authorizeRoles('super_admin'), getPrescriptiveAnalytics);
-router.get('/benchmark', authorizeRoles('super_admin', 'branch_admin'), getForecastingBenchmark);
+router.get('/benchmark', authorizeRoles('super_admin'), getForecastingBenchmark);
+router.get('/benchmark/history', authorizeRoles('super_admin'), getBenchmarkHistory);
 
 module.exports = router;

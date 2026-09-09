@@ -65,7 +65,12 @@ export default function RestockManagement() {
   };
 
   const handleApprove = async (id) => {
-    if (!confirm('Approve this restock request? Branch inventory will be updated immediately.')) return;
+    const confirmed = await showConfirm(
+      "Approve Restock Request",
+      "Approve this restock request? Branch inventory will be updated immediately.",
+      { confirmLabel: "Approve" }
+    );
+    if (!confirmed) return;
     setProcessingId(id);
     const token = localStorage.getItem('token');
     try {
