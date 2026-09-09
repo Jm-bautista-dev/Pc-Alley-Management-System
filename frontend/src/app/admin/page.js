@@ -39,6 +39,7 @@ function AdminPageContent() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBranchModalOpen, setIsBranchModalOpen] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [pendingRestockCount, setPendingRestockCount] = useState(0);
   const [provisionData, setProvisionData] = useState({
     username: "",
     password: "",
@@ -158,8 +159,7 @@ function AdminPageContent() {
       }
       if (restockRes.ok) {
         const restockData = await restockRes.json();
-        // Store pending count for badge
-        setComparativeData(prev => Array.isArray(prev) ? prev : { ...prev, pendingRestock: restockData.length });
+        setPendingRestockCount(Array.isArray(restockData) ? restockData.length : 0);
       }
 
       if (auditRes.ok) {
@@ -445,16 +445,16 @@ function AdminPageContent() {
             </button>
             <button 
               onClick={() => setActiveTab("restock")}
-              className={`h-9 px-5 rounded-lg text-sm font-semibold transition-colors border ${
+              className={`h-9 px-5 rounded-lg text-sm font-semibold transition-colors border flex items-center gap-2 ${
                 activeTab === "restock" 
-                ? "bg-brand-neonblue/10 border-brand-neonblue/30 text-brand-neonblue" 
+                ? "bg-amber-500/10 border-amber-500/30 text-amber-500" 
                 : "bg-brand-surface border-border text-muted hover:text-main hover:bg-brand-bgbase"
               }`}
             >
               Restock Requests
-              {currentUser?.role === 'branch_admin' && comparativeData?.pendingRestock > 0 && (
-                <span className="ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-400 text-white text-[10px] font-bold">
-                  {comparativeData.pendingRestock}
+              {pendingRestockCount > 0 && (
+                <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded-full bg-amber-400 text-white text-[10px] font-bold">
+                  {pendingRestockCount}
                 </span>
               )}
             </button>
@@ -752,7 +752,7 @@ function AdminPageContent() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
             >
-              <RestockManagement />
+              <RestockManagement onRequestProcessed={() => setPendingRestockCount(c => Math.max(0, c - 1))} />
             </motion.div>
           )}
 

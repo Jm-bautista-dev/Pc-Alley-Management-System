@@ -7,7 +7,7 @@ import { format } from 'date-fns';
 import { RefreshCw, Filter, CheckSquare, Square, CheckCheck, XCircle, ChevronDown, Package, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function RestockManagement() {
+export default function RestockManagement({ onRequestProcessed }) {
   const [requests, setRequests]           = useState([]);
   const [branches, setBranches]           = useState([]);
   const [loading, setLoading]             = useState(true);
@@ -79,6 +79,7 @@ export default function RestockManagement() {
       });
       if (res.ok) {
         showSuccess('Request approved — inventory updated');
+        if (onRequestProcessed) onRequestProcessed();
         fetchRequests();
       } else {
         const err = await res.json();
@@ -107,6 +108,7 @@ export default function RestockManagement() {
         showSuccess('Request rejected');
         setRejectionModal(null);
         setRejectionReason('');
+        if (onRequestProcessed) onRequestProcessed();
         fetchRequests();
       } else {
         const err = await res.json();
@@ -151,6 +153,9 @@ export default function RestockManagement() {
 
     if (passed > 0) showSuccess(`${passed} request${passed > 1 ? 's' : ''} approved — inventory updated`);
     if (failed > 0) showError(`${failed} request${failed > 1 ? 's' : ''} failed`);
+    if (onRequestProcessed) {
+      for (let i = 0; i < passed; i++) onRequestProcessed();
+    }
     fetchRequests();
   };
 
@@ -181,6 +186,9 @@ export default function RestockManagement() {
 
     if (passed > 0) showSuccess(`${passed} request${passed > 1 ? 's' : ''} rejected`);
     if (failed > 0) showError(`${failed} failed`);
+    if (onRequestProcessed) {
+      for (let i = 0; i < passed; i++) onRequestProcessed();
+    }
     setBatchRejectModal(false);
     setRejectionReason('');
     fetchRequests();
