@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import {
@@ -30,6 +30,15 @@ export default function DiscountsPage() {
     }
     return [];
   });
+  const [currentUser] = useState(() => {
+    if (typeof window !== "undefined") {
+      try { return JSON.parse(localStorage.getItem("user") || "null"); } catch { return null; }
+    }
+    return null;
+  });
+  const isEmployee = currentUser?.role === "employee";
+  const [activeTab, setActiveTab] = useState(isEmployee ? "active" : "manage");
+  const [copiedCode, setCopiedCode] = useState(null);
   const [search, setSearch] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -122,6 +131,16 @@ export default function DiscountsPage() {
   const activeCount = discounts.filter(d => d.active && !isExpired(d.expiry_date)).length;
   const totalSaved = discounts.reduce((sum, d) => sum + (d.type === DISCOUNT_TYPES[0] ? 0 : d.value * d.uses), 0);
 
+  // Active discounts for staff claim view
+  const activeDiscounts = discounts.filter(d => d.active && !isExpired(d.expiry_date));
+
+  const handleCopyCode = (code) => {
+    navigator.clipboard.writeText(code).then(() => {
+      setCopiedCode(code);
+      setTimeout(() => setCopiedCode(null), 2000);
+    });
+  };
+
   return (
     <div className="flex bg-brand-bgbase min-h-screen text-main font-dmsans transition-colors duration-300">
       <Sidebar />
@@ -158,6 +177,84 @@ export default function DiscountsPage() {
             </motion.div>
           </div>
 
+          {/* Tabs — staff sees Active Discounts; admin/super_admin sees both tabs */}
+          {!isEmployee && (
+            <div className="flex gap-2 mb-6">
+              {[{id: "manage", label: "Manage Discounts"}, {id: "active", label: `Active Discounts (${activeCount})`}].map(t => (
+                <button key={t.id} onClick={() => setActiveTab(t.id)}
+                  className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${activeTab === t.id ? "bg-yellow-500/20 text-yellow-500 border-yellow-500/40" : "bg-brand-surface border-border text-muted hover:text-main"}`}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* ── STAFF ACTIVE DISCOUNTS VIEW ── */}
+          {(activeTab === "active" || isEmployee) && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+              {isEmployee && (
+                <div className="mb-4 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl flex items-center gap-3">
+                  <Tag size={16} className="text-yellow-500 shrink-0" />
+                  <p className="text-xs font-bold text-yellow-500">
+                    These are active promotions you can apply to customer transactions. Show or copy the coupon code at checkout.
+                  </p>
+                </div>
+              )}
+              {activeDiscounts.length === 0 ? (
+                <div className="bg-brand-surface border border-border rounded-2xl p-16 flex flex-col items-center justify-center">
+                  <Percent size={36} className="text-main/10 mb-3" />
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted">No active discounts right now</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {activeDiscounts.map((d, idx) => (
+                    <motion.div key={d.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.04 }}
+                      className="bg-brand-surface border border-yellow-500/20 rounded-2xl p-5 flex flex-col gap-3 hover:border-yellow-500/40 transition-all shadow-sm">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-[9px] font-black uppercase tracking-[3px] text-yellow-500 mb-0.5">Active Promo</p>
+                          <p className="text-sm font-black text-main truncate" title={d.name}>{d.name}</p>
+                        </div>
+                        <span className="text-lg font-rajdhani font-black text-yellow-500 shrink-0">
+                          {d.type === DISCOUNT_TYPES[0] ? `${d.value}% OFF` : `₱${d.value.toLocaleString()} OFF`}
+                        </span>
+                      </div>
+                      {d.min_purchase > 0 && (
+                        <p className="text-[10px] text-muted font-bold">Min. purchase: ₱{d.min_purchase.toLocaleString()}</p>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 px-3 py-2 bg-brand-bgbase border border-yellow-500/20 rounded-xl text-[11px] font-mono font-black text-yellow-500 text-center tracking-widest">
+                          {d.code}
+                        </code>
+                        <button onClick={() => handleCopyCode(d.code)}
+                          className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all flex items-center gap-1.5 shrink-0 ${
+                            copiedCode === d.code
+                              ? "bg-green-500/20 border-green-500/40 text-green-500"
+                              : "bg-yellow-500/10 border-yellow-500/30 text-yellow-500 hover:bg-yellow-500/20"
+                          }`}>
+                          {copiedCode === d.code ? <><CheckCircle2 size={12} /> Copied</> : <><Tag size={12} /> Copy</>}
+                        </button>
+                      </div>
+                      <div className="flex items-center justify-between pt-1 border-t border-border/30">
+                        <span className="text-[9px] text-muted font-bold uppercase tracking-wider flex items-center gap-1">
+                          <Calendar size={10} /> Expires {new Date(d.expiry_date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}
+                        </span>
+                        {d.max_uses && (
+                          <span className="text-[9px] text-muted font-bold uppercase tracking-wider">
+                            {d.uses || 0}/{d.max_uses} uses
+                          </span>
+                        )}
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {/* ── ADMIN MANAGE VIEW ── */}
+          {activeTab === "manage" && !isEmployee && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           {/* Toolbar */}
           <div className="flex flex-col sm:flex-row gap-3 mb-6">
             <div className="relative flex-1 max-w-sm">
@@ -274,6 +371,8 @@ export default function DiscountsPage() {
               </div>
             )}
           </motion.div>
+            </motion.div>
+          )}
         </div>
       </main>
 
