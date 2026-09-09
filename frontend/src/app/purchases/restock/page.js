@@ -474,19 +474,15 @@ export default function ProcurementPage() {
                   </div>
                   <h1 className="text-2xl lg:text-3xl font-rajdhani font-black uppercase tracking-wide flex items-center gap-2 text-main">
                     <span>BRANCH RESTOCK</span>
-                    <span className="text-brand-neonblue">PILLS OVERVIEW</span>
+                    <span className="text-brand-neonblue">HUBS</span>
                   </h1>
                 </div>
 
                 {/* Quick Metrics */}
                 <div className="flex items-center gap-3">
-                  <div className="bg-brand-surface border border-border px-4 py-2.5 rounded-xl text-center shadow-sm">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-muted block">Pending Requests</span>
-                    <span className="text-lg font-rajdhani font-black text-amber-400 font-mono">{totalPendingRequests}</span>
-                  </div>
-                  <div className="bg-brand-surface border border-border px-4 py-2.5 rounded-xl text-center shadow-sm">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-muted block">Critical Stock</span>
-                    <span className="text-lg font-rajdhani font-black text-rose-400 font-mono">{totalCriticalStock}</span>
+                  <div className="bg-brand-surface border border-border px-5 py-2.5 rounded-xl text-center shadow-sm">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-muted block">Request Restock</span>
+                    <span className="text-lg font-rajdhani font-black text-brand-neonblue font-mono">{totalPendingRequests} Products</span>
                   </div>
                   <button
                     onClick={() => { fetchData(); fetchRequests(); }}
@@ -515,9 +511,6 @@ export default function ProcurementPage() {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {branchPillData.map((branch) => {
-                      const hasPending = branch.pendingRequestsCount > 0;
-                      const hasCritical = branch.criticalCount > 0;
-
                       return (
                         <motion.button
                           key={branch.id}
@@ -554,25 +547,12 @@ export default function ProcurementPage() {
                               </div>
                             </div>
 
-                            {/* Status Badges */}
+                            {/* Status Badge: Request Restock {number of products} */}
                             <div className="flex flex-wrap items-center gap-2 mb-4">
-                              {hasPending ? (
-                                <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-amber-400/15 text-amber-400 border border-amber-400/30 flex items-center gap-1.5 animate-pulse">
-                                  <Clock size={11} />
-                                  {branch.pendingRequestsCount} Pending {branch.pendingRequestsCount === 1 ? 'Request' : 'Requests'}
-                                </span>
-                              ) : (
-                                <span className="text-[10px] font-bold uppercase px-2.5 py-1 rounded-full bg-brand-muted/10 text-muted border border-border">
-                                  0 Pending Requests
-                                </span>
-                              )}
-
-                              {hasCritical && (
-                                <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-rose-500/15 text-rose-400 border border-rose-500/30 flex items-center gap-1.5">
-                                  <AlertTriangle size={11} />
-                                  {branch.criticalCount} Critical
-                                </span>
-                              )}
+                              <span className="text-[11px] font-black uppercase px-3 py-1.5 rounded-full bg-brand-neonblue/15 text-brand-neonblue border border-brand-neonblue/30 flex items-center gap-1.5 font-mono">
+                                <Inbox size={13} />
+                                Request Restock: {branch.pendingRequestsCount} {branch.pendingRequestsCount === 1 ? 'Product' : 'Products'}
+                              </span>
                             </div>
                           </div>
 
@@ -740,7 +720,7 @@ export default function ProcurementPage() {
               className="bg-brand-surface border border-border rounded-2xl w-full max-w-6xl h-[90vh] flex flex-col shadow-2xl overflow-hidden relative"
             >
               {/* Modal Header */}
-              <div className="px-6 py-5 border-b border-border bg-brand-bgbase flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0">
+              <div className="px-6 py-5 border-b border-border bg-brand-bgbase flex justify-between items-center gap-4 shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-brand-neonblue/15 border border-brand-neonblue/30 text-brand-neonblue flex items-center justify-center shrink-0">
                     <Building size={20} />
@@ -755,56 +735,18 @@ export default function ProcurementPage() {
                       </span>
                     </div>
                     <p className="text-xs text-muted font-medium mt-0.5">
-                      Review stock requests, approve with checkboxes for batch approval, and manage inventory allocation.
+                      Review stock requests and approve with checkboxes for batch approval.
                     </p>
                   </div>
                 </div>
 
-                {/* Modal Tabs & Close */}
-                <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
-                  <div className="flex items-center bg-brand-surface border border-border rounded-xl p-1 gap-1">
-                    <button
-                      onClick={() => setBranchModalTab("requests")}
-                      className={`px-4 py-1.5 rounded-lg text-xs font-rajdhani font-bold tracking-wider uppercase transition-all flex items-center gap-2 ${
-                        branchModalTab === "requests"
-                          ? "bg-brand-neonblue text-slate-950 font-black shadow-sm"
-                          : "text-muted hover:text-main"
-                      }`}
-                    >
-                      <Inbox size={14} />
-                      Branch Requests
-                      {activeBranchRequests.filter(r => isPendingStatus(r.status)).length > 0 && (
-                        <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full font-mono ${
-                          branchModalTab === "requests" ? "bg-slate-950 text-brand-neonblue" : "bg-amber-400/20 text-amber-400"
-                        }`}>
-                          {activeBranchRequests.filter(r => isPendingStatus(r.status)).length}
-                        </span>
-                      )}
-                    </button>
-
-                    <button
-                      onClick={() => setBranchModalTab("inventory")}
-                      className={`px-4 py-1.5 rounded-lg text-xs font-rajdhani font-bold tracking-wider uppercase transition-all flex items-center gap-2 ${
-                        branchModalTab === "inventory"
-                          ? "bg-brand-neonblue text-slate-950 font-black shadow-sm"
-                          : "text-muted hover:text-main"
-                      }`}
-                    >
-                      <Package size={14} />
-                      Branch Stock
-                      <span className="text-[10px] font-bold font-mono opacity-80">
-                        ({activeBranchInventory.length})
-                      </span>
-                    </button>
-                  </div>
-
-                  <button
-                    onClick={() => setActiveBranchModal(null)}
-                    className="p-2 rounded-xl bg-brand-surface border border-border text-muted hover:text-main hover:border-brand-neonblue/30 transition-colors"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
+                {/* Modal Close Button */}
+                <button
+                  onClick={() => setActiveBranchModal(null)}
+                  className="p-2 rounded-xl bg-brand-surface border border-border text-muted hover:text-main hover:border-brand-neonblue/30 transition-colors"
+                >
+                  <X size={18} />
+                </button>
               </div>
 
               {/* Modal Body */}
@@ -814,343 +756,242 @@ export default function ProcurementPage() {
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                   
                   {/* Status subtabs for requests */}
-                  {branchModalTab === "requests" ? (
-                    <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar w-full md:w-auto pb-2 md:pb-0">
-                      {[
-                        { id: "Pending", label: "Pending Review" },
-                        { id: "Approved", label: "Approved" },
-                        { id: "Fulfilled", label: "Fulfilled" },
-                        { id: "Rejected", label: "Rejected" },
-                        { id: "All", label: "All Records" }
-                      ].map(tab => (
-                        <button
-                          key={tab.id}
-                          onClick={() => setBranchModalReqStatus(tab.id)}
-                          className={`px-3 py-1.5 rounded-lg text-[11px] font-bold font-rajdhani uppercase tracking-wider transition-all whitespace-nowrap ${
-                            branchModalReqStatus === tab.id
-                              ? "bg-brand-neonblue/20 text-brand-neonblue border border-brand-neonblue/40"
-                              : "text-muted hover:text-main bg-brand-bgbase border border-border"
-                          }`}
-                        >
-                          {tab.label}
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted font-bold uppercase tracking-wider">Sector Catalog Inventory</span>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar w-full md:w-auto pb-2 md:pb-0">
+                    {[
+                      { id: "Pending", label: "Pending Review" },
+                      { id: "Approved", label: "Approved" },
+                      { id: "Fulfilled", label: "Fulfilled" },
+                      { id: "Rejected", label: "Rejected" },
+                      { id: "All", label: "All Records" }
+                    ].map(tab => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setBranchModalReqStatus(tab.id)}
+                        className={`px-3 py-1.5 rounded-lg text-[11px] font-bold font-rajdhani uppercase tracking-wider transition-all whitespace-nowrap ${
+                          branchModalReqStatus === tab.id
+                            ? "bg-brand-neonblue/20 text-brand-neonblue border border-brand-neonblue/40"
+                            : "text-muted hover:text-main bg-brand-bgbase border border-border"
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
 
                   {/* Search Bar */}
-                  <div className="flex items-center gap-2.5 w-full md:w-auto">
-                    <div className="relative flex-1 md:w-64">
-                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-                      <input
-                        type="text"
-                        value={branchModalSearch}
-                        onChange={(e) => setBranchModalSearch(e.target.value)}
-                        placeholder={branchModalTab === "requests" ? "Search request #, product, staff..." : "Search product or SKU..."}
-                        className="w-full bg-brand-bgbase border border-border rounded-xl py-2 pl-9 pr-3 text-xs text-main focus:outline-none focus:border-brand-neonblue/30 transition-all font-bold"
-                      />
-                    </div>
-
-                    {branchModalTab === "requests" && (
-                      <select
-                        value={branchModalPriority}
-                        onChange={(e) => setBranchModalPriority(e.target.value)}
-                        className="bg-brand-bgbase border border-border rounded-xl py-2 px-2.5 text-xs text-main focus:outline-none focus:border-brand-neonblue/30 font-bold uppercase"
-                      >
-                        <option value="">All Priority</option>
-                        <option value="urgent">Urgent</option>
-                        <option value="normal">Normal</option>
-                        <option value="low">Low</option>
-                      </select>
-                    )}
+                  <div className="relative w-full md:w-72">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+                    <input
+                      type="text"
+                      value={branchModalSearch}
+                      onChange={(e) => setBranchModalSearch(e.target.value)}
+                      placeholder="Search request #, product, staff..."
+                      className="w-full bg-brand-bgbase border border-border rounded-xl py-2 pl-9 pr-3 text-xs text-main focus:outline-none focus:border-brand-neonblue/30 transition-all font-bold"
+                    />
                   </div>
                 </div>
 
-                {/* ── TAB 1: BRANCH REQUESTS LIST WITH CHECKBOXES ── */}
-                {branchModalTab === "requests" && (
-                  <div>
-                    {/* Batch Selection Bar */}
-                    {selectableRequests.length > 0 && (
-                      <div className="flex items-center justify-between bg-brand-bgbase border border-border rounded-xl px-4 py-2.5 mb-4">
-                        <button
-                          onClick={handleToggleSelectAll}
-                          className="flex items-center gap-2 text-xs font-rajdhani font-bold uppercase tracking-wider text-main hover:text-brand-neonblue transition-colors"
-                        >
-                          {isAllSelectableChecked ? (
-                            <CheckSquare size={17} className="text-brand-neonblue" />
-                          ) : (
-                            <Square size={17} className="text-muted" />
-                          )}
-                          <span>
-                            {isAllSelectableChecked ? "Deselect All" : "Select All Pending"} ({selectableRequests.length})
-                          </span>
-                        </button>
-
-                        {isSomeChecked && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-amber-400 font-bold font-mono">
-                              {selectedRequestIds.size} Selected
-                            </span>
-                            <button
-                              onClick={handleBatchApprove}
-                              disabled={batchActionLoading}
-                              className="bg-emerald-500/15 hover:bg-emerald-500 hover:text-white text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-lg text-xs font-rajdhani font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm"
-                            >
-                              <ThumbsUp size={12} />
-                              Approve Selected ({selectedRequestIds.size})
-                            </button>
-                            <button
-                              onClick={() => {
-                                setBatchRejectReason("");
-                                setShowBatchRejectModal(true);
-                              }}
-                              disabled={batchActionLoading}
-                              className="bg-rose-500/15 hover:bg-rose-500 hover:text-white text-rose-400 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-rajdhani font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm"
-                            >
-                              <ThumbsDown size={12} />
-                              Reject Selected ({selectedRequestIds.size})
-                            </button>
-                          </div>
+                {/* ── BRANCH REQUESTS LIST WITH CHECKBOXES ── */}
+                <div>
+                  {/* Batch Selection Bar */}
+                  {selectableRequests.length > 0 && (
+                    <div className="flex items-center justify-between bg-brand-bgbase border border-border rounded-xl px-4 py-2.5 mb-4">
+                      <button
+                        onClick={handleToggleSelectAll}
+                        className="flex items-center gap-2 text-xs font-rajdhani font-bold uppercase tracking-wider text-main hover:text-brand-neonblue transition-colors"
+                      >
+                        {isAllSelectableChecked ? (
+                          <CheckSquare size={17} className="text-brand-neonblue" />
+                        ) : (
+                          <Square size={17} className="text-muted" />
                         )}
-                      </div>
-                    )}
+                        <span>
+                          {isAllSelectableChecked ? "Deselect All" : "Select All Pending"} ({selectableRequests.length})
+                        </span>
+                      </button>
 
-                    {/* Empty State */}
-                    {activeBranchRequests.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-16 bg-brand-bgbase border border-border rounded-2xl border-dashed">
-                        <Inbox size={40} className="text-main/20 mb-3" />
-                        <h4 className="text-xs font-black uppercase tracking-[2px] text-main">No Stock Requisitions Found</h4>
-                        <p className="text-[11px] text-muted mt-1">There are no stock requisitions under this filter for this branch.</p>
-                      </div>
-                    ) : (
-                      <div className="bg-brand-bgbase border border-border rounded-xl overflow-hidden">
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left border-collapse">
-                            <thead>
-                              <tr className="border-b border-border bg-brand-surface text-[10px] font-black uppercase tracking-[2px] text-muted">
-                                <th className="py-3.5 px-4 w-12 text-center">
-                                  <button
-                                    onClick={handleToggleSelectAll}
-                                    title="Select / Deselect all"
-                                    className="text-muted hover:text-brand-neonblue transition-colors"
-                                  >
-                                    {isAllSelectableChecked ? (
-                                      <CheckSquare size={16} className="text-brand-neonblue" />
-                                    ) : (
-                                      <Square size={16} />
-                                    )}
-                                  </button>
-                                </th>
-                                <th className="py-3.5 px-4">Request # / Date</th>
-                                <th className="py-3.5 px-4">Requester (Staff)</th>
-                                <th className="py-3.5 px-4">Product Details</th>
-                                <th className="py-3.5 px-4 text-center">Requested Qty</th>
-                                <th className="py-3.5 px-4">Priority</th>
-                                <th className="py-3.5 px-4">Status</th>
-                                <th className="py-3.5 px-4 text-right">Actions</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border text-xs">
-                              {activeBranchRequests.map((req) => {
-                                const isPending = isPendingStatus(req.status);
-                                const isChecked = selectedRequestIds.has(req.id);
-                                const statusBadge = getStatusBadge(req.status);
-                                const requesterName = req.User?.first_name 
-                                  ? `${req.User.first_name} ${req.User.last_name || ''}` 
-                                  : (req.User?.username || "Staff Associate");
+                      {isSomeChecked && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-amber-400 font-bold font-mono">
+                            {selectedRequestIds.size} Selected
+                          </span>
+                          <button
+                            onClick={handleBatchApprove}
+                            disabled={batchActionLoading}
+                            className="bg-emerald-500/15 hover:bg-emerald-500 hover:text-white text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-lg text-xs font-rajdhani font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm"
+                          >
+                            <ThumbsUp size={12} />
+                            Approve Selected ({selectedRequestIds.size})
+                          </button>
+                          <button
+                            onClick={() => {
+                              setBatchRejectReason("");
+                              setShowBatchRejectModal(true);
+                            }}
+                            disabled={batchActionLoading}
+                            className="bg-rose-500/15 hover:bg-rose-500 hover:text-white text-rose-400 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-rajdhani font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm"
+                          >
+                            <ThumbsDown size={12} />
+                            Reject Selected ({selectedRequestIds.size})
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-                                return (
-                                  <tr
-                                    key={req.id}
-                                    className={`transition-colors group ${
-                                      isChecked ? "bg-brand-neonblue/10" : "hover:bg-brand-surface/60"
-                                    }`}
-                                  >
-                                    {/* Checkbox Column */}
-                                    <td className="py-3.5 px-4 text-center">
-                                      {isPending ? (
-                                        <button
-                                          onClick={() => handleToggleRow(req.id)}
-                                          className="text-muted hover:text-brand-neonblue transition-colors"
-                                        >
-                                          {isChecked ? (
-                                            <CheckSquare size={16} className="text-brand-neonblue" />
-                                          ) : (
-                                            <Square size={16} />
-                                          )}
-                                        </button>
-                                      ) : (
-                                        <div className="w-4 h-4 mx-auto rounded border border-border/30 opacity-20 cursor-not-allowed" />
-                                      )}
-                                    </td>
+                  {/* Empty State */}
+                  {activeBranchRequests.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 bg-brand-bgbase border border-border rounded-2xl border-dashed">
+                      <Inbox size={40} className="text-main/20 mb-3" />
+                      <h4 className="text-xs font-black uppercase tracking-[2px] text-main">No Stock Requisitions Found</h4>
+                      <p className="text-[11px] text-muted mt-1">There are no stock requisitions under this filter for this branch.</p>
+                    </div>
+                  ) : (
+                    <div className="bg-brand-bgbase border border-border rounded-xl overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="border-b border-border bg-brand-surface text-[10px] font-black uppercase tracking-[2px] text-muted">
+                              <th className="py-3.5 px-4 w-12 text-center">
+                                <button
+                                  onClick={handleToggleSelectAll}
+                                  title="Select / Deselect all"
+                                  className="text-muted hover:text-brand-neonblue transition-colors"
+                                >
+                                  {isAllSelectableChecked ? (
+                                    <CheckSquare size={16} className="text-brand-neonblue" />
+                                  ) : (
+                                    <Square size={16} />
+                                  )}
+                                </button>
+                              </th>
+                              <th className="py-3.5 px-4">Request # / Date</th>
+                              <th className="py-3.5 px-4">Requester (Staff)</th>
+                              <th className="py-3.5 px-4">Product Details</th>
+                              <th className="py-3.5 px-4 text-center">Requested Qty</th>
+                              <th className="py-3.5 px-4">Status</th>
+                              <th className="py-3.5 px-4 text-right">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border text-xs">
+                            {activeBranchRequests.map((req) => {
+                              const isPending = isPendingStatus(req.status);
+                              const isChecked = selectedRequestIds.has(req.id);
+                              const statusBadge = getStatusBadge(req.status);
+                              const requesterName = req.User?.first_name 
+                                ? `${req.User.first_name} ${req.User.last_name || ''}` 
+                                : (req.User?.username || "Staff Associate");
 
-                                    {/* Request # */}
-                                    <td className="py-3.5 px-4">
-                                      <span className="font-mono font-bold text-main">{req.request_number}</span>
-                                      <p className="text-[10px] text-muted mt-0.5">
-                                        {req.created_at ? new Date(req.created_at).toLocaleDateString() : '—'}
-                                      </p>
-                                    </td>
-
-                                    {/* Requester */}
-                                    <td className="py-3.5 px-4">
-                                      <div className="flex items-center gap-2">
-                                        <div className="w-6 h-6 rounded-lg bg-brand-neonblue/10 border border-brand-neonblue/20 text-brand-neonblue flex items-center justify-center text-xs font-bold shrink-0">
-                                          <User size={12} />
-                                        </div>
-                                        <span className="font-bold text-main">{requesterName}</span>
-                                      </div>
-                                    </td>
-
-                                    {/* Product */}
-                                    <td className="py-3.5 px-4">
-                                      <p className="font-rajdhani font-bold text-xs text-main capitalize truncate max-w-xs">
-                                        {req.Product?.name || `Product #${req.product_id}`}
-                                      </p>
-                                      <span className="text-[10px] font-mono text-muted uppercase">{req.Product?.sku || 'SKU-UNKNOWN'}</span>
-                                    </td>
-
-                                    {/* Quantity */}
-                                    <td className="py-3.5 px-4 text-center">
-                                      <span className="text-sm font-rajdhani font-black text-main">
-                                        {req.quantity_requested}
-                                      </span>
-                                      <span className="text-[9px] text-muted ml-1 uppercase">units</span>
-                                    </td>
-
-                                    {/* Priority */}
-                                    <td className="py-3.5 px-4">
-                                      <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${
-                                        req.priority === 'urgent' ? 'text-rose-400 border-rose-400/20 bg-rose-400/10' :
-                                        req.priority === 'normal' ? 'text-cyan-400 border-cyan-400/20 bg-cyan-400/10' :
-                                        'text-muted border-border bg-brand-surface'
-                                      }`}>
-                                        {req.priority || 'normal'}
-                                      </span>
-                                    </td>
-
-                                    {/* Status Badge */}
-                                    <td className="py-3.5 px-4">
-                                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border inline-flex items-center gap-1.5 ${statusBadge.cls}`}>
-                                        <span className={`w-1.5 h-1.5 rounded-full ${statusBadge.dot}`} />
-                                        {statusBadge.label}
-                                      </span>
-                                    </td>
-
-                                    {/* Actions */}
-                                    <td className="py-3.5 px-4 text-right">
-                                      <div className="flex items-center justify-end gap-1.5">
-                                        {isPending ? (
-                                          <>
-                                            <button
-                                              onClick={() => handleOpenApproveModal(req)}
-                                              className="h-7 px-2.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500 hover:text-white border border-emerald-500/30 transition-all flex items-center gap-1"
-                                            >
-                                              <ThumbsUp size={11} />
-                                              Approve
-                                            </button>
-                                            <button
-                                              onClick={() => handleOpenRejectModal(req)}
-                                              className="h-7 px-2.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-rose-500/15 text-rose-400 hover:bg-rose-500 hover:text-white border border-rose-500/30 transition-all flex items-center gap-1"
-                                            >
-                                              <ThumbsDown size={11} />
-                                              Reject
-                                            </button>
-                                          </>
+                              return (
+                                <tr
+                                  key={req.id}
+                                  className={`transition-colors group ${
+                                    isChecked ? "bg-brand-neonblue/10" : "hover:bg-brand-surface/60"
+                                  }`}
+                                >
+                                  {/* Checkbox Column */}
+                                  <td className="py-3.5 px-4 text-center">
+                                    {isPending ? (
+                                      <button
+                                        onClick={() => handleToggleRow(req.id)}
+                                        className="text-muted hover:text-brand-neonblue transition-colors"
+                                      >
+                                        {isChecked ? (
+                                          <CheckSquare size={16} className="text-brand-neonblue" />
                                         ) : (
-                                          <button
-                                            onClick={() => {
-                                              setActiveReq(req);
-                                              setShowDetailsModal(true);
-                                            }}
-                                            className="h-7 px-2.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-brand-surface border border-border text-muted hover:text-main transition-colors flex items-center gap-1"
-                                          >
-                                            <FileText size={11} />
-                                            Details
-                                          </button>
+                                          <Square size={16} />
                                         )}
+                                      </button>
+                                    ) : (
+                                      <div className="w-4 h-4 mx-auto rounded border border-border/30 opacity-20 cursor-not-allowed" />
+                                    )}
+                                  </td>
+
+                                  {/* Request # */}
+                                  <td className="py-3.5 px-4">
+                                    <span className="font-mono font-bold text-main">{req.request_number}</span>
+                                    <p className="text-[10px] text-muted mt-0.5">
+                                      {req.created_at ? new Date(req.created_at).toLocaleDateString() : '—'}
+                                    </p>
+                                  </td>
+
+                                  {/* Requester */}
+                                  <td className="py-3.5 px-4">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-6 h-6 rounded-lg bg-brand-neonblue/10 border border-brand-neonblue/20 text-brand-neonblue flex items-center justify-center text-xs font-bold shrink-0">
+                                        <User size={12} />
                                       </div>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* ── TAB 2: INVENTORY CATALOG ── */}
-                {branchModalTab === "inventory" && (
-                  <div>
-                    {activeBranchInventory.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-16 bg-brand-bgbase border border-border rounded-2xl border-dashed">
-                        <Package size={40} className="text-main/20 mb-3" />
-                        <h4 className="text-xs font-black uppercase tracking-[2px] text-main">No Products in Sector Inventory</h4>
-                      </div>
-                    ) : (
-                      <div className="bg-brand-bgbase border border-border rounded-xl overflow-hidden">
-                        <div className="divide-y divide-border">
-                          {activeBranchInventory.map((item) => {
-                            const isLowStock = item.quantity <= item.low_stock_threshold;
-                            return (
-                              <div
-                                key={item.id}
-                                className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 hover:bg-brand-surface/60 transition-colors"
-                              >
-                                <div className="flex items-center gap-3">
-                                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center border shrink-0 ${
-                                    isLowStock 
-                                      ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' 
-                                      : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                                  }`}>
-                                    {isLowStock ? <AlertTriangle size={16} /> : <CheckCircle2 size={16} />}
-                                  </div>
-                                  <div>
-                                    <h4 className="text-sm font-rajdhani font-bold text-main capitalize">
-                                      {item.Product?.name}
-                                    </h4>
-                                    <div className="flex items-center gap-2 mt-0.5">
-                                      <span className="text-[10px] text-muted uppercase font-mono">{item.Product?.sku}</span>
-                                      <span className="text-[10px] text-muted">• Threshold: {item.low_stock_threshold}</span>
+                                      <span className="font-bold text-main">{requesterName}</span>
                                     </div>
-                                  </div>
-                                </div>
+                                  </td>
 
-                                <div className="flex items-center gap-6 justify-between sm:justify-end">
-                                  <div className="text-right">
-                                    <span className="text-[9px] text-muted uppercase font-bold tracking-wider block">Active Stock</span>
-                                    <span className={`text-base font-rajdhani font-black ${isLowStock ? 'text-rose-400' : 'text-main'}`}>
-                                      {item.quantity} <span className="text-[10px] text-muted">UNITS</span>
+                                  {/* Product */}
+                                  <td className="py-3.5 px-4">
+                                    <p className="font-rajdhani font-bold text-xs text-main capitalize truncate max-w-xs">
+                                      {req.Product?.name || `Product #${req.product_id}`}
+                                    </p>
+                                    <span className="text-[10px] font-mono text-muted uppercase">{req.Product?.sku || 'SKU-UNKNOWN'}</span>
+                                  </td>
+
+                                  {/* Quantity */}
+                                  <td className="py-3.5 px-4 text-center">
+                                    <span className="text-sm font-rajdhani font-black text-main">
+                                      {req.quantity_requested}
                                     </span>
-                                  </div>
+                                    <span className="text-[9px] text-muted ml-1 uppercase">units</span>
+                                  </td>
 
-                                  <button
-                                    onClick={() => setRestockItem(item)}
-                                    className={`h-8 px-4 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all ${
-                                      isLowStock 
-                                        ? 'bg-rose-500/15 text-rose-400 hover:bg-rose-500 hover:text-white border border-rose-500/30'
-                                        : 'bg-brand-surface border border-border text-main hover:text-brand-neonblue hover:border-brand-neonblue/40'
-                                    }`}
-                                  >
-                                    <Download size={12} />
-                                    Restock
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
+                                  {/* Status Badge */}
+                                  <td className="py-3.5 px-4">
+                                    <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full border inline-flex items-center gap-1.5 ${statusBadge.cls}`}>
+                                      <span className={`w-1.5 h-1.5 rounded-full ${statusBadge.dot}`} />
+                                      {statusBadge.label}
+                                    </span>
+                                  </td>
+
+                                  {/* Actions */}
+                                  <td className="py-3.5 px-4 text-right">
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      {isPending ? (
+                                        <>
+                                          <button
+                                            onClick={() => handleOpenApproveModal(req)}
+                                            className="h-7 px-2.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500 hover:text-white border border-emerald-500/30 transition-all flex items-center gap-1"
+                                          >
+                                            <ThumbsUp size={11} />
+                                            Approve
+                                          </button>
+                                          <button
+                                            onClick={() => handleOpenRejectModal(req)}
+                                            className="h-7 px-2.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-rose-500/15 text-rose-400 hover:bg-rose-500 hover:text-white border border-rose-500/30 transition-all flex items-center gap-1"
+                                          >
+                                            <ThumbsDown size={11} />
+                                            Reject
+                                          </button>
+                                        </>
+                                      ) : (
+                                        <button
+                                          onClick={() => {
+                                            setActiveReq(req);
+                                            setShowDetailsModal(true);
+                                          }}
+                                          className="h-7 px-2.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-brand-surface border border-border text-muted hover:text-main transition-colors flex items-center gap-1"
+                                        >
+                                          <FileText size={11} />
+                                          Details
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       </div>
-                    )}
-                  </div>
-                )}
+                    </div>
+                  )}
+                </div>
 
               </div>
             </motion.div>
