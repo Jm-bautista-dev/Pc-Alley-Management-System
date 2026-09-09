@@ -247,40 +247,66 @@ export default function ProcurementPage() {
     ).length;
   }, [requests, currentBranchId]);
 
-  // Auto-open staff modal from URL query params (e.g. ?staff_id=X or ?requester_id=X or ?request_id=Y or from notification)
+  // Auto-open modal from URL query params (e.g. ?branch_id=X for Super Admin, ?staff_id=Y for Branch Admin, ?request_id=Z, or from notifications)
   useEffect(() => {
-    if (typeof window === "undefined" || !users.length) return;
+    if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
+    const branchIdParam = params.get("branch_id") || params.get("branch") || params.get("branchId");
     const staffIdParam = params.get("staff_id") || params.get("requester_id");
     const reqIdParam = params.get("request_id") || params.get("id");
     const tabParam = params.get("tab");
 
-    if (staffIdParam) {
-      const targetStaff = users.find(u => String(u.id) === String(staffIdParam));
-      if (targetStaff) {
-        setActiveStaffModal(targetStaff);
-        return;
-      }
-    }
-
-    if (reqIdParam && requests.length) {
-      const targetReq = requests.find(r => String(r.id) === String(reqIdParam));
-      if (targetReq) {
-        const staff = users.find(u => u.id === targetReq.requested_by);
-        if (staff) {
-          setActiveStaffModal(staff);
+    // 1. SUPER ADMIN FLOW: Auto-open Branch Modal
+    if (isSuperAdmin && branches.length > 0) {
+      if (branchIdParam) {
+        const targetBranch = branches.find(b => String(b.id) === String(branchIdParam));
+        if (targetBranch) {
+          setActiveBranchModal(targetBranch);
           return;
+        }
+      }
+
+      if (reqIdParam && requests.length > 0) {
+        const targetReq = requests.find(r => String(r.id) === String(reqIdParam));
+        if (targetReq) {
+          const targetBranch = branches.find(b => b.id === targetReq.branch_id);
+          if (targetBranch) {
+            setActiveBranchModal(targetBranch);
+            return;
+          }
         }
       }
     }
 
-    if (tabParam === "requests" && staffPillData.length > 0) {
-      const staffWithPending = staffPillData.find(s => s.pendingRequestsCount > 0) || staffPillData[0];
-      if (staffWithPending) {
-        setActiveStaffModal(staffWithPending);
+    // 2. BRANCH ADMIN FLOW: Auto-open Staff Modal
+    if (!isSuperAdmin && users.length > 0) {
+      if (staffIdParam) {
+        const targetStaff = users.find(u => String(u.id) === String(staffIdParam));
+        if (targetStaff) {
+          setActiveStaffModal(targetStaff);
+          return;
+        }
+      }
+
+      if (reqIdParam && requests.length > 0) {
+        const targetReq = requests.find(r => String(r.id) === String(reqIdParam));
+        if (targetReq) {
+          const staff = users.find(u => u.id === targetReq.requested_by);
+          if (staff) {
+            setActiveStaffModal(staff);
+            return;
+          }
+        }
+      }
+
+      if (tabParam === "requests" && staffPillData.length > 0) {
+        const staffWithPending = staffPillData.find(s => s.pendingRequestsCount > 0) || staffPillData[0];
+        if (staffWithPending) {
+          setActiveStaffModal(staffWithPending);
+        }
       }
     }
-  }, [users, requests, staffPillData]);
+  }, [isSuperAdmin, branches, users, requests, staffPillData]);
 
   // ── Branch Admin: Flat Inventory Filter ──
   const filteredInventory = useMemo(() => {

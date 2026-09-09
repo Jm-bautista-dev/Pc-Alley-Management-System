@@ -188,7 +188,7 @@ const createRequest = async (req, res) => {
             title: 'New Branch Stock Request Pending HQ Review',
             message: `Branch '${destBranch.name}' submitted stock request (${summaryNumbers}) for ${items.length} item(s).`,
             type: 'stock_request',
-            link: '/purchases/restock'
+            link: `/purchases/restock?branch_id=${branch_id}`
           }));
           await Notification.bulkCreate(notifications);
         }
@@ -274,7 +274,7 @@ const branchAdminApprove = async (req, res) => {
           title: 'Branch-Endorsed Stock Request Awaiting HQ',
           message: `Branch Admin ${req.user.username} approved request ${request.request_number} for '${request.Product?.name}' (${request.quantity_requested} units). Ready for HQ review.`,
           type: 'stock_request',
-          link: '/purchases/restock'
+          link: `/purchases/restock?branch_id=${request.branch_id}`
         }));
         await Notification.bulkCreate(notifications);
       }
