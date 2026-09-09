@@ -202,16 +202,26 @@ export default function ProcurementPage() {
   // ── Branch Admin: Staff Analytics Aggregation ──
   const staffPillData = useMemo(() => {
     if (isSuperAdmin) return [];
-    // Get all users in this branch with role employee or branch_admin
+    // Strictly filter staff members (role: employee or staff, exclude branch admins / managers)
     const branchStaff = users.filter(u => 
       (u.branch_id === currentBranchId || !currentBranchId) && 
-      (u.role === 'employee' || u.role === 'staff' || u.role === 'branch_admin')
+      (u.role === 'employee' || u.role === 'staff') &&
+      u.role !== 'branch_admin' &&
+      u.role !== 'super_admin' &&
+      u.id !== currentUser?.id
     );
 
-    // Also include any users who created requests for this branch if not already in list
+    // Also include any staff users who created requests for this branch if not already in list
     const requesterIdsInBranch = new Set(requests.filter(r => r.branch_id === currentBranchId).map(r => r.requested_by));
     users.forEach(u => {
-      if (requesterIdsInBranch.has(u.id) && !branchStaff.some(s => s.id === u.id)) {
+      if (
+        requesterIdsInBranch.has(u.id) && 
+        (u.role === 'employee' || u.role === 'staff') && 
+        u.role !== 'branch_admin' && 
+        u.role !== 'super_admin' && 
+        u.id !== currentUser?.id &&
+        !branchStaff.some(s => s.id === u.id)
+      ) {
         branchStaff.push(u);
       }
     });
@@ -228,7 +238,7 @@ export default function ProcurementPage() {
         requests: staffReqs
       };
     });
-  }, [users, requests, currentBranchId, isSuperAdmin]);
+  }, [users, requests, currentBranchId, isSuperAdmin, currentUser]);
 
   const totalBranchPendingStaffRequests = useMemo(() => {
     return requests.filter(r => 
