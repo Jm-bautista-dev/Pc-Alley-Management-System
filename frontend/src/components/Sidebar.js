@@ -93,8 +93,7 @@ const Sidebar = () => {
         ] },
         { title: "Buy Stock",       icon: Download,        path: "#purchases",        group: "SALES", subItems: [
           { title: "Stock Purchases", path: "/purchases" },
-          { title: "Order Stock", path: "/purchases/restock" },
-          { title: "Branch Requests", path: "/admin/product-requests" }
+          { title: "Order Stock", path: "/purchases/restock" }
         ] },
 
         { title: "Reports",         icon: ClipboardList,   path: "#reports",          group: "SYSTEM", subItems: [
