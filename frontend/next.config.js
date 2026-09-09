@@ -33,6 +33,11 @@ const nextConfig = {
         destination: '/dashboard',
         permanent: true,
       },
+      {
+        source: '/reports',
+        destination: '/reports/profit-loss',
+        permanent: false,
+      },
     ];
   },
 };
