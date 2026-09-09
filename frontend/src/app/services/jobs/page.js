@@ -146,8 +146,8 @@ export default function ServiceJobsPage() {
       showError("Customer name can only contain letters, spaces, hyphens, apostrophes, and dots.");
       return;
     }
-    if (name.length < 2 || name.length > 100) {
-      showError("Customer name must be between 2 and 100 characters.");
+    if (name.length < 2 || name.length > 21) {
+      showError("Customer name must be between 2 and 21 characters.");
       return;
     }
 
@@ -376,53 +376,61 @@ export default function ServiceJobsPage() {
                   <motion.div
                     key={job.id}
                     layout
-                    className="bg-brand-surface border border-brand-border rounded-3xl p-6 hover:border-purple-500/30 transition-all shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6"
+                    className="bg-brand-surface border border-brand-border rounded-3xl p-6 hover:border-purple-500/30 transition-all shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6 overflow-hidden"
                   >
-                    <div className="space-y-2 flex-1">
+                    <div className="space-y-2 flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-3">
-                        <span className="font-mono font-black text-main text-sm">
+                        <span className="font-mono font-black text-main text-sm shrink-0">
                           {job.job_number}
                         </span>
-                        <span className={`px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${statusMeta.color}`}>
+                        <span className={`px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border shrink-0 ${statusMeta.color}`}>
                           {statusMeta.label}
                         </span>
-                        <span className="text-[10px] font-bold text-brand-muted flex items-center gap-1">
+                        <span className="text-[10px] font-bold text-brand-muted flex items-center gap-1 shrink-0">
                           <Clock size={12} /> {new Date(job.created_at || job.received_at).toLocaleDateString()}
                         </span>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-4 text-xs font-bold">
-                        <div className="flex items-center gap-1.5 text-main">
-                          <User size={14} className="text-purple-400" />
-                          <span>{job.customer_name}</span>
-                          {job.customer_phone && <span className="text-brand-muted">({job.customer_phone})</span>}
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-bold min-w-0">
+                        <div className="flex items-center gap-1.5 text-main min-w-0 max-w-full">
+                          <User size={14} className="text-purple-400 shrink-0" />
+                          <span className="truncate max-w-[200px] sm:max-w-xs md:max-w-sm" title={job.customer_name}>
+                            {job.customer_name}
+                          </span>
+                          {job.customer_phone && (
+                            <span className="text-brand-muted truncate max-w-[130px] shrink-0" title={job.customer_phone}>
+                              ({job.customer_phone})
+                            </span>
+                          )}
                         </div>
-                        <div className="flex items-center gap-1.5 text-brand-muted">
-                          <Laptop size={14} className="text-brand-neonblue" />
-                          <span>{job.device_type} {job.serial_number ? `• S/N: ${job.serial_number}` : ''}</span>
+                        <div className="flex items-center gap-1.5 text-brand-muted min-w-0 max-w-full">
+                          <Laptop size={14} className="text-brand-neonblue shrink-0" />
+                          <span className="truncate max-w-[220px]" title={`${job.device_type || ''} ${job.serial_number ? `• S/N: ${job.serial_number}` : ''}`}>
+                            {job.device_type} {job.serial_number ? `• S/N: ${job.serial_number}` : ''}
+                          </span>
                         </div>
                       </div>
 
-                      <p className="text-xs text-brand-muted font-normal line-clamp-1">
+                      <p className="text-xs text-brand-muted font-normal truncate" title={`Service: ${job.service_name} | Issue: ${job.reported_issue || "No notes"}`}>
                         <strong className="text-main font-bold">Service:</strong> {job.service_name} &nbsp;|&nbsp; 
                         <strong className="text-main font-bold"> Issue:</strong> {job.reported_issue || "No notes"}
                       </p>
                     </div>
 
-                    <div className="flex items-center justify-between md:justify-end gap-6 w-full md:w-auto border-t md:border-t-0 border-brand-border pt-4 md:pt-0">
-                      <div className="text-right">
+                    <div className="flex items-center justify-between md:justify-end gap-6 w-full md:w-auto border-t md:border-t-0 border-brand-border pt-4 md:pt-0 shrink-0">
+                      <div className="text-right shrink-0">
                         <span className="text-[10px] font-bold text-brand-muted uppercase tracking-wider block">
                           Final Cost
                         </span>
-                        <span className="text-lg font-rajdhani font-black text-main">
-                          ₱{parseFloat(job.final_price || job.estimated_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        <span className="text-lg font-rajdhani font-black text-main whitespace-nowrap">
+                          ₱{parseFloat(job.final_price || job.estimated_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 shrink-0">
                         <button
                           onClick={() => handleOpenDetail(job)}
-                          className="px-4 py-2 bg-brand-panel hover:bg-brand-hover border border-brand-border text-main font-black text-xs uppercase tracking-wider rounded-xl transition-all"
+                          className="px-4 py-2 bg-brand-panel hover:bg-brand-hover border border-brand-border text-main font-black text-xs uppercase tracking-wider rounded-xl transition-all shrink-0"
                         >
                           View / Update
                         </button>
@@ -430,7 +438,7 @@ export default function ServiceJobsPage() {
                         {job.status !== 'completed' && job.status !== 'cancelled' && (
                           <button
                             onClick={() => handleSendToPOS(job)}
-                            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all flex items-center gap-1.5 shadow-sm"
+                            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all flex items-center gap-1.5 shadow-sm shrink-0 whitespace-nowrap"
                             title="Invoice at POS"
                           >
                             <CreditCard size={14} /> Checkout in POS
@@ -469,14 +477,19 @@ export default function ServiceJobsPage() {
                 <form onSubmit={handleCreateJob} className="space-y-4 overflow-y-auto custom-scrollbar flex-1 pr-1">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-[10px] font-black uppercase tracking-wider text-brand-muted mb-1.5">
-                        Customer Name *
-                      </label>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-[10px] font-black uppercase tracking-wider text-brand-muted">
+                          Customer Name *
+                        </label>
+                        <span className={`text-[10px] font-mono font-bold ${createForm.customer_name.length >= 21 ? 'text-rose-400' : 'text-brand-muted'}`}>
+                          {createForm.customer_name.length}/21
+                        </span>
+                      </div>
                       <input
                         type="text"
                         required
-                        maxLength={100}
-                        placeholder="Juan Dela Cruz (letters only)"
+                        maxLength={21}
+                        placeholder="Juan Dela Cruz"
                         value={createForm.customer_name}
                         onChange={e => setCreateForm({ ...createForm, customer_name: e.target.value })}
                         className="w-full px-4 py-2 bg-brand-panel border border-brand-border rounded-xl text-xs font-bold text-main focus:outline-none"
@@ -615,7 +628,7 @@ export default function ServiceJobsPage() {
                 <h2 className="text-xl font-rajdhani font-black text-main uppercase tracking-wider mb-1">
                   Ticket #{selectedJob.job_number}
                 </h2>
-                <p className="text-xs text-brand-muted font-bold mb-4">
+                <p className="text-xs text-brand-muted font-bold mb-4 truncate" title={`${selectedJob.customer_name} • ${selectedJob.service_name}`}>
                   {selectedJob.customer_name} • {selectedJob.service_name}
                 </p>
 

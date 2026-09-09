@@ -84,7 +84,7 @@ router.post('/jobs', [
   body('customer_name')
     .trim()
     .notEmpty().withMessage('Customer name is required.')
-    .isLength({ min: 2, max: 100 }).withMessage('Customer name must be between 2 and 100 characters.')
+    .isLength({ min: 2, max: 21 }).withMessage('Customer name must be between 2 and 21 characters.')
     .custom(val => !/\d/.test(val)).withMessage('Customer name cannot contain numbers.')
     .matches(/^[A-Za-z\s.\'-]+$/).withMessage('Customer name can only contain letters, spaces, hyphens, apostrophes, and dots.'),
   body('customer_phone')

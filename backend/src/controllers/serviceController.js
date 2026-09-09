@@ -289,7 +289,7 @@ const createServiceJob = async (req, res) => {
     if (!trimmedName) return res.status(400).json({ error: 'Customer name is required' });
     if (/\d/.test(trimmedName)) return res.status(400).json({ error: 'Customer name cannot contain numbers' });
     if (!/^[A-Za-z\s.\'-]+$/.test(trimmedName)) return res.status(400).json({ error: 'Customer name can only contain letters, spaces, hyphens, and dots' });
-    if (trimmedName.length < 2 || trimmedName.length > 100) return res.status(400).json({ error: 'Customer name must be between 2 and 100 characters' });
+    if (trimmedName.length < 2 || trimmedName.length > 21) return res.status(400).json({ error: 'Customer name must be between 2 and 21 characters' });
 
     let cleanPhone = null;
     if (customer_phone && customer_phone.trim()) {
