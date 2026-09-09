@@ -57,12 +57,18 @@ const markAllRead = async (req, res) => {
 const deleteOne = async (req, res) => {
   try {
     const { id } = req.params;
-    const notification = await Notification.findOne({
-      where: { id, userId: req.user.id }
-    });
+    const isAdmin = req.user.role === 'super_admin' || req.user.role === 'branch_admin';
+
+    // For admins, allow deletion of any notification (including restock_request)
+    const where = isAdmin
+      ? { id }
+      : { id, userId: req.user.id };
+
+    const notification = await Notification.findOne({ where });
     if (!notification) return res.status(404).json({ message: 'Notification not found.' });
-    
-    if (notification.type === 'restock_request') {
+
+    // Only block staff (employee) from dismissing pending restock_request notifications
+    if (!isAdmin && notification.type === 'restock_request') {
       return res.status(400).json({ message: 'Pending restock requests cannot be dismissed. They must be approved or rejected.' });
     }
 
@@ -76,12 +82,16 @@ const deleteOne = async (req, res) => {
 const clearAll = async (req, res) => {
   try {
     const { Op } = require('sequelize');
-    await Notification.destroy({ 
-      where: { 
-        userId: req.user.id,
-        type: { [Op.ne]: 'restock_request' }
-      } 
-    });
+    const isAdmin = req.user.role === 'super_admin' || req.user.role === 'branch_admin';
+
+    const where = isAdmin
+      ? {} // Admins can clear all notifications, including restock_request
+      : {
+          userId: req.user.id,
+          type: { [Op.ne]: 'restock_request' } // Staff cannot clear pending restock notifications
+        };
+
+    await Notification.destroy({ where });
     res.json({ message: 'All dismissible notifications cleared.' });
   } catch (error) {
     res.status(500).json({ error: error.message });

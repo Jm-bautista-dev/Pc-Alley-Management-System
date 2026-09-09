@@ -27,26 +27,32 @@ const createRequest = async (req, res) => {
       status: 'Pending'
     });
 
-    // Notify all Super Admins and the branch admins for this branch
+    // Notification routing:
+    // - Employee (staff) → notify only the Branch Admins of that branch
+    // - Branch Admin → notify the Branch Admins of that branch + Super Admins
     const { Op } = require('sequelize');
-    const admins = await User.findAll({
-      where: {
-        [Op.or]: [
-          { role: 'super_admin' },
-          { role: 'branch_admin', branch_id }
-        ]
-      }
-    });
+    const isEmployee = req.user.role === 'employee';
+
+    const recipientQuery = isEmployee
+      ? { role: 'branch_admin', branch_id }
+      : {
+          [Op.or]: [
+            { role: 'super_admin' },
+            { role: 'branch_admin', branch_id }
+          ]
+        };
+
+    const recipients = await User.findAll({ where: recipientQuery });
     const product = await Product.findByPk(product_id);
     const branch = await Branch.findByPk(branch_id);
 
-    if (admins.length > 0 && product && branch) {
+    if (recipients.length > 0 && product && branch) {
       await notifyUsers({
-        users: admins,
+        users: recipients,
         branchId: branch_id,
         title: 'New Restock Request',
         message: `${req.user.username} requested ${quantity} units of ${product.name} for ${branch.name}.`,
-        type: 'info',
+        type: 'restock_request',
         link: `/purchases/restock`,
         emailDetails: {
           details: {
@@ -55,6 +61,7 @@ const createRequest = async (req, res) => {
             'Quantity Requested': `${quantity} units`,
             'Branch': branch.name,
             'Requested By': req.user.username,
+            'Requester Role': isEmployee ? 'Staff' : 'Branch Admin',
             'Notes': notes || 'None'
           },
           actionUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/purchases/restock`,

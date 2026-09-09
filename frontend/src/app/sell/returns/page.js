@@ -170,10 +170,12 @@ export default function ReturnsPage() {
                   }`}>{s}</button>
               ))}
             </div>
-            <button onClick={() => setIsModalOpen(true)}
-              className="btn-premium flex items-center gap-2 px-6 py-2.5 rounded-full text-xs ml-auto">
-              <Plus size={16} /> New Return
-            </button>
+            {!isSuperAdmin && (
+              <button onClick={() => setIsModalOpen(true)}
+                className="btn-premium flex items-center gap-2 px-6 py-2.5 rounded-full text-xs ml-auto">
+                <Plus size={16} /> New Return
+              </button>
+            )}
           </div>
 
           {/* Table */}

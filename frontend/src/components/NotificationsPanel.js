@@ -62,6 +62,11 @@ export default function NotificationsPanel({ isOpen, onClose }) {
   const { notifications, unreadCount, markAsRead, markAllAsRead, removeNotification, clearAll, refresh } = useNotifications();
   const router = useRouter();
 
+  // Derive role for permission-based rendering
+  const currentUserRole = typeof window !== "undefined"
+    ? (() => { try { return JSON.parse(localStorage.getItem("user"))?.role || ""; } catch { return ""; } })()
+    : "";
+
   // Close on Escape
   useEffect(() => {
     if (!isOpen) return;
@@ -216,7 +221,7 @@ export default function NotificationsPanel({ isOpen, onClose }) {
 
                             {/* Actions */}
                             <div className="flex items-center gap-2 mt-2.5">
-                              {/* Restock quick-approve (only for super_admin, unread) */}
+                              {/* Restock quick-approve (only for super_admin/branch_admin, unread) */}
                               {isRestock && !note.read && (
                                 <>
                                   <button
@@ -254,8 +259,8 @@ export default function NotificationsPanel({ isOpen, onClose }) {
                                 </button>
                               )}
 
-                              {/* Dismiss */}
-                              {!isRestock && (
+                              {/* Dismiss — always shown for admin/super_admin; shown for non-restock for staff */}
+                              {(currentUserRole === 'super_admin' || currentUserRole === 'branch_admin' || !isRestock) && (
                                 <button
                                   onClick={() => removeNotification(note.id)}
                                   className="h-7 px-2 rounded-lg text-xs text-muted hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-400/10 ml-auto"

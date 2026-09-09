@@ -1,52 +1,58 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { apiUrl } from '../../lib/api';
-import { showSuccess, showError, showInfo, showWarning, showConfirm, showModal } from "@/context/ModalContext";
+import { showSuccess, showError, showConfirm } from "@/context/ModalContext";
 import { format } from 'date-fns';
-import { RefreshCw, Filter } from 'lucide-react';
+import { RefreshCw, Filter, CheckSquare, Square, CheckCheck, XCircle, ChevronDown, Package, Clock } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function RestockManagement() {
-  const [requests, setRequests]       = useState([]);
-  const [branches, setBranches]       = useState([]);
-  const [loading, setLoading]         = useState(true);
-  const [processingId, setProcessingId] = useState(null);
-  const [rejectionModal, setRejectionModal] = useState(null);
+  const [requests, setRequests]           = useState([]);
+  const [branches, setBranches]           = useState([]);
+  const [loading, setLoading]             = useState(true);
+  const [processingIds, setProcessingIds] = useState(new Set());
+  const [rejectionModal, setRejectionModal] = useState(null); // single rejection modal
+  const [batchRejectModal, setBatchRejectModal] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUser]     = useState(null);
+
+  // Batch selection
+  const [selectedIds, setSelectedIds]     = useState(new Set());
 
   // Filters
-  const [filterStatus, setFilterStatus]   = useState('');
+  const [filterStatus, setFilterStatus]   = useState('Pending');
   const [filterBranch, setFilterBranch]   = useState('');
 
+  const userData = useCallback(() => {
+    try { return JSON.parse(localStorage.getItem('user')); } catch { return null; }
+  }, []);
+
   useEffect(() => {
-    const u = localStorage.getItem('user');
-    if (u) setCurrentUser(JSON.parse(u));
+    const u = userData();
+    setCurrentUser(u);
     fetchBranches();
-    fetchRequests();
+    fetchRequests('Pending', '');
   }, []);
 
   const fetchBranches = async () => {
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(apiUrl('/api/branches'), {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await fetch(apiUrl('/api/branches'), { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) setBranches(await res.json());
     } catch (_) {}
   };
 
   const fetchRequests = async (status = filterStatus, branch = filterBranch) => {
     setLoading(true);
+    setSelectedIds(new Set()); // clear selection on refresh
     const token = localStorage.getItem('token');
     try {
       const params = new URLSearchParams();
       if (status) params.set('status', status);
       if (branch) params.set('branch_id', branch);
       const url = `/api/restock-requests${params.toString() ? '?' + params.toString() : ''}`;
-      const res = await fetch(apiUrl(url), {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await fetch(apiUrl(url), { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) setRequests(await res.json());
       else showError('Failed to load restock requests');
     } catch (_) {
@@ -56,14 +62,7 @@ export default function RestockManagement() {
     }
   };
 
-  const applyFilters = () => fetchRequests(filterStatus, filterBranch);
-
-  const clearFilters = () => {
-    setFilterStatus('');
-    setFilterBranch('');
-    fetchRequests('', '');
-  };
-
+  // ── Single Approve ──────────────────────────────────────────────────────────
   const handleApprove = async (id) => {
     const confirmed = await showConfirm(
       "Approve Restock Request",
@@ -71,7 +70,7 @@ export default function RestockManagement() {
       { confirmLabel: "Approve" }
     );
     if (!confirmed) return;
-    setProcessingId(id);
+    setProcessingIds(s => new Set(s).add(id));
     const token = localStorage.getItem('token');
     try {
       const res = await fetch(apiUrl(`/api/restock-requests/${id}/approve`), {
@@ -88,14 +87,15 @@ export default function RestockManagement() {
     } catch (_) {
       showError('An error occurred');
     } finally {
-      setProcessingId(null);
+      setProcessingIds(s => { const n = new Set(s); n.delete(id); return n; });
     }
   };
 
+  // ── Single Reject ───────────────────────────────────────────────────────────
   const handleReject = async (e) => {
     e.preventDefault();
     const id = rejectionModal.id;
-    setProcessingId(id);
+    setProcessingIds(s => new Set(s).add(id));
     const token = localStorage.getItem('token');
     try {
       const res = await fetch(apiUrl(`/api/restock-requests/${id}/reject`), {
@@ -115,8 +115,96 @@ export default function RestockManagement() {
     } catch (_) {
       showError('An error occurred');
     } finally {
-      setProcessingId(null);
+      setProcessingIds(s => { const n = new Set(s); n.delete(id); return n; });
     }
+  };
+
+  // ── Batch Approve ───────────────────────────────────────────────────────────
+  const handleBatchApprove = async () => {
+    if (selectedIds.size === 0) return;
+    const confirmed = await showConfirm(
+      "Batch Approve",
+      `Approve ${selectedIds.size} restock request${selectedIds.size > 1 ? 's' : ''}? Inventory will be updated for all selected requests.`,
+      { confirmLabel: `Approve ${selectedIds.size} Requests` }
+    );
+    if (!confirmed) return;
+
+    const token = localStorage.getItem('token');
+    const ids = Array.from(selectedIds);
+    let passed = 0, failed = 0;
+
+    for (const id of ids) {
+      setProcessingIds(s => new Set(s).add(id));
+      try {
+        const res = await fetch(apiUrl(`/api/restock-requests/${id}/approve`), {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) passed++;
+        else failed++;
+      } catch (_) {
+        failed++;
+      } finally {
+        setProcessingIds(s => { const n = new Set(s); n.delete(id); return n; });
+      }
+    }
+
+    if (passed > 0) showSuccess(`${passed} request${passed > 1 ? 's' : ''} approved — inventory updated`);
+    if (failed > 0) showError(`${failed} request${failed > 1 ? 's' : ''} failed`);
+    fetchRequests();
+  };
+
+  // ── Batch Reject ────────────────────────────────────────────────────────────
+  const handleBatchReject = async (e) => {
+    e.preventDefault();
+    if (selectedIds.size === 0) return;
+    const token = localStorage.getItem('token');
+    const ids = Array.from(selectedIds);
+    let passed = 0, failed = 0;
+
+    for (const id of ids) {
+      setProcessingIds(s => new Set(s).add(id));
+      try {
+        const res = await fetch(apiUrl(`/api/restock-requests/${id}/reject`), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ reason: rejectionReason })
+        });
+        if (res.ok) passed++;
+        else failed++;
+      } catch (_) {
+        failed++;
+      } finally {
+        setProcessingIds(s => { const n = new Set(s); n.delete(id); return n; });
+      }
+    }
+
+    if (passed > 0) showSuccess(`${passed} request${passed > 1 ? 's' : ''} rejected`);
+    if (failed > 0) showError(`${failed} failed`);
+    setBatchRejectModal(false);
+    setRejectionReason('');
+    fetchRequests();
+  };
+
+  // ── Checkbox helpers ────────────────────────────────────────────────────────
+  const pendingRequests = requests.filter(r => r.status === 'Pending');
+  const allPendingSelected = pendingRequests.length > 0 && pendingRequests.every(r => selectedIds.has(r.id));
+  const somePendingSelected = pendingRequests.some(r => selectedIds.has(r.id));
+
+  const toggleAll = () => {
+    if (allPendingSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(pendingRequests.map(r => r.id)));
+    }
+  };
+
+  const toggleOne = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
   };
 
   const statusBadge = (status) => {
@@ -128,10 +216,10 @@ export default function RestockManagement() {
     return map[status] || 'text-muted bg-brand-bgbase border-border';
   };
 
-  const isSuperAdmin = currentUser?.role === 'super_admin';
-  const canApprove   = currentUser?.role === 'super_admin' || currentUser?.role === 'branch_admin';
+  const isSuperAdmin  = currentUser?.role === 'super_admin';
+  const isBranchAdmin = currentUser?.role === 'branch_admin';
+  const canApprove    = isSuperAdmin || isBranchAdmin;
 
-  // Summary counts
   const pending  = requests.filter(r => r.status === 'Pending').length;
   const approved = requests.filter(r => r.status === 'Approved').length;
   const rejected = requests.filter(r => r.status === 'Rejected').length;
@@ -144,7 +232,11 @@ export default function RestockManagement() {
         <div>
           <h2 className="text-lg font-semibold text-main">Restock Requests</h2>
           <p className="text-sm text-muted mt-0.5">
-            {isSuperAdmin ? 'Review and approve branch inventory replenishment requests' : 'Track your branch restock requests'}
+            {isSuperAdmin
+              ? 'Review and manage all branch inventory replenishment requests'
+              : isBranchAdmin
+              ? 'Review and approve staff restock requests for your branch'
+              : 'Track your submitted restock requests'}
           </p>
         </div>
         <button
@@ -159,14 +251,14 @@ export default function RestockManagement() {
       {/* Summary cards */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: 'Pending',  count: pending,  color: 'text-amber-500',  bg: 'bg-amber-50  dark:bg-amber-400/10',  border: 'border-amber-200  dark:border-amber-400/20' },
+          { label: 'Pending',  count: pending,  color: 'text-amber-500',   bg: 'bg-amber-50  dark:bg-amber-400/10',   border: 'border-amber-200  dark:border-amber-400/20' },
           { label: 'Approved', count: approved, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-400/10', border: 'border-emerald-200 dark:border-emerald-400/20' },
-          { label: 'Rejected', count: rejected, color: 'text-rose-500',   bg: 'bg-rose-50   dark:bg-rose-400/10',   border: 'border-rose-200   dark:border-rose-400/20' },
+          { label: 'Rejected', count: rejected, color: 'text-rose-500',    bg: 'bg-rose-50   dark:bg-rose-400/10',    border: 'border-rose-200   dark:border-rose-400/20' },
         ].map(({ label, count, color, bg, border }) => (
           <button
             key={label}
             onClick={() => { setFilterStatus(label); fetchRequests(label, filterBranch); }}
-            className={`p-4 rounded-xl border ${bg} ${border} text-left hover:opacity-80 transition-opacity`}
+            className={`p-4 rounded-xl border ${bg} ${border} text-left hover:opacity-80 transition-opacity ${filterStatus === label ? 'ring-2 ring-offset-1 ring-brand-neonblue/40' : ''}`}
           >
             <p className={`text-2xl font-bold ${color}`}>{count}</p>
             <p className={`text-xs font-semibold mt-0.5 ${color} opacity-70`}>{label}</p>
@@ -174,7 +266,7 @@ export default function RestockManagement() {
         ))}
       </div>
 
-      {/* Filters — super admin only sees branch filter */}
+      {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 p-4 bg-brand-bgbase border border-border rounded-xl">
         <Filter size={14} className="text-muted shrink-0" />
         <span className="text-xs font-semibold text-muted uppercase tracking-wider">Filter:</span>
@@ -204,14 +296,14 @@ export default function RestockManagement() {
         )}
 
         <button
-          onClick={applyFilters}
+          onClick={() => fetchRequests(filterStatus, filterBranch)}
           className="h-8 px-4 rounded-lg bg-brand-neonblue text-white text-xs font-semibold hover:bg-brand-neonblue/90"
         >
           Apply
         </button>
         {(filterStatus || filterBranch) && (
           <button
-            onClick={clearFilters}
+            onClick={() => { setFilterStatus(''); setFilterBranch(''); fetchRequests('', ''); }}
             className="h-8 px-3 rounded-lg border border-border text-xs font-medium text-muted hover:text-main hover:bg-brand-hover"
           >
             Clear
@@ -219,13 +311,71 @@ export default function RestockManagement() {
         )}
       </div>
 
+      {/* ── Batch Action Bar ── */}
+      <AnimatePresence>
+        {selectedIds.size > 0 && canApprove && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="flex items-center justify-between gap-4 px-5 py-3 bg-brand-neonblue/10 border border-brand-neonblue/30 rounded-xl"
+          >
+            <div className="flex items-center gap-3">
+              <CheckSquare size={16} className="text-brand-neonblue" />
+              <span className="text-sm font-bold text-main">
+                {selectedIds.size} request{selectedIds.size > 1 ? 's' : ''} selected
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleBatchApprove}
+                disabled={processingIds.size > 0}
+                className="h-8 px-4 rounded-lg bg-emerald-500 text-white text-xs font-bold hover:bg-emerald-600 disabled:opacity-50 flex items-center gap-1.5"
+              >
+                <CheckCheck size={13} /> Approve Selected
+              </button>
+              <button
+                onClick={() => setBatchRejectModal(true)}
+                disabled={processingIds.size > 0}
+                className="h-8 px-4 rounded-lg bg-rose-500 text-white text-xs font-bold hover:bg-rose-600 disabled:opacity-50 flex items-center gap-1.5"
+              >
+                <XCircle size={13} /> Reject Selected
+              </button>
+              <button
+                onClick={() => setSelectedIds(new Set())}
+                className="h-8 px-3 rounded-lg border border-border text-xs font-medium text-muted hover:text-main"
+              >
+                Clear
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Table */}
       <div className="bg-brand-surface border border-border rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-border bg-brand-bgbase">
-                {['Date', 'Branch', 'Requested By', 'Product', 'Qty', 'Est. Cost', 'Status', isSuperAdmin ? 'Actions' : 'Processed'].map(h => (
+                {/* Checkbox column — only for canApprove, only when viewing Pending */}
+                {canApprove && (filterStatus === 'Pending' || filterStatus === '') && (
+                  <th className="px-4 py-3 w-10">
+                    <button
+                      onClick={toggleAll}
+                      className="text-muted hover:text-main transition-colors"
+                      title={allPendingSelected ? "Deselect all" : "Select all pending"}
+                    >
+                      {allPendingSelected
+                        ? <CheckSquare size={16} className="text-brand-neonblue" />
+                        : somePendingSelected
+                        ? <CheckSquare size={16} className="text-brand-neonblue/50" />
+                        : <Square size={16} />
+                      }
+                    </button>
+                  </th>
+                )}
+                {['Date', 'Branch', 'Requested By', 'Product', 'Qty', 'Est. Cost', 'Status', canApprove ? 'Actions' : 'Status Info'].map(h => (
                   <th key={h} className="px-4 py-3 text-xs font-semibold text-muted uppercase tracking-wider whitespace-nowrap">
                     {h}
                   </th>
@@ -235,25 +385,46 @@ export default function RestockManagement() {
             <tbody className="divide-y divide-border">
               {loading && requests.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="px-4 py-16 text-center text-sm text-muted animate-pulse">
+                  <td colSpan="9" className="px-4 py-16 text-center text-sm text-muted animate-pulse">
                     Loading requests...
                   </td>
                 </tr>
               ) : requests.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="px-4 py-16 text-center text-sm text-muted">
-                    No restock requests found
+                  <td colSpan="9" className="px-4 py-16 text-center">
+                    <Package size={32} className="mx-auto text-muted/30 mb-3" />
+                    <p className="text-sm text-muted font-semibold">No restock requests found</p>
+                    <p className="text-xs text-muted/60 mt-1">
+                      {filterStatus ? `No ${filterStatus.toLowerCase()} requests` : 'Submit a stock request from the Inventory page'}
+                    </p>
                   </td>
                 </tr>
               ) : (
                 requests.map((req) => {
-                  const isTarget = typeof window !== 'undefined' &&
-                    new URLSearchParams(window.location.search).get('id') === String(req.id);
+                  const isPending  = req.status === 'Pending';
+                  const isSelected = selectedIds.has(req.id);
+                  const isProcessing = processingIds.has(req.id);
+                  const showCheckbox = canApprove && isPending && (filterStatus === 'Pending' || filterStatus === '');
+
                   return (
                     <tr
                       key={req.id}
-                      className={`hover:bg-brand-bgbase transition-colors ${isTarget ? 'bg-brand-neonblue/5 border-l-2 border-brand-neonblue' : ''}`}
+                      className={`transition-colors ${isSelected ? 'bg-brand-neonblue/5' : 'hover:bg-brand-bgbase'} ${isProcessing ? 'opacity-60' : ''}`}
                     >
+                      {/* Checkbox */}
+                      {canApprove && (filterStatus === 'Pending' || filterStatus === '') && (
+                        <td className="px-4 py-3">
+                          {isPending && (
+                            <button onClick={() => toggleOne(req.id)} className="text-muted hover:text-brand-neonblue transition-colors">
+                              {isSelected
+                                ? <CheckSquare size={16} className="text-brand-neonblue" />
+                                : <Square size={16} />
+                              }
+                            </button>
+                          )}
+                        </td>
+                      )}
+
                       {/* Date */}
                       <td className="px-4 py-3 text-sm text-muted whitespace-nowrap">
                         {format(new Date(req.createdAt), 'MMM dd, yyyy')}
@@ -304,20 +475,20 @@ export default function RestockManagement() {
                         </span>
                       </td>
 
-                      {/* Actions / Processed info */}
+                      {/* Actions */}
                       <td className="px-4 py-3">
-                        {canApprove && req.status === 'Pending' ? (
+                        {canApprove && isPending ? (
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => handleApprove(req.id)}
-                              disabled={processingId === req.id}
+                              disabled={isProcessing}
                               className="h-8 px-3 rounded-lg bg-emerald-500 text-white text-xs font-semibold hover:bg-emerald-600 disabled:opacity-50 whitespace-nowrap"
                             >
-                              Approve
+                              {isProcessing ? '…' : 'Approve'}
                             </button>
                             <button
                               onClick={() => setRejectionModal(req)}
-                              disabled={processingId === req.id}
+                              disabled={isProcessing}
                               className="h-8 px-3 rounded-lg bg-rose-500 text-white text-xs font-semibold hover:bg-rose-600 disabled:opacity-50 whitespace-nowrap"
                             >
                               Reject
@@ -343,8 +514,10 @@ export default function RestockManagement() {
                                 )}
                               </>
                             )}
-                            {req.status === 'Pending' && (
-                              <span className="text-amber-500 font-semibold">Awaiting admin</span>
+                            {req.status === 'Pending' && !canApprove && (
+                              <span className="text-amber-500 font-semibold flex items-center gap-1">
+                                <Clock size={11} /> Awaiting admin
+                              </span>
                             )}
                           </div>
                         )}
@@ -358,48 +531,105 @@ export default function RestockManagement() {
         </div>
       </div>
 
-      {/* Rejection modal */}
-      {rejectionModal && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-brand-surface border border-border rounded-2xl w-full max-w-md shadow-xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-border">
-              <h3 className="text-base font-semibold text-main">Reject Request</h3>
-              <p className="text-sm text-muted mt-0.5">
-                {rejectionModal.Product?.name} — {rejectionModal.quantity} units for {rejectionModal.Branch?.name}
-              </p>
-            </div>
-            <form onSubmit={handleReject} className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-muted mb-1.5">Reason for rejection</label>
-                <textarea
-                  required
-                  value={rejectionReason}
-                  onChange={(e) => setRejectionReason(e.target.value)}
-                  rows={3}
-                  className="w-full bg-brand-bgbase border border-border rounded-xl px-4 py-3 text-sm text-main focus:outline-none focus:border-brand-neonblue/40 resize-none"
-                  placeholder="Enter reason..."
-                />
+      {/* ── Single Rejection Modal ── */}
+      <AnimatePresence>
+        {rejectionModal && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-brand-surface border border-border rounded-2xl w-full max-w-md shadow-xl overflow-hidden"
+            >
+              <div className="px-6 py-4 border-b border-border">
+                <h3 className="text-base font-semibold text-main">Reject Request</h3>
+                <p className="text-sm text-muted mt-0.5">
+                  {rejectionModal.Product?.name} — {rejectionModal.quantity} units for {rejectionModal.Branch?.name}
+                </p>
               </div>
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => { setRejectionModal(null); setRejectionReason(''); }}
-                  className="flex-1 h-10 rounded-xl border border-border text-sm font-medium text-muted hover:text-main hover:bg-brand-bgbase"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={!!processingId}
-                  className="flex-1 h-10 rounded-xl bg-rose-500 text-white text-sm font-semibold hover:bg-rose-600 disabled:opacity-50"
-                >
-                  {processingId ? 'Processing...' : 'Confirm Reject'}
-                </button>
-              </div>
-            </form>
+              <form onSubmit={handleReject} className="p-6 space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-muted mb-1.5">Reason for rejection *</label>
+                  <textarea
+                    required
+                    value={rejectionReason}
+                    onChange={(e) => setRejectionReason(e.target.value)}
+                    rows={3}
+                    className="w-full bg-brand-bgbase border border-border rounded-xl px-4 py-3 text-sm text-main focus:outline-none focus:border-brand-neonblue/40 resize-none"
+                    placeholder="Enter reason..."
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => { setRejectionModal(null); setRejectionReason(''); }}
+                    className="flex-1 h-10 rounded-xl border border-border text-sm font-medium text-muted hover:text-main hover:bg-brand-bgbase"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={processingIds.size > 0}
+                    className="flex-1 h-10 rounded-xl bg-rose-500 text-white text-sm font-semibold hover:bg-rose-600 disabled:opacity-50"
+                  >
+                    {processingIds.size > 0 ? 'Processing...' : 'Confirm Reject'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
+
+      {/* ── Batch Rejection Modal ── */}
+      <AnimatePresence>
+        {batchRejectModal && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-brand-surface border border-border rounded-2xl w-full max-w-md shadow-xl overflow-hidden"
+            >
+              <div className="px-6 py-4 border-b border-border">
+                <h3 className="text-base font-semibold text-main">Batch Reject</h3>
+                <p className="text-sm text-muted mt-0.5">
+                  This reason will apply to all {selectedIds.size} selected request{selectedIds.size > 1 ? 's' : ''}.
+                </p>
+              </div>
+              <form onSubmit={handleBatchReject} className="p-6 space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-muted mb-1.5">Reason for rejection *</label>
+                  <textarea
+                    required
+                    value={rejectionReason}
+                    onChange={(e) => setRejectionReason(e.target.value)}
+                    rows={3}
+                    className="w-full bg-brand-bgbase border border-border rounded-xl px-4 py-3 text-sm text-main focus:outline-none focus:border-brand-neonblue/40 resize-none"
+                    placeholder="Enter reason..."
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => { setBatchRejectModal(false); setRejectionReason(''); }}
+                    className="flex-1 h-10 rounded-xl border border-border text-sm font-medium text-muted hover:text-main hover:bg-brand-bgbase"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={processingIds.size > 0}
+                    className="flex-1 h-10 rounded-xl bg-rose-500 text-white text-sm font-semibold hover:bg-rose-600 disabled:opacity-50"
+                  >
+                    {processingIds.size > 0 ? 'Processing...' : `Reject ${selectedIds.size} Requests`}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
