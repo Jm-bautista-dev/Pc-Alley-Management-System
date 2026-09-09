@@ -471,17 +471,11 @@ export default function ProcurementPage() {
                     <span className="text-[10px] font-black tracking-[3px] uppercase text-brand-neonblue bg-brand-neonblue/10 px-2.5 py-0.5 rounded border border-brand-neonblue/20">
                       Central Authority • Super Admin
                     </span>
-                    <span className="text-[10px] font-black tracking-[2px] uppercase text-muted">
-                      • Click any branch pill to view restock requests
-                    </span>
                   </div>
                   <h1 className="text-2xl lg:text-3xl font-rajdhani font-black uppercase tracking-wide flex items-center gap-2 text-main">
                     <span>BRANCH RESTOCK</span>
                     <span className="text-brand-neonblue">PILLS OVERVIEW</span>
                   </h1>
-                  <p className="text-xs text-muted font-medium mt-1">
-                    Click any branch pill to open its modal, review stock requisitions, and perform batch or single approvals with checkboxes.
-                  </p>
                 </div>
 
                 {/* Quick Metrics */}
@@ -509,7 +503,7 @@ export default function ProcurementPage() {
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-1.5 h-4 bg-brand-neonblue rounded-full" />
                   <h3 className="text-xs font-rajdhani font-black uppercase text-main tracking-widest">
-                    BRANCHES (CLICK TO OPEN REQUEST LIST MODAL)
+                    BRANCHES
                   </h3>
                 </div>
 
