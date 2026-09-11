@@ -35,16 +35,7 @@ function AdminPageContent() {
   const [activityLogs, setActivityLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("personnel");
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isBranchModalOpen, setIsBranchModalOpen] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const [pendingRestockCount, setPendingRestockCount] = useState(0);
-  const [provisionData, setProvisionData] = useState({
-    username: "",
-    password: "",
-    role: "employee",
-    branch_id: ""
-  });
   const [branchData, setBranchData] = useState({
     name: "",
     location: "",
@@ -65,14 +56,6 @@ function AdminPageContent() {
     return `${days}d ago`;
   };
 
-  const availableRoles = currentUser?.role === "super_admin"
-    ? [
-        { value: "employee", label: "Staff" },
-        { value: "branch_admin", label: "Manager" }
-      ]
-    : [
-        { value: "employee", label: "Staff" }
-      ];
 
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem("user"));
@@ -98,44 +81,6 @@ function AdminPageContent() {
     }
   }, [searchParams, router]);
 
-  useEffect(() => {
-    if (!currentUser) return;
-
-    setProvisionData((prev) => ({
-      ...prev,
-      role: availableRoles[0]?.value || "employee",
-      branch_id: currentUser.role === "branch_admin"
-        ? String(currentUser.branch_id)
-        : (prev.branch_id || (branches[0] ? String(branches[0].id) : ""))
-    }));
-  }, [currentUser, branches]);
-
-  const resetProvisionForm = () => {
-    setProvisionData({
-      username: "",
-      password: "",
-      role: availableRoles[0]?.value || "employee",
-      branch_id: currentUser?.role === "branch_admin"
-        ? String(currentUser.branch_id)
-        : (branches[0] ? String(branches[0].id) : "")
-    });
-    setShowPassword(false);
-  };
-
-  const openProvisionModal = () => {
-    resetProvisionForm();
-    setIsModalOpen(true);
-  };
-
-  useEffect(() => {
-    if (searchParams.get("create") !== "1") return;
-    if (!currentUser) return;
-    if (currentUser.role === "employee") return;
-    if (currentUser.role === "super_admin" && !branches.length) return;
-
-    openProvisionModal();
-    router.replace("/admin");
-  }, [searchParams, currentUser, branches]);
 
   const fetchData = async () => {
     const token = localStorage.getItem("token");
@@ -190,113 +135,6 @@ function AdminPageContent() {
     }
   };
 
-  const handleProvision = async (e) => {
-    e.preventDefault();
-    const token = localStorage.getItem("token");
-
-    if (!branches.length) {
-      showError("No branches available yet. Create a branch first before registering staff.");
-      return;
-    }
-    
-    const payload = {
-      ...provisionData,
-      username: provisionData.username.trim().toLowerCase(),
-      branch_id: currentUser.role === 'branch_admin'
-        ? Number(currentUser.branch_id)
-        : Number(provisionData.branch_id)
-    };
-
-    if (!payload.username) {
-      showError("Please enter a username for the new account.");
-      return;
-    }
-    if (payload.username.length < 3 || payload.username.length > 50) {
-      showError("Username must be between 3 and 50 characters.");
-      return;
-    }
-
-    if (!payload.password || payload.password.length < 6) {
-      showError("Password must be at least 6 characters.");
-      return;
-    }
-
-    if (!payload.branch_id || Number.isNaN(payload.branch_id)) {
-      showError("Please assign a branch for the new account.");
-      return;
-    }
-
-    try {
-      const res = await fetch(apiUrl("/api/auth/register"), {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
-      
-      if (res.ok) {
-        setIsModalOpen(false);
-        resetProvisionForm();
-        showSuccess("Staff account created successfully!");
-        fetchData();
-      } else {
-        const errData = await res.json().catch(() => ({}));
-        if (errData.errors && Array.isArray(errData.errors)) {
-          const msgs = errData.errors.map(e => e.msg || Object.values(e)[0]).filter(Boolean).join('\n');
-          showError(msgs || "Validation failed");
-        } else {
-          showError(errData.message || errData.error || "Failed to create staff account");
-        }
-      }
-    } catch (err) {
-       console.error("Provisioning Error:", err);
-       showError("Network connection error");
-    }
-  };
-
-  const handleCreateBranch = async (e) => {
-    e.preventDefault();
-    const name = branchData.name.trim();
-    if (!name) {
-      showError("Branch name is required.");
-      return;
-    }
-    if (name.length < 2 || name.length > 100) {
-      showError("Branch name must be between 2 and 100 characters.");
-      return;
-    }
-
-    const token = localStorage.getItem("token");
-    try {
-      const res = await fetch(apiUrl("/api/branches"), {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          name,
-          location: branchData.location ? branchData.location.trim() : "",
-          phone: branchData.phone ? branchData.phone.trim() : ""
-        })
-      });
-      
-      if (res.ok) {
-        setIsBranchModalOpen(false);
-        setBranchData({ name: "", location: "", phone: "" });
-        showSuccess("Branch created successfully!");
-        fetchData(); // Refresh branch list
-      } else {
-        const err = await res.json().catch(() => ({}));
-        showError(err.message || err.error || "Failed to create branch.");
-      }
-    } catch (err) {
-      console.error("Branch Creation Error:", err);
-      showError("Network connection error");
-    }
-  };
 
   const handleUpdateBranch = async (e) => {
     e.preventDefault();
@@ -445,24 +283,15 @@ function AdminPageContent() {
                     {currentUser?.role === 'branch_admin' ? `Staff — ${currentUser?.branch_name || 'Your Branch'}` : 'Users'}
                   </h3>
                 </div>
-                <div className="flex flex-wrap items-center gap-3 md:gap-4">
-                  {currentUser?.role === 'super_admin' && (
-                    <motion.button 
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => setIsBranchModalOpen(true)}
-                      className="btn-ghost h-10 px-6 rounded-full"
-                    >
-                       Create Branch
-                    </motion.button>
-                  )}
+                <div className="flex items-center gap-3">
                   <motion.button 
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    onClick={openProvisionModal}
-                    className="btn-premium h-10 px-6 rounded-full"
+                    onClick={() => router.push("/personnel")}
+                    className="btn-ghost h-9 px-4 rounded-full text-xs font-bold flex items-center gap-1.5"
                   >
-                     Create User
+                    <Users size={14} />
+                    <span>Manage in Personnel</span>
                   </motion.button>
                 </div>
               </div>
@@ -717,203 +546,6 @@ function AdminPageContent() {
           </motion.div>
         </div>
       </main>
-
-      <AnimatePresence>
-        {isModalOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsModalOpen(false)}
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-            />
-            
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="w-full max-w-lg bg-brand-surface border border-border rounded-[32px] p-6 md:p-10 relative z-10 shadow-2xl overflow-hidden"
-            >
-              <div className="absolute top-0 right-0 w-32 h-32 bg-brand-crimson/10 blur-[80px] pointer-events-none" />
-              
-              <div className="mb-10">
-                <h3 className="text-xl font-rajdhani font-black tracking-[4px] uppercase text-main mb-2">Create Staff Account</h3>
-                <p className="text-[10px] text-muted font-bold uppercase tracking-widest">Create a new login for your staff</p>
-              </div>
-
-              <form onSubmit={handleProvision} className="space-y-6">
-                <div className="space-y-2">
-                   <label className="text-[9px] font-black uppercase tracking-[3px] text-muted ml-2">Username</label>
-                   <input 
-                     type="text" 
-                     required
-                     value={provisionData.username}
-                     onChange={(e) => setProvisionData({...provisionData, username: e.target.value})}
-                     className="w-full bg-brand-bgbase border border-border rounded-2xl py-4 px-6 text-sm text-main placeholder:text-muted focus:outline-none focus:border-brand-neonblue transition-all"
-                     placeholder="personnel@pcalley.com or manager_sta_cruz@branch"
-                   />
-                 </div>
-
-                <div className="space-y-2">
-                   <label className="text-[9px] font-black uppercase tracking-[3px] text-muted ml-2">Password</label>
-                   <div className="relative">
-                     <input 
-                       type={showPassword ? "text" : "password"} 
-                       required
-                       value={provisionData.password}
-                       onChange={(e) => setProvisionData({...provisionData, password: e.target.value})}
-                       className="w-full bg-brand-bgbase border border-border rounded-2xl py-4 pl-6 pr-12 text-sm text-main placeholder:text-muted focus:outline-none focus:border-brand-crimson transition-all"
-                       placeholder="••••••••"
-                     />
-                     <button
-                       type="button"
-                       onClick={() => setShowPassword(!showPassword)}
-                       className="absolute right-4 top-1/2 -translate-y-1/2 text-muted hover:text-main transition-colors z-10"
-                     >
-                       {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                     </button>
-                   </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                     <label className="text-[9px] font-black uppercase tracking-[3px] text-muted ml-2">Role</label>
-                     <select 
-                       value={provisionData.role}
-                       onChange={(e) => setProvisionData({...provisionData, role: e.target.value})}
-                       className="w-full bg-brand-bgbase border border-border rounded-2xl py-4 px-6 text-sm text-main focus:outline-none focus:border-brand-neonblue transition-all appearance-none"
-                     >
-                        {availableRoles.map((roleOption) => (
-                          <option key={roleOption.value} value={roleOption.value} className="bg-brand-surface">
-                            {roleOption.label}
-                          </option>
-                        ))}
-                     </select>
-                  </div>
-
-                  <div className="space-y-2">
-                     <label className="text-[9px] font-black uppercase tracking-[3px] text-muted ml-2">Branch</label>
-                     <select 
-                       value={currentUser?.role === 'branch_admin' ? currentUser.branch_id : provisionData.branch_id}
-                       onChange={(e) => setProvisionData({...provisionData, branch_id: e.target.value})}
-                       className="w-full bg-brand-bgbase border border-border rounded-2xl py-4 px-6 text-sm text-main focus:outline-none focus:border-brand-neonblue transition-all appearance-none"
-                       disabled={currentUser?.role === 'branch_admin'}
-                       required
-                     >
-                        {currentUser?.role !== 'branch_admin' && (
-                          <option value="" disabled className="bg-brand-surface">Select Branch</option>
-                        )}
-                        {branches.map(b => (
-                           <option key={b.id} value={b.id} className="bg-brand-surface">{b.name}</option>
-                        ))}
-                     </select>
-                  </div>
-                </div>
-
-                <div className="pt-6 flex gap-4">
-                  <button 
-                    type="button"
-                    onClick={() => {
-                      setIsModalOpen(false);
-                      resetProvisionForm();
-                    }}
-                    className="flex-1 py-4 rounded-full border border-border text-[10px] font-black uppercase tracking-[3px] text-muted hover:text-main hover:bg-brand-muted/5 transition-all"
-                  >
-                   Cancel
-                  </button>
-                  <button 
-                     type="submit"
-                     className="flex-[2] py-4 bg-brand-crimson hover:bg-red-700 rounded-full text-[10px] font-black uppercase tracking-[3px] text-main shadow-lg shadow-brand-crimson/20 transition-all active:scale-[0.98]"
-                  >
-                     Register Account
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {isBranchModalOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsBranchModalOpen(false)}
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-            />
-            
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="w-full max-w-lg bg-brand-surface border border-border rounded-[32px] p-6 md:p-10 relative z-10 shadow-2xl overflow-hidden"
-            >
-              <div className="absolute top-0 right-0 w-32 h-32 bg-brand-neonblue/10 blur-[80px] pointer-events-none" />
-              
-              <div className="mb-10">
-                <h3 className="text-xl font-rajdhani font-black tracking-[4px] uppercase text-main mb-2">Create New Branch</h3>
-                <p className="text-[10px] text-muted font-bold uppercase tracking-widest">Create a new branch in the system</p>
-              </div>
-
-              <form onSubmit={handleCreateBranch} className="space-y-6">
-                <div className="space-y-2">
-                    <label className="text-[9px] font-black uppercase tracking-[3px] text-muted ml-2">Branch Name</label>
-                    <input 
-                      type="text" 
-                      required
-                      value={branchData.name}
-                      onChange={(e) => setBranchData({...branchData, name: e.target.value})}
-                      className="w-full bg-main/5 border border-border rounded-2xl py-4 px-6 text-sm text-main focus:outline-none focus:border-brand-neonblue transition-all"
-                      placeholder="e.g. Branch D - Northern Spire"
-                    />
-                 </div>
-
-                 <div className="space-y-2">
-                    <label className="text-[9px] font-black uppercase tracking-[3px] text-muted ml-2">Branch Address</label>
-                    <input 
-                      type="text" 
-                      value={branchData.location}
-                      onChange={(e) => setBranchData({...branchData, location: e.target.value})}
-                      className="w-full bg-main/5 border border-border rounded-2xl py-4 px-6 text-sm text-main focus:outline-none focus:border-brand-neonblue transition-all"
-                      placeholder="Business District, Quezon City"
-                    />
-                 </div>
-
-                 <div className="space-y-2">
-                    <label className="text-[9px] font-black uppercase tracking-[3px] text-muted ml-2">Branch Phone Number</label>
-                    <input 
-                      type="text" 
-                      value={branchData.phone}
-                      onChange={(e) => setBranchData({...branchData, phone: e.target.value})}
-                      className="w-full bg-main/5 border border-border rounded-2xl py-4 px-6 text-sm text-main focus:outline-none focus:border-brand-neonblue transition-all"
-                      placeholder="0917-000-0000"
-                    />
-                 </div>
-
-                <div className="pt-6 flex gap-4">
-                  <button 
-                    type="button"
-                    onClick={() => setIsBranchModalOpen(false)}
-                    className="flex-1 py-4 rounded-full border border-border text-[10px] font-black uppercase tracking-[3px] text-muted hover:text-main hover:bg-main/5 transition-all"
-                  >
-                   Cancel
-                  </button>
-                  <button 
-                     type="submit"
-                     className="flex-[2] py-4 bg-brand-neonblue hover:bg-blue-700 rounded-full text-[10px] font-black uppercase tracking-[3px] text-main shadow-lg shadow-brand-neonblue/20 transition-all active:scale-[0.98]"
-                  >
-                    Create Branch
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
       <AnimatePresence>
         {isEditModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">

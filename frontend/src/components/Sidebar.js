@@ -34,6 +34,7 @@ const Sidebar = () => {
       "Procurement":     ["/purchases", "/admin/product-requests", "/products/my-requests"],
       "Reports":         ["/reports"],
       "Analytics":       ["/forecasting", "/prescriptive-analytics"],
+      "Personnel":       ["/personnel"],
       "Administration":  ["/staff", "/roles", "/admin"],
       "Staff":           ["/staff", "/roles"],
       "Our Staff":       ["/staff", "/roles"],
@@ -105,6 +106,7 @@ const Sidebar = () => {
           { title: "Model Benchmarking", path: "/forecasting/benchmark" },
           { title: "Prescriptive Analytics", path: "/prescriptive-analytics" }
         ] },
+        { title: "Personnel",       icon: Users,           path: "/personnel",        group: "SYSTEM" },
         { title: "System Admin",    icon: ShieldCheck,     path: "/admin",            group: "SYSTEM" },
       ];
     }
@@ -141,6 +143,7 @@ const Sidebar = () => {
         { title: "Order Stock", path: "/purchases/restock" }
       ] },
 
+      { title: "Personnel",       icon: Users,           path: "/personnel",        group: "SYSTEM" },
       { title: personnelTitle,    icon: UserPlus,        path: "#user-management",  group: "SYSTEM", subItems: [
         { title: "Staff List", path: "/staff" },
         { title: "Roles & Permissions", path: "/roles" }
@@ -222,7 +225,7 @@ const Sidebar = () => {
   const initials   = (user?.first_name ? `${user.first_name[0]}${user.last_name?.[0] || ''}` : (user?.username || "AD")).substring(0, 2).toUpperCase();
   const userName   = userFullName;
   const roleName   = { super_admin: "Super Admin", branch_admin: "Branch Manager", employee: "Staff Associate" }[user?.role] || "Administrator";
-  const isAllowed  = (p) => user?.role === "employee" ? !["/analytics", "/admin", "/staff"].includes(p) : true;
+  const isAllowed  = (p) => user?.role === "employee" ? !["/analytics", "/admin", "/staff", "/personnel"].includes(p) : true;
   const isExpanded = !isCollapsed || isHovered || isMobile;
 
   if (isChecking) return null;
