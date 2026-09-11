@@ -843,7 +843,7 @@ export default function ProcurementPage() {
                 <div className="flex items-center gap-3">
                   <div className="bg-brand-surface border border-border px-5 py-2.5 rounded-xl text-center shadow-sm">
                     <span className="text-[9px] font-black uppercase tracking-widest text-muted block">Restock Requests</span>
-                    <span className="text-lg font-rajdhani font-black text-brand-neonblue font-mono">{totalPendingRequests} Products</span>
+                    <span className="text-lg font-rajdhani font-black text-brand-neonblue">{totalPendingRequests} Products</span>
                   </div>
                   <button
                     onClick={() => { fetchData(); fetchRequests(); }}
@@ -949,11 +949,11 @@ export default function ProcurementPage() {
                 <div className="flex items-center gap-3">
                   <div className="bg-brand-surface border border-border px-5 py-2.5 rounded-xl text-center shadow-sm">
                     <span className="text-[9px] font-black uppercase tracking-widest text-muted block">Staff Restock Requests</span>
-                    <span className="text-lg font-rajdhani font-black text-orange-400 font-mono">{totalBranchPendingStaffRequests} Products</span>
+                    <span className="text-lg font-rajdhani font-black text-orange-400">{totalBranchPendingStaffRequests} Products</span>
                   </div>
                   <div className="bg-brand-surface border border-border px-5 py-2.5 rounded-xl text-center shadow-sm hidden sm:block">
                     <span className="text-[9px] font-black uppercase tracking-widest text-muted block">Branch Inventory</span>
-                    <span className="text-lg font-rajdhani font-black text-main font-mono">{inventory.length} Items</span>
+                    <span className="text-lg font-rajdhani font-black text-main">{inventory.length} Items</span>
                   </div>
                   <button
                     onClick={() => { fetchData(); fetchRequests(); }}
