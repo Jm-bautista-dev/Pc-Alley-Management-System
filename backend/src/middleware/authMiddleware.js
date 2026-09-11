@@ -17,17 +17,25 @@ const authenticateToken = (req, res, next) => {
 
   if (!token) {
     console.warn(`[AUTH] Missing token for ${req.method} ${req.url}. Available headers:`, Object.keys(req.headers));
-    return res.status(401).json({ message: 'Access denied, token missing' });
+    return res.status(401).json({ 
+      code: 'TOKEN_MISSING',
+      message: 'Access denied, token missing' 
+    });
   }
 
   jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
     if (err) {
-      console.error(`[AUTH] Token validation failed for ${req.url}: ${err.message}`);
-      // Return the specific error message to help debug (e.g., "jwt expired", "invalid signature")
-      return res.status(403).json({ 
-        message: 'Token invalid or expired',
-        details: err.message,
-        hint: 'Please try logging out and logging back in.'
+      console.error(`[AUTH] Token validation failed for ${req.url}: ${err.name} - ${err.message}`);
+      if (err.name === 'TokenExpiredError') {
+        return res.status(401).json({ 
+          code: 'TOKEN_EXPIRED',
+          message: 'Your session has expired. Please sign in again.'
+        });
+      }
+
+      return res.status(401).json({ 
+        code: 'TOKEN_INVALID',
+        message: 'Invalid authentication token. Please sign in again.'
       });
     }
     req.user = user;

@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, apiFetch } from "@/lib/api";
 
 const NotificationContext = createContext();
 
@@ -24,12 +24,10 @@ export function NotificationProvider({ children }) {
   const intervalRef = useRef(null);
 
   const fetchNotifications = async () => {
-    const token = localStorage.getItem("token");
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
     if (!token) return;
     try {
-      const res = await fetch(apiUrl("/api/notifications"), {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiFetch("/api/notifications");
       if (res.ok) {
         const data = await res.json();
         setNotifications(

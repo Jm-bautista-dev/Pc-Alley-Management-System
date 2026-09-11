@@ -1,17 +1,20 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { User, Lock, Eye, EyeOff, ShieldAlert, ArrowRight, Loader2, Sun, Moon } from "lucide-react";
 import { motion } from "framer-motion";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { apiUrl } from "@/lib/api";
 import { LogoIcon } from "@/components/Logo";
 import { useTheme } from "@/context/ThemeContext";
 import toast, { Toaster } from "react-hot-toast";
+import { getSafeRedirect, resetSessionModalLock, isTokenExpired } from "@/lib/session";
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectParam = searchParams ? searchParams.get("redirect") : null;
   const { theme, toggleTheme } = useTheme();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -21,21 +24,37 @@ export default function LoginPage() {
   });
 
   useEffect(() => {
-    // If user is already logged in, redirect them
+    // If user already has an active, valid session, redirect them
+    const storedToken = localStorage.getItem("token");
     const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      try {
-        const parsed = JSON.parse(storedUser);
-        if (parsed.role === "employee" || parsed.role === "staff") {
-          router.push("/sales");
-        } else {
-          router.push("/dashboard");
+
+    if (storedToken && storedUser) {
+      const expiredStatus = isTokenExpired(storedToken);
+      if (expiredStatus === false) {
+        try {
+          const parsed = JSON.parse(storedUser);
+          const pending =
+            redirectParam ||
+            (typeof window !== "undefined"
+              ? sessionStorage.getItem("session_redirect")
+              : null);
+          const target = getSafeRedirect(pending, parsed.role);
+          try {
+            sessionStorage.removeItem("session_redirect");
+          } catch (_) {}
+          router.push(target);
+          return;
+        } catch (_) {
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
         }
-      } catch (e) {
-        localStorage.clear();
+      } else {
+        // Expired or malformed: clean up so login form is ready
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
       }
     }
-  }, []);
+  }, [redirectParam, router]);
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.id]: e.target.value });
 
@@ -58,13 +77,31 @@ export default function LoginPage() {
       if (res.ok) {
         localStorage.setItem("token", data.token);
         localStorage.setItem("user", JSON.stringify(data.user));
+        resetSessionModalLock();
         toast.success("Security Clearance Verified.");
-        
-        if (data.user.role === "employee" || data.user.role === "staff") {
-          router.push("/sales");
-        } else {
-          router.push("/dashboard");
+
+        // Broadcast successful login to other tabs
+        if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+          try {
+            const channel = new BroadcastChannel("pc_alley_auth_channel");
+            channel.postMessage({ type: "LOGIN_SUCCESS", user: data.user });
+            channel.close();
+          } catch (_) {}
         }
+
+        const pendingRedirect =
+          redirectParam ||
+          (typeof window !== "undefined"
+            ? sessionStorage.getItem("session_redirect")
+            : null);
+        const safeRoute = getSafeRedirect(pendingRedirect, data.user.role);
+
+        // Clear stored redirect after successfully determining safe target
+        try {
+          sessionStorage.removeItem("session_redirect");
+        } catch (_) {}
+
+        router.push(safeRoute);
       } else {
         toast.error(data.message || "Invalid Security Credentials");
       }
@@ -239,5 +276,13 @@ export default function LoginPage() {
       </div>
       <Toaster position="bottom-right" />
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-brand-bgbase" />}>
+      <LoginPageContent />
+    </Suspense>
   );
 }

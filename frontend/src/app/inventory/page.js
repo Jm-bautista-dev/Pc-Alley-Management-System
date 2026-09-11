@@ -18,7 +18,7 @@ import {
 
 const PesoSign = ({ size }) => <span style={{ fontSize: size }} className="font-bold">₱</span>;
 import toast, { Toaster } from "react-hot-toast";
-import { apiUrl, getApiErrorMessage } from "@/lib/api";
+import { apiUrl, apiFetch, getApiErrorMessage } from "@/lib/api";
 import { useTheme } from "@/context/ThemeContext";
 import { getChartTheme } from "@/lib/chartTheme";
 import { exportToExcel } from "@/lib/excelExport";
@@ -69,13 +69,9 @@ export default function InventoryPage() {
   }, [selectedBranch]);
 
   const fetchBranches = async () => {
-    const token = localStorage.getItem("token");
     try {
-      const res = await fetch(apiUrl("/api/branches"), {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await apiFetch("/api/branches");
       if (res.status === 401 || res.status === 403) {
-        handleLogout();
         return;
       }
       const data = await res.json();
@@ -91,26 +87,22 @@ export default function InventoryPage() {
   };
 
   const fetchInventory = async () => {
-    const token = localStorage.getItem("token");
     setLoading(true);
     try {
-      let url = apiUrl("/api/inventory");
+      let url = "/api/inventory";
       if (selectedBranch) url += `?branch_id=${selectedBranch}`;
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await apiFetch(url);
       if (res.status === 401 || res.status === 403) {
-        handleLogout();
         return;
       }
       const raw = await res.json();
-        // API returns an envelope with a 'data' array; fallback to empty array if missing
-        const items = raw.data ?? [];
-        if (res.ok) {
-          setInventory(items);
-        } else {
-          toast.error(raw.message || "Access Denied");
-        }
+      // API returns an envelope with a 'data' array; fallback to empty array if missing
+      const items = raw.data ?? [];
+      if (res.ok) {
+        setInventory(items);
+      } else {
+        toast.error(raw.message || "Access Denied");
+      }
     } catch (err) {
       console.error("Matrix Sync Failure:", err);
       toast.error(getApiErrorMessage(err, "Cannot load inventory list."));

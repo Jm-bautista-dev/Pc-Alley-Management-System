@@ -4,6 +4,7 @@ import { LayoutProvider } from '../context/LayoutContext';
 import { NotificationProvider } from '../context/NotificationContext';
 import { ModalProvider } from '../context/ModalContext';
 import { ThemeProvider } from '../context/ThemeContext';
+import AuthListener from '../components/AuthListener';
 import { Toaster } from 'react-hot-toast';
 
 export const dynamic = 'force-dynamic';
@@ -54,6 +55,7 @@ export default function RootLayout({ children }) {
         <ThemeProvider>
           <NotificationProvider>
             <ModalProvider>
+              <AuthListener />
               <LayoutProvider>
                 {children}
                 <Toaster 
