@@ -27,7 +27,7 @@ const Sidebar = () => {
       "Sell":            ["/sell"],
       "Expenses":        ["/expenses"],
       "Reports":         ["/reports"],
-      "User Management": ["/staff", "/roles"],
+      "User Management": ["/personnel", "/staff", "/roles"],
     };
     Object.entries(paths).forEach(([key, matches]) => {
       if (matches.some((p) => pathname.startsWith(p))) initial[key] = true;
@@ -38,7 +38,6 @@ const Sidebar = () => {
   const { isCollapsed, isMobile, isSidebarOpen, setIsSidebarOpen } = useLayout();
   const { theme } = useTheme();
   const [user, setUser] = useState(null);
-  const personnelTitle = user?.role === "super_admin" ? "Team List" : "Our Staff";
 
   const getNavItems = () => {
     const role = user?.role;
@@ -63,6 +62,7 @@ const Sidebar = () => {
       ] },
       { title: "Buy Stock",    icon: Download,        path: "#purchases", group: "SALES", subItems: [{ title: "Stock Purchases", path: "/purchases" }, { title: "Order Stock", path: "/purchases/restock" }] },
       { title: "Expenses",     icon: DollarSign,      path: "/expenses",  group: "SALES" },
+      { title: "Personnel",    icon: UserPlus,        path: "/personnel", group: "SYSTEM" },
       { title: "Reports",      icon: ClipboardList,   path: "#reports",   group: "SYSTEM", subItems: [{ title: "Profit / Loss", path: "/reports/profit-loss" }, { title: "Stock Activity", path: "/reports/purchase-sale" }] },
       { title: "System Admin", icon: ShieldCheck,     path: "/admin",     group: "SYSTEM" },
     ];
@@ -81,7 +81,7 @@ const Sidebar = () => {
         { title: "Discounts", path: "/sell/discounts" },
         { title: "Import Sales", path: "/sell/import" }
       ] },
-      { title: personnelTitle, icon: UserPlus,        path: "#user-management",  group: "SALES", subItems: [{ title: "Staff List", path: "/staff" }] },
+      { title: "Personnel",    icon: UserPlus,        path: "/personnel",        group: "SALES" },
       { title: "Expenses",     icon: DollarSign,      path: "/expenses",         group: "SALES" },
       { title: "Reports",      icon: ClipboardList,   path: "#reports",          group: "SYSTEM", subItems: [{ title: "Profit / Loss", path: "/reports/profit-loss" }, { title: "Stock Activity", path: "/reports/purchase-sale" }] },
     ];
