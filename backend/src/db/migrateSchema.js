@@ -713,6 +713,148 @@ const migrateSchema = async () => {
     } catch (roleErr) {
       console.warn('DATABASE: Roles and user_roles migration warning:', roleErr.message);
     }
+
+    // ── Product, Brand & Category Relationships Migration ──
+    try {
+      // 1. Ensure categories table has status and deleted_at
+      await addColumnIfMissing(queryInterface, 'categories', 'status', {
+        type: DataTypes.STRING(20),
+        allowNull: false,
+        defaultValue: 'active'
+      });
+      await addColumnIfMissing(queryInterface, 'categories', 'deleted_at', {
+        type: DataTypes.DATE,
+        allowNull: true
+      });
+      await addColumnIfMissing(queryInterface, 'categories', 'spec_template', {
+        type: DataTypes.TEXT,
+        allowNull: true
+      });
+
+      // 2. Ensure brands table has deleted_at
+      await addColumnIfMissing(queryInterface, 'brands', 'deleted_at', {
+        type: DataTypes.DATE,
+        allowNull: true
+      });
+
+      // 3. Ensure foreign keys and indexes on products table
+      const [fks] = await sequelize.query(`
+        SELECT CONSTRAINT_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, DELETE_RULE
+        FROM information_schema.KEY_COLUMN_USAGE kcu
+        JOIN information_schema.REFERENTIAL_CONSTRAINTS rc
+          ON kcu.CONSTRAINT_NAME = rc.CONSTRAINT_NAME
+          AND kcu.CONSTRAINT_SCHEMA = rc.CONSTRAINT_SCHEMA
+        WHERE kcu.TABLE_NAME = 'products'
+          AND kcu.TABLE_SCHEMA = DATABASE()
+      `);
+
+      // If category_id has CASCADE delete rule, drop to replace with RESTRICT
+      const cascadeCatFks = fks.filter(fk => fk.COLUMN_NAME === 'category_id' && fk.DELETE_RULE === 'CASCADE');
+      for (const fk of cascadeCatFks) {
+        try {
+          await sequelize.query(`ALTER TABLE \`products\` DROP FOREIGN KEY \`${fk.CONSTRAINT_NAME}\``);
+        } catch (dropErr) {
+          console.warn(`Could not drop FK ${fk.CONSTRAINT_NAME}:`, dropErr.message);
+        }
+      }
+
+      // Ensure proper foreign keys with RESTRICT
+      const [remainingCatFks] = await sequelize.query(`
+        SELECT CONSTRAINT_NAME
+        FROM information_schema.KEY_COLUMN_USAGE
+        WHERE TABLE_NAME = 'products'
+          AND COLUMN_NAME = 'category_id'
+          AND REFERENCED_TABLE_NAME = 'categories'
+          AND TABLE_SCHEMA = DATABASE()
+      `);
+      if (remainingCatFks.length === 0) {
+        await sequelize.query(`
+          ALTER TABLE \`products\`
+          ADD CONSTRAINT \`fk_products_category\`
+          FOREIGN KEY (\`category_id\`) REFERENCES \`categories\` (\`id\`)
+          ON DELETE RESTRICT ON UPDATE CASCADE
+        `);
+      }
+
+      const [brandFks] = await sequelize.query(`
+        SELECT CONSTRAINT_NAME
+        FROM information_schema.KEY_COLUMN_USAGE
+        WHERE TABLE_NAME = 'products'
+          AND COLUMN_NAME = 'brand_id'
+          AND REFERENCED_TABLE_NAME = 'brands'
+          AND TABLE_SCHEMA = DATABASE()
+      `);
+      if (brandFks.length === 0) {
+        await sequelize.query(`
+          ALTER TABLE \`products\`
+          ADD CONSTRAINT \`fk_products_brand\`
+          FOREIGN KEY (\`brand_id\`) REFERENCES \`brands\` (\`id\`)
+          ON DELETE RESTRICT ON UPDATE CASCADE
+        `);
+      }
+
+      // 4. Ensure indexes on category_id and brand_id
+      try {
+        await sequelize.query(`CREATE INDEX \`idx_products_category_id\` ON \`products\` (\`category_id\`)`);
+      } catch (_) {}
+      try {
+        await sequelize.query(`CREATE INDEX \`idx_products_brand_id\` ON \`products\` (\`brand_id\`)`);
+      } catch (_) {}
+
+      // 5. Seed standard canonical hardware brands if they do not exist
+      const canonicalBrands = [
+        { name: 'ASUS', slug: 'asus', description: 'Motherboards, graphics cards, laptops, and monitors' },
+        { name: 'MSI', slug: 'msi', description: 'Gaming hardware, motherboards, graphics cards, and desktops' },
+        { name: 'Gigabyte', slug: 'gigabyte', description: 'Motherboards, graphics cards, and computing components' },
+        { name: 'Intel', slug: 'intel', description: 'Processors, motherboards, and solid-state storage' },
+        { name: 'AMD', slug: 'amd', description: 'Ryzen processors and Radeon graphics cards' },
+        { name: 'NVIDIA', slug: 'nvidia', description: 'GeForce graphics cards and AI accelerators' },
+        { name: 'Corsair', slug: 'corsair', description: 'Gaming memory, power supplies, cooling, and peripherals' },
+        { name: 'Kingston', slug: 'kingston', description: 'Memory modules, USB drives, and solid-state drives' },
+        { name: 'Logitech', slug: 'logitech', description: 'Mice, keyboards, headsets, and streaming gear' },
+        { name: 'Samsung', slug: 'samsung', description: 'Memory, SSDs, monitors, and display technology' },
+        { name: 'Western Digital', slug: 'western-digital', description: 'Internal and external HDDs and SSDs' },
+        { name: 'Seagate', slug: 'seagate', description: 'Hard drives, solid-state drives, and data storage systems' },
+        { name: 'Unassigned', slug: 'unassigned', description: 'Default unassigned brand' }
+      ];
+
+      for (const b of canonicalBrands) {
+        await sequelize.query(`
+          INSERT INTO \`brands\` (\`name\`, \`slug\`, \`description\`, \`status\`, \`created_at\`, \`updated_at\`)
+          VALUES (?, ?, ?, 'active', NOW(), NOW())
+          ON DUPLICATE KEY UPDATE \`status\` = IF(\`status\` IS NULL, 'active', \`status\`)
+        `, { replacements: [b.name, b.slug, b.description] });
+      }
+
+      // Ensure default 'Uncategorized' category exists
+      await sequelize.query(`
+        INSERT INTO \`categories\` (\`name\`, \`slug\`, \`status\`, \`createdAt\`, \`updatedAt\`)
+        VALUES ('Uncategorized', 'uncategorized', 'active', NOW(), NOW())
+        ON DUPLICATE KEY UPDATE \`status\` = IF(\`status\` IS NULL, 'active', \`status\`)
+      `);
+
+      // 6. Seed hardware specification templates for canonical categories
+      try {
+        const { getTemplateForCategory } = require('../utils/hardwareSpecs');
+        const allCategories = await sequelize.query("SELECT id, name, spec_template FROM `categories`", { type: sequelize.QueryTypes.SELECT });
+        for (const cat of allCategories) {
+          if (!cat.spec_template) {
+            const matched = getTemplateForCategory(cat.name);
+            if (matched && matched.fields) {
+              await sequelize.query("UPDATE `categories` SET `spec_template` = ? WHERE `id` = ?", {
+                replacements: [JSON.stringify(matched.fields), cat.id]
+              });
+            }
+          }
+        }
+      } catch (specSeedErr) {
+        console.warn('DATABASE: Spec template seeding notice:', specSeedErr.message);
+      }
+
+      console.log('DATABASE: Verified Product, Brand, and Category relationships, indexes, and referential constraints.');
+    } catch (relErr) {
+      console.warn('DATABASE: Product/Brand/Category relationships migration warning:', relErr.message);
+    }
   } catch (error) {
     console.warn(`DATABASE: Schema migration skipped or failed: ${error.message}`);
   }

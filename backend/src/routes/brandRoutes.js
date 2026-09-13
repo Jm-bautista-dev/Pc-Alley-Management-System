@@ -27,7 +27,7 @@ router.get('/', authenticateToken, async (req, res) => {
       attributes: {
         include: [
           [
-            sequelize.literal('(SELECT COUNT(*) FROM Products WHERE Products.brand_id = Brand.id AND Products.deleted_at IS NULL)'),
+            sequelize.literal('(SELECT COUNT(*) FROM products WHERE products.brand_id = Brand.id AND products.deleted_at IS NULL)'),
             'productCount'
           ]
         ]
@@ -173,6 +173,54 @@ router.patch('/:id', [authenticateToken, authorizeRoles('super_admin', 'branch_a
   }
 });
 
+// POST /:id/reassign - Reassign products from one brand to another
+router.post('/:id/reassign', [authenticateToken, authorizeRoles('super_admin')], async (req, res) => {
+  const t = await sequelize.transaction();
+  try {
+    const { id } = req.params;
+    const { targetBrandId } = req.body;
+
+    if (!targetBrandId) {
+      await t.rollback();
+      return res.status(400).json({ error: 'Target brand ID is required.' });
+    }
+
+    if (parseInt(id) === parseInt(targetBrandId)) {
+      await t.rollback();
+      return res.status(400).json({ error: 'Target brand cannot be the same as the source brand.' });
+    }
+
+    const [sourceBrand, targetBrand] = await Promise.all([
+      Brand.findByPk(id, { transaction: t }),
+      Brand.findByPk(targetBrandId, { transaction: t })
+    ]);
+
+    if (!sourceBrand) {
+      await t.rollback();
+      return res.status(404).json({ error: 'Source brand not found.' });
+    }
+
+    if (!targetBrand) {
+      await t.rollback();
+      return res.status(404).json({ error: 'Target brand not found.' });
+    }
+
+    const [updatedCount] = await Product.update(
+      { brand_id: targetBrand.id },
+      { where: { brand_id: sourceBrand.id }, transaction: t }
+    );
+
+    await t.commit();
+    res.json({
+      message: `Successfully reassigned ${updatedCount} products to ${targetBrand.name}.`,
+      reassignedCount: updatedCount
+    });
+  } catch (error) {
+    await t.rollback();
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // DELETE brand (Super Admin only)
 router.delete('/:id', [authenticateToken, authorizeRoles('super_admin')], async (req, res) => {
   try {
@@ -185,7 +233,10 @@ router.delete('/:id', [authenticateToken, authorizeRoles('super_admin')], async 
     // Check if products use this brand
     const productCount = await Product.count({ where: { brand_id: id } });
     if (productCount > 0) {
-      return res.status(400).json({ error: `Cannot delete brand. It is currently linked with ${productCount} products. Try archiving it instead.` });
+      return res.status(400).json({
+        error: `Cannot delete brand. It is currently linked with ${productCount} products. Please reassign products first or archive the brand.`,
+        productCount
+      });
     }
 
     if (brand.logo) {

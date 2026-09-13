@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { showSuccess, showError, showInfo, showWarning, showConfirm, showModal } from "@/context/ModalContext";
 import { apiUrl } from "@/lib/api";
 import { resolveProductImageUrl, handleProductImageError } from "@/lib/imageHelper";
+import ProductSpecsEditor from "@/components/ProductSpecsEditor";
 
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -509,13 +510,10 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
             />
           </div>
           <div>
-            <label className="block text-[10px] uppercase font-black text-muted mb-1">Product Specifications</label>
-            <textarea
+            <ProductSpecsEditor
+              category={categories.find(c => String(c.id) === String(formData.category_id)) || product.Category}
               value={formData.specifications || ""}
-              onChange={e => setFormData({ ...formData, specifications: e.target.value })}
-              placeholder="e.g. Dimensions, weight, socket types..."
-              rows={2}
-              className="w-full bg-brand-bgbase border border-border text-main rounded-lg px-3 py-2 text-sm font-bold resize-none"
+              onChange={val => setFormData({ ...formData, specifications: val })}
             />
           </div>
 

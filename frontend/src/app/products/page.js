@@ -22,11 +22,16 @@ import {
   Trash2,
   UploadCloud,
   QrCode,
-  Barcode
+  Barcode,
+  Sliders,
+  Download
 } from "lucide-react";
 import { apiUrl, handleSessionExpired } from "@/lib/api";
 import { resolveProductImageUrl, handleProductImageError } from "@/lib/imageHelper";
 import { showSuccess, showError, showInfo, showWarning, showConfirm, showModal } from "@/context/ModalContext";
+import ProductDetailsModal from "@/components/ProductDetailsModal";
+import { formatSpecsSummary, formatSpecsForExport } from "@/lib/hardwareSpecs";
+import { exportToExcel } from "@/lib/excelExport";
 
 export default function ProductsPage() {
   const [products, setProducts] = useState([]);
@@ -35,8 +40,14 @@ export default function ProductsPage() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [user, setUser] = useState(null);
   const [branches, setBranches] = useState([]);
+  const [brands, setBrands] = useState([]);
+  const [selectedBrand, setSelectedBrand] = useState("All");
   const [inventoryRows, setInventoryRows] = useState([]);
   const [selectedBranch, setSelectedBranch] = useState("");
+
+  // Details Modal State
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -68,18 +79,19 @@ export default function ProductsPage() {
       }
     }
     fetchBranches();
+    fetchBrands();
   }, []);
 
   // Fetch products when filters / page change (this was the missing trigger!)
   useEffect(() => {
     fetchProducts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, selectedBranch, debouncedSearch, sortBy]);
+  }, [page, selectedBranch, selectedBrand, debouncedSearch, sortBy]);
 
   // Reset to page 1 when filters change
   useEffect(() => {
     setPage(1);
-  }, [selectedBranch, debouncedSearch, sortBy]);
+  }, [selectedBranch, selectedBrand, debouncedSearch, sortBy]);
 
   async function fetchBranches() {
     const token = localStorage.getItem("token");
@@ -91,6 +103,19 @@ export default function ProductsPage() {
       }
     } catch (err) {
       console.error("Branch directory connection failure:", err);
+    }
+  }
+
+  async function fetchBrands() {
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(apiUrl("/api/brands/active"), { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data) setBrands(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error("Brand directory connection failure:", err);
     }
   }
 
@@ -107,6 +132,7 @@ export default function ProductsPage() {
         sort: sortBy,
       });
       if (debouncedSearch) productParams.set("search", debouncedSearch);
+      if (selectedBrand && selectedBrand !== "All") productParams.set("brand_id", selectedBrand);
 
       // Build inventory query params (only current page of products)
       const inventoryParams = new URLSearchParams({
@@ -226,13 +252,14 @@ export default function ProductsPage() {
 
   const categories = ["All", ...new Set(scopedProducts.map(p => p.Category?.name).filter(Boolean))];
 
-  // Client-side category + price filter (search/sort/branch are server-side)
+  // Client-side category + brand + price filter (search/sort/branch are server-side)
   let filteredProducts = scopedProducts.filter(p => {
     const matchesCategory = activeCategory === "All" || p.Category?.name === activeCategory;
+    const matchesBrand = selectedBrand === "All" || String(p.brand_id) === String(selectedBrand) || p.Brand?.name === selectedBrand;
     const price = Number(p.price);
     const matchesMinPrice = minPrice === "" || price >= Number(minPrice);
     const matchesMaxPrice = maxPrice === "" || price <= Number(maxPrice);
-    return matchesCategory && matchesMinPrice && matchesMaxPrice;
+    return matchesCategory && matchesBrand && matchesMinPrice && matchesMaxPrice;
   });
 
   // Group products by category
@@ -324,6 +351,40 @@ export default function ProductsPage() {
                     </Link>
                   </>
                 )}
+
+                {/* Export Catalog to Excel Button */}
+                <motion.button 
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => {
+                    if (filteredProducts.length === 0) {
+                      showWarning("No products available to export.");
+                      return;
+                    }
+                    const exportData = filteredProducts.map(p => ({
+                      ID: p.id,
+                      SKU: p.sku,
+                      Barcode: p.barcode || "",
+                      "Product Name": p.name,
+                      Category: p.Category?.name || "Uncategorized",
+                      Brand: p.Brand?.name || "Unassigned",
+                      "Price (PHP)": Number(p.price || 0),
+                      "Available Stock": p.stockSummary?.totalStock ?? 0,
+                      Status: p.status || "active",
+                      "Technical Specifications": formatSpecsForExport(p.specifications),
+                      "Created Date": p.createdAt ? new Date(p.createdAt).toLocaleDateString() : ""
+                    }));
+                    exportToExcel(exportData, "PC_Alley_Hardware_Catalog", "Hardware Catalog", {
+                      title: "PC ALLEY HARDWARE CATALOG & SPECIFICATIONS",
+                      subtitle: `Exported ${exportData.length} products • Branch Scope: ${selectedBranchName}`
+                    });
+                    showSuccess(`Exported ${exportData.length} products to Excel with full technical specifications!`);
+                  }}
+                  className="btn-ghost h-11 px-4 border border-border hover:border-brand-neonblue/40 flex items-center gap-2"
+                  title="Export Catalog to Excel (.xlsx) with Technical Specifications"
+                >
+                  <Download size={15} /> Export Catalog
+                </motion.button>
                 
                 <motion.button 
                   whileHover={{ scale: 1.03 }}
@@ -345,7 +406,7 @@ export default function ProductsPage() {
                   exit={{ opacity: 0, height: 0 }}
                   className="overflow-hidden mb-8"
                 >
-                  <div className="bg-brand-surface border border-border rounded-2xl p-6 shadow-sm grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                  <div className="bg-brand-surface border border-border rounded-2xl p-6 shadow-sm grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-6">
                     {/* Branch Scope */}
                     <div>
                       <label className="block text-[10px] font-black uppercase tracking-[2px] text-main/40 mb-2">Branch Scope</label>
@@ -358,6 +419,21 @@ export default function ProductsPage() {
                         {user?.role === "super_admin" && <option value="">All Branches</option>}
                         {branches.map(branch => (
                           <option key={branch.id} value={branch.id}>{branch.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Brand Filter */}
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-[2px] text-main/40 mb-2">Brand</label>
+                      <select
+                        value={selectedBrand}
+                        onChange={(e) => setSelectedBrand(e.target.value)}
+                        className="w-full bg-brand-bgbase border border-border rounded-xl py-3 px-4 text-xs font-bold text-main focus:outline-none focus:border-brand-neonblue/30 transition-colors"
+                      >
+                        <option value="All">All Brands</option>
+                        {brands.map(b => (
+                          <option key={b.id} value={b.id}>{b.name}</option>
                         ))}
                       </select>
                     </div>
@@ -406,10 +482,11 @@ export default function ProductsPage() {
                         onClick={() => {
                           setMinPrice("");
                           setMaxPrice("");
+                          setSelectedBrand("All");
                           setSortBy("name-asc");
                           if (user?.role === "super_admin") setSelectedBranch("");
                         }}
-                        className="btn-ghost h-11"
+                        className="btn-ghost h-11 w-full"
                       >
                         Clear Filters
                       </motion.button>
@@ -497,6 +574,10 @@ export default function ProductsPage() {
                   {items.map((product, idx) => (
                     <div
                       key={product.id}
+                      onClick={() => {
+                        setSelectedProduct(product);
+                        setIsDetailsModalOpen(true);
+                      }}
                       className={`grid grid-cols-[auto,1fr,auto] md:flex items-center gap-4 px-4 md:px-6 py-4 hover:bg-brand-muted/5 transition-colors group cursor-pointer ${
                         idx !== items.length - 1 ? 'border-b border-border' : ''
                       }`}
@@ -529,11 +610,29 @@ export default function ProductsPage() {
                         )}
                       </div>
 
-                      {/* Name */}
+                      {/* Name & Brand */}
                       <div className="flex-1 min-w-0">
-                        <h4 className="text-sm font-rajdhani font-bold text-main group-hover:text-brand-neonblue transition-colors truncate capitalize">
-                          {product.name}
-                        </h4>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="text-sm font-rajdhani font-bold text-main group-hover:text-brand-neonblue transition-colors truncate capitalize">
+                            {product.name}
+                          </h4>
+                          {product.Brand && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-brand-neonblue bg-brand-neonblue/10 px-2 py-0.5 rounded-full border border-brand-neonblue/20">
+                              <Tag size={9} /> {product.Brand.name}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Specification Preview Pill */}
+                        {formatSpecsSummary(product.specifications) && (
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-mono text-muted/70 bg-brand-bgbase px-2 py-0.5 rounded border border-border/40 truncate max-w-sm" title="Click product to view full technical specifications">
+                              <Sliders size={10} className="text-brand-neonblue shrink-0" />
+                              <span className="truncate">{formatSpecsSummary(product.specifications)}</span>
+                            </span>
+                          </div>
+                        )}
+
                         <div className="flex items-center gap-2 mt-0.5 md:hidden">
                           <span className="text-[10px] text-muted/50 uppercase tracking-widest font-mono">{product.sku}</span>
                           {product.barcode && (
@@ -616,6 +715,16 @@ export default function ProductsPage() {
             )}
           </div>
         </div>
+
+        {/* Product Details & Technical Specifications Modal */}
+        <ProductDetailsModal
+          product={selectedProduct}
+          isOpen={isDetailsModalOpen}
+          onClose={() => {
+            setIsDetailsModalOpen(false);
+            setSelectedProduct(null);
+          }}
+        />
       </main>
     </div>
   );

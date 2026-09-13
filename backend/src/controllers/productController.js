@@ -3,6 +3,7 @@ const imageService = require('../services/imageService');
 const { getPaginationParams } = require('../utils/pagination');
 const { Op } = require('sequelize');
 const { generateUniqueSku } = require('../utils/skuGenerator');
+const { validateAndSanitizeSpecifications } = require('../utils/hardwareSpecs');
 const sequelize = require('../db');
 
 const getProducts = async (req, res) => {
@@ -16,7 +17,9 @@ const getProducts = async (req, res) => {
       conditions.push({
         [Op.or]: [
           { name: { [Op.like]: `%${search}%` } },
-          { sku: { [Op.like]: `%${search}%` } }
+          { sku: { [Op.like]: `%${search}%` } },
+          { barcode: { [Op.like]: `%${search}%` } },
+          { specifications: { [Op.like]: `%${search}%` } }
         ]
       });
     }
@@ -123,15 +126,19 @@ const createProduct = async (req, res) => {
         if (!sku) {
           sku = await generateUniqueSku(category_id);
         }
+        const cleanSpecs = specifications !== undefined && specifications !== null && specifications !== ''
+          ? validateAndSanitizeSpecifications(specifications).sanitizedData
+          : null;
+
         product = await Product.create({
           name,
           sku,
           description,
           price,
-          category_id: category_id || null,
-          brand_id: brand_id || null,
+          category_id: (category_id && category_id !== '') ? parseInt(category_id) : null,
+          brand_id: (brand_id && brand_id !== '') ? parseInt(brand_id) : null,
           barcode: barcode || null,
-          specifications: specifications || null,
+          specifications: cleanSpecs,
           status: status || 'active',
           supplier_id: supplier_id || null,
           image_url,
@@ -168,6 +175,7 @@ const createProduct = async (req, res) => {
     }));
     await Inventory.bulkCreate(inventoryData);
 
+    await product.reload({ include: [Category, Brand] });
     res.status(201).json(product);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -244,10 +252,12 @@ const updateProduct = async (req, res) => {
     if (name) product.name = name;
     if (sku) product.sku = sku;
     if (price !== undefined) product.price = price;
-    if (category_id !== undefined) product.category_id = category_id;
-    if (brand_id !== undefined) product.brand_id = brand_id;
-    if (barcode !== undefined) product.barcode = barcode;
-    if (specifications !== undefined) product.specifications = specifications;
+    if (category_id !== undefined) product.category_id = (category_id === '' || category_id === null) ? null : parseInt(category_id);
+    if (brand_id !== undefined) product.brand_id = (brand_id === '' || brand_id === null) ? null : parseInt(brand_id);
+    if (barcode !== undefined) product.barcode = barcode ? barcode.trim() : null;
+    if (specifications !== undefined) {
+      product.specifications = validateAndSanitizeSpecifications(specifications).sanitizedData;
+    }
     if (status !== undefined) product.status = status;
     if (description !== undefined) product.description = description;
 
@@ -277,6 +287,7 @@ const updateProduct = async (req, res) => {
     }
 
     await product.save();
+    await product.reload({ include: [Category, Brand] });
     res.json(product);
   } catch (error) {
     res.status(400).json({ error: error.message });

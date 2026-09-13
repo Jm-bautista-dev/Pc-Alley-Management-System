@@ -10,6 +10,7 @@ import { showSuccess, showError, showInfo, showWarning, showConfirm, showModal }
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useTheme } from "@/context/ThemeContext";
+import ProductSpecsEditor from "@/components/ProductSpecsEditor";
 
 export default function AddPage() {
   const router = useRouter();
@@ -240,16 +241,11 @@ export default function AddPage() {
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-black text-muted uppercase tracking-[2px] mb-2">Product Specifications</label>
-                    <textarea 
-                      name="specifications"
-                      maxLength={2000}
+                    <ProductSpecsEditor
+                      category={categories.find(c => String(c.id) === String(formData.category_id))}
                       value={formData.specifications}
-                      onChange={handleChange}
-                      placeholder="e.g. 24GB GDDR6X, Boost Clock 2520 MHz, 384-bit, PCIe 4.0..." 
-                      rows={4}
-                      className="w-full bg-brand-bgbase border border-border/50 rounded-xl px-4 py-3 text-sm text-main font-bold outline-none focus:border-brand-neonblue transition-colors resize-none"
-                    ></textarea>
+                      onChange={(val) => setFormData(prev => ({ ...prev, specifications: val }))}
+                    />
                   </div>
                 </div>
               </div>

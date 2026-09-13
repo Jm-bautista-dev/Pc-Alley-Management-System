@@ -8,7 +8,28 @@ const Product = sequelize.define('Product', {
   category_id: { type: DataTypes.INTEGER, references: { model: 'categories', key: 'id' } },
   brand_id: { type: DataTypes.INTEGER, references: { model: 'brands', key: 'id' } },
   barcode: { type: DataTypes.STRING, allowNull: true },
-  specifications: { type: DataTypes.TEXT, allowNull: true },
+  specifications: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    get() {
+      const raw = this.getDataValue('specifications');
+      if (!raw) return null;
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return raw;
+      }
+    },
+    set(value) {
+      if (value === null || value === undefined || value === '') {
+        this.setDataValue('specifications', null);
+      } else if (typeof value === 'object') {
+        this.setDataValue('specifications', JSON.stringify(value));
+      } else {
+        this.setDataValue('specifications', String(value).trim());
+      }
+    }
+  },
   status: { type: DataTypes.STRING, defaultValue: 'active', allowNull: false },
   supplier_id: { type: DataTypes.INTEGER, references: { model: 'suppliers', key: 'id' } },
   price: { type: DataTypes.DECIMAL(10, 2), allowNull: false },

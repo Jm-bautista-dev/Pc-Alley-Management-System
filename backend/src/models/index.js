@@ -57,10 +57,10 @@ UserSession.belongsTo(User, { foreignKey: 'user_id' });
 Branch.hasMany(Product, { foreignKey: 'branch_id' });
 Product.belongsTo(Branch, { foreignKey: 'branch_id' });
 
-Category.hasMany(Product, { foreignKey: 'category_id' });
+Category.hasMany(Product, { foreignKey: 'category_id', onDelete: 'RESTRICT' });
 Product.belongsTo(Category, { foreignKey: 'category_id' });
 
-Brand.hasMany(Product, { foreignKey: 'brand_id' });
+Brand.hasMany(Product, { foreignKey: 'brand_id', onDelete: 'RESTRICT' });
 Product.belongsTo(Brand, { foreignKey: 'brand_id' });
 
 Product.hasMany(BranchProduct, { foreignKey: 'product_id' });
