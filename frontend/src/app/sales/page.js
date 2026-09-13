@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { ThermalReceiptModal } from "@/components/ThermalReceipt";
 import Sidebar from "@/components/Sidebar";
 import { useLayout } from "@/context/LayoutContext";
@@ -43,7 +43,9 @@ import {
   Wrench,
   Clock,
   Sparkles,
-  ClipboardList
+  ClipboardList,
+  RefreshCw,
+  ArrowLeftRight
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiUrl } from "@/lib/api";
@@ -443,6 +445,7 @@ export default function SalesPage() {
   const [bundleCustomItems, setBundleCustomItems] = useState([]);
   const [bundleProductSearch, setBundleProductSearch] = useState("");
   const [bundleProductPickerOpen, setBundleProductPickerOpen] = useState(false);
+  const [replacingBundleItemId, setReplacingBundleItemId] = useState(null);
 
   // Variable / Custom Service Price Input Modal
   const [selectedServiceDetail, setSelectedServiceDetail] = useState(null);
@@ -753,6 +756,7 @@ export default function SalesPage() {
     );
     setBundleProductSearch("");
     setBundleProductPickerOpen(false);
+    setReplacingBundleItemId(null);
   };
 
   const handleUpdateBundleItemQty = (productId, delta) => {
@@ -769,10 +773,62 @@ export default function SalesPage() {
 
   const handleRemoveBundleItem = (productId) => {
     setBundleCustomItems(prev => prev.filter(i => i.id !== productId));
+    if (replacingBundleItemId === productId) {
+      setReplacingBundleItemId(null);
+    }
+  };
+
+  const handleStartReplaceBundleItem = (productId) => {
+    setReplacingBundleItemId(productId);
+    setBundleProductPickerOpen(true);
+  };
+
+  const handleReplaceBundleItem = (targetProductId, invItem) => {
+    const prod = invItem.Product || invItem;
+    if (!prod || !prod.id) return;
+
+    setBundleCustomItems(prev => {
+      const targetIndex = prev.findIndex(i => i.id === targetProductId);
+      if (targetIndex === -1) return prev;
+      const prevQty = prev[targetIndex].quantity || 1;
+
+      // Check if product already exists in bundle
+      const alreadyExistsIndex = prev.findIndex((i, idx) => idx !== targetIndex && i.id === prod.id);
+      if (alreadyExistsIndex > -1) {
+        // Merge quantity
+        return prev.map((item, idx) => {
+          if (idx === alreadyExistsIndex) {
+            return { ...item, quantity: item.quantity + prevQty };
+          }
+          return idx === targetIndex ? null : item;
+        }).filter(Boolean);
+      }
+
+      // Drop-in replacement
+      const updated = [...prev];
+      updated[targetIndex] = {
+        id: prod.id,
+        name: prod.name,
+        sku: prod.sku || "",
+        price: parseFloat(prod.price || 0),
+        quantity: prevQty
+      };
+      return updated;
+    });
+
+    setReplacingBundleItemId(null);
+    setToastMessage(`Swapped for: ${prod.name}`);
+    clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = setTimeout(() => setToastMessage(""), 2000);
   };
 
   const handleAddProductToBundleCustomization = (invItem) => {
+    if (replacingBundleItemId) {
+      handleReplaceBundleItem(replacingBundleItemId, invItem);
+      return;
+    }
     const prod = invItem.Product || invItem;
+    if (!prod || !prod.id) return;
     const existing = bundleCustomItems.find(i => i.id === prod.id);
     if (existing) {
       setBundleCustomItems(prev =>
@@ -792,57 +848,115 @@ export default function SalesPage() {
     }
   };
 
+  // Determine if the bundle has been customized compared to the original definition
+  const isBundleCustomized = useMemo(() => {
+    if (!selectedBundleForCustomization) return false;
+    const origItems = selectedBundleForCustomization.items || [];
+    if (origItems.length !== bundleCustomItems.length) return true;
+
+    for (const ci of bundleCustomItems) {
+      const match = origItems.find(oi => (oi.Product?.id || oi.product_id) === ci.id);
+      if (!match) return true;
+      if ((match.quantity || 1) !== ci.quantity) return true;
+    }
+    return false;
+  }, [selectedBundleForCustomization, bundleCustomItems]);
+
+  // Dynamic pricing recalculation preserving existing promotional discount rules
+  const bundleCalculatedPricing = useMemo(() => {
+    if (!selectedBundleForCustomization) {
+      return { basePrice: 0, originalRetailSum: 0, currentRetailSum: 0, finalPrice: 0, savings: 0 };
+    }
+    const origItems = selectedBundleForCustomization.items || [];
+    const originalRetailSum = origItems.reduce((sum, i) => {
+      return sum + (parseFloat(i.Product?.price || 0) * (i.quantity || 1));
+    }, 0);
+    const baseBundlePrice = parseFloat(selectedBundleForCustomization.price || 0);
+    const currentRetailSum = bundleCustomItems.reduce((sum, i) => {
+      return sum + (parseFloat(i.price || 0) * (i.quantity || 1));
+    }, 0);
+
+    const promotionalSavings = (originalRetailSum > baseBundlePrice && baseBundlePrice > 0)
+      ? (originalRetailSum - baseBundlePrice)
+      : 0;
+
+    let finalPrice = baseBundlePrice;
+    if (isBundleCustomized) {
+      if (promotionalSavings > 0) {
+        finalPrice = Math.max(0, currentRetailSum - promotionalSavings);
+      } else {
+        finalPrice = currentRetailSum;
+      }
+    } else {
+      finalPrice = baseBundlePrice > 0 ? baseBundlePrice : currentRetailSum;
+    }
+
+    return {
+      basePrice: baseBundlePrice,
+      originalRetailSum,
+      currentRetailSum,
+      finalPrice: Math.round(finalPrice * 100) / 100,
+      savings: promotionalSavings
+    };
+  }, [selectedBundleForCustomization, bundleCustomItems, isBundleCustomized]);
+
   const handleConfirmAddBundleToOrder = () => {
     if (!selectedBundleForCustomization || bundleCustomItems.length === 0) {
       showError("Bundle must contain at least one product.");
       return;
     }
 
-    const updatedCart = [...cart];
+    const { finalPrice, currentRetailSum } = bundleCalculatedPricing;
+    const bundleDisplayName = isBundleCustomized
+      ? `${selectedBundleForCustomization.name} — Customized`
+      : selectedBundleForCustomization.name;
 
-    bundleCustomItems.forEach(bundleItem => {
+    const updatedCart = [...cart];
+    let runningApportionedTotal = 0;
+
+    bundleCustomItems.forEach((bundleItem, idx) => {
       const invItem = inventory.find(i => i.product_id === bundleItem.id || i.Product?.id === bundleItem.id);
       const stock = invItem ? (invItem.quantity ?? invItem.stock ?? 9999) : 9999;
 
-      const existingIndex = updatedCart.findIndex(c => c.id === bundleItem.id && !c.isService);
-
-      if (existingIndex > -1) {
-        const currentQty = updatedCart[existingIndex].quantity;
-        const newQty = currentQty + bundleItem.quantity;
-        updatedCart[existingIndex] = {
-          ...updatedCart[existingIndex],
-          quantity: newQty,
-          isBundleItem: true,
-          bundleName: selectedBundleForCustomization.name,
-          selectionSummary: `Bundle: ${selectedBundleForCustomization.name} (${bundleItem.name})`
-        };
-      } else {
-        const cartItem = {
-          id: bundleItem.id,
-          name: bundleItem.name,
-          price: bundleItem.price,
-          unitPrice: bundleItem.price,
-          sku: bundleItem.sku,
-          quantity: bundleItem.quantity,
-          maxStock: stock,
-          isBundleItem: true,
-          bundleName: selectedBundleForCustomization.name,
-          item_type: "product",
-          isService: false,
-          selectedVariant: "Standard",
-          selectedAddons: [],
-          notes: "",
-          selectionSummary: `Bundle: ${selectedBundleForCustomization.name}`
-        };
-        updatedCart.push(cartItem);
+      let effectiveUnitPrice = bundleItem.price;
+      if (currentRetailSum > 0 && finalPrice !== currentRetailSum) {
+        if (idx === bundleCustomItems.length - 1) {
+          const remaining = Math.max(0, finalPrice - runningApportionedTotal);
+          effectiveUnitPrice = Math.round((remaining / bundleItem.quantity) * 100) / 100;
+        } else {
+          effectiveUnitPrice = Math.round((bundleItem.price * (finalPrice / currentRetailSum)) * 100) / 100;
+          runningApportionedTotal += (effectiveUnitPrice * bundleItem.quantity);
+        }
       }
+
+      const cartItem = {
+        id: bundleItem.id,
+        name: bundleItem.name,
+        price: effectiveUnitPrice,
+        unitPrice: effectiveUnitPrice,
+        sku: bundleItem.sku,
+        quantity: bundleItem.quantity,
+        maxStock: stock,
+        isBundleItem: true,
+        bundleId: selectedBundleForCustomization.id,
+        bundleName: bundleDisplayName,
+        isCustomizedBundle: isBundleCustomized,
+        item_type: "product",
+        isService: false,
+        selectedVariant: "Standard",
+        selectedAddons: [],
+        notes: "",
+        selectionSummary: `Bundle: ${bundleDisplayName} (${bundleItem.name})`
+      };
+      updatedCart.push(cartItem);
     });
 
     setCart(updatedCart);
-    setToastMessage(`${t[language].addedToOrder}: Bundle ${selectedBundleForCustomization.name}`);
+    setToastMessage(`${t[language].addedToOrder}: ${bundleDisplayName}`);
     clearTimeout(toastTimeoutRef.current);
     toastTimeoutRef.current = setTimeout(() => setToastMessage(""), 2000);
     setSelectedBundleForCustomization(null);
+    setReplacingBundleItemId(null);
   };
 
   useEffect(() => {
@@ -1293,6 +1407,8 @@ export default function SalesPage() {
           service_id: (item.item_type === "service" || item.isService) ? item.id : undefined,
           quantity: item.quantity,
           unit_price: item.price,
+          bundle_name: item.bundleName || undefined,
+          selection_summary: item.selectionSummary || undefined,
           price_override_reason: item.priceOverrideReason || undefined,
           service_job_id: item.serviceJobId || undefined
         }))
@@ -1389,6 +1505,9 @@ export default function SalesPage() {
       const cartItem = cart.find(c => c.id === item.productId);
       if (cartItem) {
         let details = [];
+        if (cartItem.isBundleItem && cartItem.bundleName && !item.productName?.includes(cartItem.bundleName)) {
+          details.push(cartItem.bundleName);
+        }
         if (cartItem.selectedVariant && cartItem.selectedVariant !== "Standard" && cartItem.selectedVariant !== "Standard Retail Package" && cartItem.selectedVariant !== "Standard Reference Edition") {
           details.push(cartItem.selectedVariant);
         }
@@ -2493,8 +2612,12 @@ export default function SalesPage() {
                                   {item.isService ? 'Technical Service' : 'Physical Product'}
                                 </span>
                                 {item.isBundleItem && (
-                                  <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider bg-brand-neonpurple/20 text-brand-neonpurple border border-brand-neonpurple/40 flex items-center gap-1">
-                                    <Layers size={10} />
+                                  <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider flex items-center gap-1 ${
+                                    item.isCustomizedBundle
+                                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                                      : 'bg-brand-neonpurple/20 text-brand-neonpurple border border-brand-neonpurple/40'
+                                  }`}>
+                                    {item.isCustomizedBundle ? <Sparkles size={10} /> : <Layers size={10} />}
                                     <span>{item.bundleName || "Bundle Item"}</span>
                                   </span>
                                 )}
@@ -3098,17 +3221,31 @@ export default function SalesPage() {
                     <Layers size={20} />
                   </div>
                   <div>
-                    <h2 className="text-lg font-rajdhani font-black text-main uppercase tracking-wide">
-                      Customize Bundle: {selectedBundleForCustomization.name}
-                    </h2>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-lg font-rajdhani font-black text-main uppercase tracking-wide">
+                        {selectedBundleForCustomization.name}
+                      </h2>
+                      {isBundleCustomized ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                          <Sparkles size={10} /> Customized
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-brand-neonpurple/15 text-brand-neonpurple border border-brand-neonpurple/30">
+                          Original Package
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[10px] text-brand-muted uppercase tracking-widest font-bold">
-                      Modify products and quantities for this transaction
+                      Transaction-level customization • Master bundle remains protected
                     </p>
                   </div>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setSelectedBundleForCustomization(null)}
+                  onClick={() => {
+                    setSelectedBundleForCustomization(null);
+                    setReplacingBundleItemId(null);
+                  }}
                   className="p-2 text-brand-muted hover:text-brand-crimson rounded-full hover:bg-brand-crimson/10 transition-colors"
                 >
                   <X size={18} />
@@ -3117,77 +3254,140 @@ export default function SalesPage() {
 
               {/* Content */}
               <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-6">
+                {/* Replacing item notification banner */}
+                {replacingBundleItemId && (
+                  <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs text-main">
+                      <ArrowLeftRight size={16} className="text-amber-400 shrink-0" />
+                      <span>
+                        Swapping: <strong className="text-amber-400 font-black">{bundleCustomItems.find(i => i.id === replacingBundleItemId)?.name}</strong>. Choose a replacement from branch inventory below.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setReplacingBundleItemId(null)}
+                      className="px-2.5 py-1 rounded-lg bg-brand-surface border border-brand-border text-[10px] font-black uppercase tracking-wider text-brand-muted hover:text-main shrink-0 ml-2"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+
                 {/* Bundle Products List */}
                 <div>
                   <div className="flex justify-between items-center mb-3">
                     <span className="text-[10px] font-black uppercase tracking-wider text-brand-muted">
-                      Bundle Items ({bundleCustomItems.length})
+                      Included Products ({bundleCustomItems.length})
                     </span>
                     <span className="text-[10px] font-mono font-bold text-brand-neonpurple">
-                      Total: ₱{bundleCustomItems.reduce((sum, i) => sum + (i.price * i.quantity), 0).toLocaleString()}
+                      Items Retail Sum: ₱{bundleCalculatedPricing.currentRetailSum.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </span>
                   </div>
 
                   {bundleCustomItems.length === 0 ? (
                     <div className="text-center py-8 border border-dashed border-brand-border rounded-2xl bg-brand-bgbase text-brand-muted text-xs">
-                      All products removed. Use the product selector below to add items.
+                      All products removed. Use the product selector below to add replacement items.
                     </div>
                   ) : (
                     <div className="space-y-2.5">
-                      {bundleCustomItems.map((item) => (
-                        <div
-                          key={item.id}
-                          className="flex items-center justify-between p-3.5 rounded-2xl bg-brand-bgbase border border-brand-border"
-                        >
-                          <div className="flex-1 min-w-0 pr-3">
-                            <p className="text-xs font-bold text-main truncate capitalize">{item.name}</p>
-                            <p className="text-[10px] text-brand-muted font-mono">
-                              ₱{item.price.toLocaleString()} each • Total:{" "}
-                              <span className="text-main font-bold">₱{(item.price * item.quantity).toLocaleString()}</span>
-                            </p>
-                          </div>
-
-                          <div className="flex items-center gap-3 shrink-0">
-                            <div className="flex items-center gap-1.5 bg-brand-surface p-1 rounded-xl border border-brand-border">
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateBundleItemQty(item.id, -1)}
-                                className="w-6 h-6 rounded-lg bg-brand-bgbase border border-brand-border flex items-center justify-center text-brand-muted hover:text-main text-xs font-black"
-                              >
-                                -
-                              </button>
-                              <span className="w-7 text-center text-xs font-mono font-black text-main">
-                                {item.quantity}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateBundleItemQty(item.id, 1)}
-                                className="w-6 h-6 rounded-lg bg-brand-bgbase border border-brand-border flex items-center justify-center text-brand-muted hover:text-main text-xs font-black"
-                              >
-                                +
-                              </button>
+                      {bundleCustomItems.map((item) => {
+                        const isBeingReplaced = replacingBundleItemId === item.id;
+                        return (
+                          <div
+                            key={item.id}
+                            className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all ${
+                              isBeingReplaced
+                                ? "bg-amber-500/10 border-amber-500/60 shadow-lg"
+                                : "bg-brand-bgbase border-brand-border hover:border-brand-neonpurple/30"
+                            }`}
+                          >
+                            <div className="flex-1 min-w-0 pr-3">
+                              <div className="flex items-center gap-2">
+                                <p className="text-xs font-bold text-main truncate capitalize">{item.name}</p>
+                                {isBeingReplaced && (
+                                  <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-amber-500 text-black">
+                                    Replacing
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-brand-muted font-mono mt-0.5">
+                                ₱{item.price.toLocaleString()} each • Total:{" "}
+                                <span className="text-main font-bold">₱{(item.price * item.quantity).toLocaleString()}</span>
+                                {item.sku && <span className="ml-2 text-brand-muted/70 uppercase">[{item.sku}]</span>}
+                              </p>
                             </div>
 
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveBundleItem(item.id)}
-                              className="p-1.5 text-brand-muted hover:text-brand-crimson hover:bg-brand-crimson/10 rounded-lg transition-colors"
-                              title="Remove product from bundle"
-                            >
-                              <Trash2 size={15} />
-                            </button>
+                            <div className="flex items-center gap-2.5 shrink-0">
+                              {/* Quantity Stepper */}
+                              <div className="flex items-center gap-1.5 bg-brand-surface p-1 rounded-xl border border-brand-border">
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateBundleItemQty(item.id, -1)}
+                                  className="w-6 h-6 rounded-lg bg-brand-bgbase border border-brand-border flex items-center justify-center text-brand-muted hover:text-main text-xs font-black"
+                                >
+                                  -
+                                </button>
+                                <span className="w-7 text-center text-xs font-mono font-black text-main">
+                                  {item.quantity}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateBundleItemQty(item.id, 1)}
+                                  className="w-6 h-6 rounded-lg bg-brand-bgbase border border-brand-border flex items-center justify-center text-brand-muted hover:text-main text-xs font-black"
+                                >
+                                  +
+                                </button>
+                              </div>
+
+                              {/* Replace / Swap Button */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (isBeingReplaced) {
+                                    setReplacingBundleItemId(null);
+                                  } else {
+                                    handleStartReplaceBundleItem(item.id);
+                                  }
+                                }}
+                                className={`px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition-all ${
+                                  isBeingReplaced
+                                    ? "bg-amber-500 text-black shadow-sm"
+                                    : "bg-brand-surface border border-brand-border text-brand-muted hover:text-amber-400 hover:border-amber-400/40"
+                                }`}
+                                title="Replace product with another from branch inventory"
+                              >
+                                <ArrowLeftRight size={12} />
+                                <span>{isBeingReplaced ? "Cancel" : "Replace"}</span>
+                              </button>
+
+                              {/* Remove Product Button */}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveBundleItem(item.id)}
+                                className="p-1.5 text-brand-muted hover:text-brand-crimson hover:bg-brand-crimson/10 rounded-lg transition-colors"
+                                title="Remove product from bundle"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
 
-                {/* Add More Products to Bundle */}
+                {/* Add / Replace Products from Branch Inventory */}
                 <div className="pt-4 border-t border-brand-border/60">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-brand-muted block mb-2">
-                    Add Products to Bundle (Search by Name or Price)
-                  </span>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-brand-muted">
+                      {replacingBundleItemId ? "Select Replacement Product" : "Add Products to Bundle"}
+                    </span>
+                    <span className="text-[9px] text-brand-muted font-bold">
+                      Showing branch inventory with available stock
+                    </span>
+                  </div>
+
                   <div className="relative mb-3">
                     <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-brand-muted" />
                     <input
@@ -3198,62 +3398,111 @@ export default function SalesPage() {
                         setBundleProductSearch(e.target.value);
                         setBundleProductPickerOpen(true);
                       }}
-                      placeholder="Search branch inventory to add to bundle..."
-                      className="w-full bg-brand-bgbase border border-brand-border rounded-xl py-2.5 pl-10 pr-4 text-xs font-bold text-main placeholder:text-brand-muted/50 focus:outline-none focus:border-brand-neonpurple"
+                      placeholder={replacingBundleItemId ? "Search replacement product by name or SKU..." : "Search branch inventory to add to bundle..."}
+                      className={`w-full bg-brand-bgbase border rounded-xl py-2.5 pl-10 pr-4 text-xs font-bold text-main placeholder:text-brand-muted/50 focus:outline-none transition-colors ${
+                        replacingBundleItemId ? "border-amber-500/50 focus:border-amber-500" : "border-brand-border focus:border-brand-neonpurple"
+                      }`}
                     />
                   </div>
 
                   {bundleProductPickerOpen && (
-                    <div className="border border-brand-border rounded-2xl bg-brand-bgbase p-2.5 max-h-48 overflow-y-auto custom-scrollbar space-y-1.5">
+                    <div className="border border-brand-border rounded-2xl bg-brand-bgbase p-2.5 max-h-52 overflow-y-auto custom-scrollbar space-y-1.5">
                       {inventory
                         .filter(inv => {
                           const prod = inv.Product || inv;
+                          if (!prod || !prod.id) return false;
+                          const stock = (inv.stock !== undefined && inv.stock !== null) ? Number(inv.stock) : Number(inv.quantity || 0);
+                          if (stock <= 0 || inv.enabled === false) return false;
                           if (!bundleProductSearch) return true;
-                          const q = bundleProductSearch.toLowerCase();
+                          const q = bundleProductSearch.toLowerCase().trim();
                           const matchName = (prod.name || "").toLowerCase().includes(q);
+                          const matchSku = (prod.sku || "").toLowerCase().includes(q);
                           const matchPrice = String(prod.price || "").includes(q);
-                          return matchName || matchPrice;
+                          return matchName || matchSku || matchPrice;
                         })
-                        .slice(0, 15)
+                        .slice(0, 20)
                         .map(inv => {
                           const prod = inv.Product || inv;
+                          const stock = (inv.stock !== undefined && inv.stock !== null) ? Number(inv.stock) : Number(inv.quantity || 0);
                           return (
                             <div
                               key={prod.id}
                               className="flex items-center justify-between p-2 rounded-xl bg-brand-surface border border-brand-border hover:border-brand-neonpurple/30 transition-colors"
                             >
                               <div className="truncate pr-2 text-xs">
-                                <span className="font-bold text-main block truncate">{prod.name}</span>
-                                <span className="text-[9px] text-brand-muted font-mono">₱{parseFloat(prod.price || 0).toLocaleString()}</span>
+                                <span className="font-bold text-main block truncate capitalize">{prod.name}</span>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-[9px] text-brand-neonpurple font-bold font-mono">₱{parseFloat(prod.price || 0).toLocaleString()}</span>
+                                  <span className="text-[9px] text-emerald-400 font-black uppercase">Stock: {stock}</span>
+                                  {prod.sku && <span className="text-[9px] text-brand-muted font-mono uppercase">[{prod.sku}]</span>}
+                                </div>
                               </div>
                               <button
                                 type="button"
                                 onClick={() => handleAddProductToBundleCustomization(inv)}
-                                className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-brand-neonpurple text-white hover:bg-brand-neonpurple/80 shrink-0 flex items-center gap-1"
+                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider shrink-0 flex items-center gap-1.5 transition-all ${
+                                  replacingBundleItemId
+                                    ? "bg-amber-500 hover:bg-amber-600 text-black font-extrabold shadow-sm"
+                                    : "bg-brand-neonpurple hover:bg-brand-neonpurple/80 text-white"
+                                }`}
                               >
-                                <Plus size={11} /> Add
+                                {replacingBundleItemId ? (
+                                  <>
+                                    <ArrowLeftRight size={12} /> Select as Replacement
+                                  </>
+                                ) : (
+                                  <>
+                                    <Plus size={12} /> Add
+                                  </>
+                                )}
                               </button>
                             </div>
                           );
                         })}
+                      {inventory.filter(inv => {
+                        const prod = inv.Product || inv;
+                        const stock = (inv.stock !== undefined && inv.stock !== null) ? Number(inv.stock) : Number(inv.quantity || 0);
+                        return stock > 0 && inv.enabled !== false;
+                      }).length === 0 && (
+                        <p className="text-center text-xs text-brand-muted py-6">No products currently in stock for this branch.</p>
+                      )}
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Footer */}
-              <div className="p-5 border-t border-brand-border bg-brand-surface flex justify-between items-center shrink-0">
+              {/* Footer with Dynamic Price Recalculation Breakdown */}
+              <div className="p-5 border-t border-brand-border bg-brand-surface flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0">
                 <div>
-                  <span className="text-[10px] text-brand-muted font-black uppercase block">Customized Total</span>
-                  <span className="text-lg font-rajdhani font-black text-brand-neonpurple">
-                    ₱{bundleCustomItems.reduce((sum, i) => sum + (i.price * i.quantity), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-brand-muted font-black uppercase block">
+                      {isBundleCustomized ? "Customized Transaction Total" : "Package Price"}
+                    </span>
+                    {isBundleCustomized && bundleCalculatedPricing.savings > 0 && (
+                      <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                        Savings Applied: −₱{bundleCalculatedPricing.savings.toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-baseline gap-2 mt-0.5">
+                    <span className="text-xl font-rajdhani font-black text-brand-neonpurple">
+                      ₱{bundleCalculatedPricing.finalPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                    {isBundleCustomized && (
+                      <span className="text-xs text-brand-muted line-through font-mono">
+                        ₱{bundleCalculatedPricing.currentRetailSum.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
                   <button
                     type="button"
-                    onClick={() => setSelectedBundleForCustomization(null)}
+                    onClick={() => {
+                      setSelectedBundleForCustomization(null);
+                      setReplacingBundleItemId(null);
+                    }}
                     className="px-5 py-2.5 rounded-full font-bold uppercase tracking-wider text-xs text-brand-muted hover:text-main transition-colors"
                   >
                     Cancel
@@ -3262,7 +3511,7 @@ export default function SalesPage() {
                     type="button"
                     onClick={handleConfirmAddBundleToOrder}
                     disabled={bundleCustomItems.length === 0}
-                    className="btn-premium h-11 px-7 rounded-full text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-lg"
+                    className="btn-premium h-11 px-7 rounded-full text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-lg disabled:opacity-50"
                   >
                     <ShoppingCart size={15} />
                     <span>Add to Transaction</span>

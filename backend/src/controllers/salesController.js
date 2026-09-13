@@ -171,15 +171,25 @@ const createSale = async (req, res) => {
           throw new Error(`Insufficient stock for "${product.name}" (available: ${currentStock})`);
         }
 
-        const unitPrice = parseFloat(product.price);
+        let unitPrice = parseFloat(product.price);
+        if (item.unit_price !== undefined && item.unit_price !== null && !isNaN(parseFloat(item.unit_price)) && parseFloat(item.unit_price) >= 0) {
+          unitPrice = parseFloat(parseFloat(item.unit_price).toFixed(2));
+        }
         const subtotal  = parseFloat((unitPrice * qty).toFixed(2));
+
+        let itemDisplayName = product.name;
+        if (item.bundle_name) {
+          itemDisplayName = `${product.name} [${item.bundle_name}]`;
+        } else if (item.selection_summary && item.selection_summary.startsWith('Bundle:')) {
+          itemDisplayName = `${product.name} [${item.selection_summary}]`;
+        }
 
         // Create SaleItem with price/name snapshot
         await SaleItem.create({
           saleId:      sale.id,
           item_type:   'product',
           productId:   product.id,
-          productName: product.name,
+          productName: itemDisplayName,
           productSku:  product.sku || null,
           quantity:    qty,
           unitPrice,
