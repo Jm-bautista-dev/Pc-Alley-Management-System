@@ -24,7 +24,7 @@ import {
   QrCode,
   Barcode
 } from "lucide-react";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, handleSessionExpired } from "@/lib/api";
 import { resolveProductImageUrl, handleProductImageError } from "@/lib/imageHelper";
 import { showSuccess, showError, showInfo, showWarning, showConfirm, showModal } from "@/context/ModalContext";
 
@@ -133,8 +133,9 @@ export default function ProductsPage() {
         }
       } else {
         console.warn("Failed to fetch products:", productRes.status);
-        if (productRes.status === 403) {
-          showError("Session Expired", "Token invalid or expired. Please try logging out and logging back in.");
+        if (productRes.status === 401 || productRes.status === 403) {
+          handleSessionExpired();
+          return;
         } else {
           const errData = await productRes.json().catch(() => ({}));
           showError("Fetch Error", errData.message || `Failed to fetch products: ${productRes.status}`);
@@ -148,10 +149,12 @@ export default function ProductsPage() {
         }
       } else {
         console.warn("Failed to fetch inventory:", inventoryRes.status);
-        if (inventoryRes.status !== 403) { // Avoid duplicate 403 dialog
-          const errData = await inventoryRes.json().catch(() => ({}));
-          showError("Fetch Error", errData.message || `Failed to fetch inventory: ${inventoryRes.status}`);
+        if (inventoryRes.status === 401 || inventoryRes.status === 403) {
+          handleSessionExpired();
+          return;
         }
+        const errData = await inventoryRes.json().catch(() => ({}));
+        showError("Fetch Error", errData.message || `Failed to fetch inventory: ${inventoryRes.status}`);
       }
     } catch (err) {
       console.error("Catalog connection failure:", err);

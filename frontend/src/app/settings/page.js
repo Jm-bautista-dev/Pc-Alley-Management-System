@@ -30,7 +30,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { showSuccess, showError, showInfo } from "@/context/ModalContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useAuthGuard } from "@/lib/useAuthGuard";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, handleSessionExpired } from "@/lib/api";
 
 export default function SettingsPage() {
   const { user: authUser, isChecking } = useAuthGuard();
@@ -220,7 +220,7 @@ export default function SettingsPage() {
 
     const token = localStorage.getItem("token");
     if (!token) {
-      showError("Session expired. Please log in again.");
+      handleSessionExpired();
       return;
     }
 
@@ -280,6 +280,10 @@ export default function SettingsPage() {
     }
 
     const token = localStorage.getItem("token");
+    if (!token) {
+      handleSessionExpired();
+      return;
+    }
     setIsSavingPassword(true);
     showInfo("Updating security credentials...", { id: "password-update" });
 

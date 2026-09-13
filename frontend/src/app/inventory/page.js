@@ -18,7 +18,7 @@ import {
 
 const PesoSign = ({ size }) => <span style={{ fontSize: size }} className="font-bold">₱</span>;
 import { showSuccess, showError, showInfo, showWarning, showConfirm, showModal } from "@/context/ModalContext";
-import { apiUrl, getApiErrorMessage } from "@/lib/api";
+import { apiUrl, getApiErrorMessage, handleSessionExpired } from "@/lib/api";
 import { useTheme } from "@/context/ThemeContext";
 import { getChartTheme } from "@/lib/chartTheme";
 import { exportToExcel } from "@/lib/excelExport";
@@ -75,7 +75,7 @@ export default function InventoryPage() {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.status === 401 || res.status === 403) {
-        handleLogout();
+        handleSessionExpired();
         return;
       }
       const data = await res.json();
@@ -100,7 +100,7 @@ export default function InventoryPage() {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.status === 401 || res.status === 403) {
-        handleLogout();
+        handleSessionExpired();
         return;
       }
       const raw = await res.json();

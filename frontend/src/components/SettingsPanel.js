@@ -18,7 +18,7 @@ import {
 import { useState, useEffect } from "react";
 import { useTheme } from "@/context/ThemeContext";
 import { showSuccess, showError, showInfo, showWarning, showConfirm, showModal } from "@/context/ModalContext";
-import { logoutUser } from "@/lib/api";
+import { logoutUser, handleSessionExpired } from "@/lib/api";
 
 const SettingsPanel = ({ isOpen, onClose }) => {
   const [activeTab, setActiveTab] = useState("profile");
@@ -55,7 +55,7 @@ const SettingsPanel = ({ isOpen, onClose }) => {
   const handleSave = async () => {
     const token = localStorage.getItem("token");
     if (!token) {
-      showError("Authentication session expired. Please log in again.");
+      handleSessionExpired();
       return;
     }
 

@@ -2,13 +2,12 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { User, Lock, Eye, EyeOff, ShieldAlert, ArrowRight, Loader2, Sun, Moon } from "lucide-react";
+import { User, Lock, Eye, EyeOff, ShieldAlert, ArrowRight, Loader2, Sun, Moon, AlertCircle, Clock } from "lucide-react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { apiUrl, getApiErrorMessage } from "@/lib/api";
 import { LogoIcon } from "@/components/Logo";
 import { useTheme } from "@/context/ThemeContext";
-import { showSuccess, showError, showInfo, showWarning, showConfirm, showModal } from "@/context/ModalContext";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -25,6 +24,8 @@ export default function LoginPage() {
   const [attemptsWarning, setAttemptsWarning] = useState("");
   const [requiresCaptcha, setRequiresCaptcha] = useState(false);
   const [captchaVerified, setCaptchaVerified] = useState(false);
+  const [authNotice, setAuthNotice] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     let interval = null;
@@ -47,10 +48,10 @@ export default function LoginPage() {
   useEffect(() => {
     // 1. Check if a session notification is queued from an expired session redirect
     try {
-      const authNotice = sessionStorage.getItem("auth_notice");
-      if (authNotice) {
+      const queuedNotice = sessionStorage.getItem("auth_notice");
+      if (queuedNotice) {
         sessionStorage.removeItem("auth_notice");
-        showWarning(authNotice);
+        setAuthNotice(queuedNotice);
       }
     } catch (e) {}
 
@@ -109,16 +110,18 @@ export default function LoginPage() {
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.id]: e.target.value });
     setAttemptsWarning("");
+    setErrorMessage("");
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setErrorMessage("");
     if (lockoutTimer > 0) {
-      showError(`Account is locked. Please wait ${lockoutTimer} seconds.`);
+      setErrorMessage(`Account is locked. Please wait ${lockoutTimer} seconds.`);
       return;
     }
     if (requiresCaptcha && !captchaVerified) {
-      showWarning("Please complete the security challenge before logging in.");
+      setErrorMessage("Please complete the security challenge before logging in.");
       return;
     }
 
@@ -156,9 +159,8 @@ export default function LoginPage() {
       if (res.ok && data.token) {
         localStorage.setItem("token", data.token);
         localStorage.setItem("user", JSON.stringify(data.user));
-        showSuccess("Security Clearance Verified.");
         
-        // Check if destination was preserved
+        // Direct seamless navigation to destination without disruptive modal popup
         const params = new URLSearchParams(window.location.search);
         const redirectParam = params.get("redirect");
         if (redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//")) {
@@ -172,7 +174,7 @@ export default function LoginPage() {
         const seconds = data.retryAfter || 900;
         setLockoutTimer(seconds);
         setLockoutMessage(data.message || "Account temporarily locked due to excessive failed attempts.");
-        showError(data.message || `Account locked. Retry in ${Math.ceil(seconds / 60)} minutes.`);
+        setErrorMessage(data.message || `Account locked. Retry in ${Math.ceil(seconds / 60)} minutes.`);
       } else {
         if (data.requireCaptcha) {
           setRequiresCaptcha(true);
@@ -181,12 +183,12 @@ export default function LoginPage() {
           setAttemptsWarning(`Security Notice: ${data.attemptsRemaining} attempt(s) remaining before temporary lockout.`);
         }
         const friendlyMsg = getApiErrorMessage(data.message, "Invalid Security Credentials");
-        showError(friendlyMsg);
+        setErrorMessage(friendlyMsg);
       }
     } catch (err) {
       console.error(err);
       const friendlyMsg = getApiErrorMessage(err, "Uplink failed. Network connection error.");
-      showError(friendlyMsg);
+      setErrorMessage(friendlyMsg);
     } finally {
       setLoading(false);
     }
@@ -274,6 +276,38 @@ export default function LoginPage() {
           </h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Session Expiration / Queued Auth Notice Banner */}
+            {authNotice && (
+              <motion.div
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-left flex items-start gap-3"
+              >
+                <Clock size={16} className="text-amber-500 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-xs font-semibold text-amber-500 leading-snug">
+                    {authNotice}
+                  </p>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Inline Error Message Banner (No Popups) */}
+            {errorMessage && (
+              <motion.div
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-3.5 bg-brand-crimson/15 border border-brand-crimson/40 rounded-xl text-left flex items-start gap-3"
+              >
+                <AlertCircle size={16} className="text-brand-crimson shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-xs font-semibold text-brand-crimson leading-snug">
+                    {errorMessage}
+                  </p>
+                </div>
+              </motion.div>
+            )}
+
             {/* Username/Email Input */}
             <div className="relative">
               <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted">
