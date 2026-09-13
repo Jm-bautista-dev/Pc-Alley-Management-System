@@ -22,7 +22,7 @@ import {
   EyeOff
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, handleSessionExpired } from "@/lib/api";
 import { showSuccess, showError, showInfo, showWarning, showConfirm, showModal } from "@/context/ModalContext";
 
 function AdminPageContent() {
@@ -58,11 +58,12 @@ function AdminPageContent() {
 
 
   useEffect(() => {
-    const storedUser = JSON.parse(localStorage.getItem("user"));
+    const storedToken = localStorage.getItem("token");
+    const storedUser = JSON.parse(localStorage.getItem("user") || "null");
     setCurrentUser(storedUser);
     
-    if (!storedUser) {
-      window.location.href = '/';
+    if (!storedUser || !storedToken) {
+      handleSessionExpired();
       return;
     }
 

@@ -48,14 +48,16 @@ let isHandlingSessionExpiry = false;
  * Clears stale client auth state and redirects to login with preserved destination
  */
 const handleSessionExpired = () => {
-  if (typeof window === "undefined" || isHandlingSessionExpiry) return;
-  isHandlingSessionExpiry = true;
+  if (typeof window === "undefined") return;
 
-  // Clear client credentials
+  // Always clear client credentials immediately
   try {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
   } catch (e) {}
+
+  if (isHandlingSessionExpiry) return;
+  isHandlingSessionExpiry = true;
 
   const currentPath = window.location.pathname + window.location.search;
   const isPublicPage = currentPath === "/" || 
@@ -70,62 +72,114 @@ const handleSessionExpired = () => {
 
     // Redirect to login preserving the intended destination
     window.location.href = `/?redirect=${encodeURIComponent(currentPath)}`;
-  } else {
-    // If already on login page, reset handling lock after short timeout
-    setTimeout(() => {
-      isHandlingSessionExpiry = false;
-    }, 1000);
   }
+
+  // Reset debounce lock after short window to prevent locking future requests
+  setTimeout(() => {
+    isHandlingSessionExpiry = false;
+  }, 2000);
+};
+
+const resetSessionExpiryLock = () => {
+  isHandlingSessionExpiry = false;
 };
 
 /**
  * User-friendly API error message formatter
- * Differentiates session expiry, unauthorized, forbidden, server error, and network failure
+ * Differentiates network failures, server errors (5xx), forbidden (403), and session expiry (401).
+ * Never labels server or network errors as session expired.
  */
 const getApiErrorMessage = (error, fallback = "An unexpected error occurred.") => {
   if (!error) return fallback;
 
-  // Network or offline failure
-  if (error.name === "TypeError" && String(error.message || "").toLowerCase().includes("fetch")) {
-    return "Unable to connect to server. Please check your network connection.";
-  }
-  if (String(error.message || "").toLowerCase().includes("networkerror") || String(error.message || "").toLowerCase().includes("failed to fetch")) {
+  // 1. Network Failure / Offline (MUST come first to never mislabel network as session expired)
+  if (
+    error.name === "TypeError" &&
+    String(error.message || "").toLowerCase().includes("fetch")
+  ) {
     return "Unable to connect to server. Please check your network connection.";
   }
 
-  // Response status-based differentiation
+  const errorMsg = String(
+    error.message ||
+    (typeof error === "string" ? error : "") ||
+    ""
+  ).toLowerCase();
+
+  if (
+    errorMsg.includes("networkerror") ||
+    errorMsg.includes("failed to fetch") ||
+    errorMsg.includes("net::err") ||
+    errorMsg.includes("network request failed") ||
+    errorMsg.includes("econnrefused") ||
+    errorMsg.includes("etimedout")
+  ) {
+    return "Unable to connect to server. Please check your network connection.";
+  }
+
+  // 2. Server-side 5xx errors (MUST be checked before auth to never mislabel server error as session expired)
   const status = error.status || error.response?.status;
-  if (status === 401) {
-    return "Session expired. Please log in again.";
-  }
-  if (status === 403) {
-    return "Access denied: You do not have permission to perform this action.";
-  }
   if (status >= 500) {
     return "The server encountered an error. Please try again in a moment.";
   }
+  if (
+    errorMsg.includes("internal server error") ||
+    errorMsg.includes("server error (50") ||
+    errorMsg.includes("status 50")
+  ) {
+    return "The server encountered an error. Please try again in a moment.";
+  }
 
-  // Check response body message
-  const rawMessage = error.response?.data?.message || 
-                     error.response?.data?.error || 
-                     error.message || 
-                     (typeof error === "string" ? error : null);
+  // 3. Forbidden Role Access (HTTP 403)
+  if (status === 403) {
+    return "Access denied: You do not have permission to perform this action.";
+  }
+  if (
+    errorMsg.includes("access denied") ||
+    errorMsg.includes("insufficient permission") ||
+    errorMsg.includes("forbidden")
+  ) {
+    return "Access denied: You do not have permission to perform this action.";
+  }
+
+  // 4. Expired Session / Unauthorized (HTTP 401 or token invalid strings)
+  if (status === 401) {
+    return "Session expired. Please log in again.";
+  }
+
+  const rawMessage =
+    error.response?.data?.message ||
+    error.response?.data?.error ||
+    error.data?.message ||
+    error.message ||
+    (typeof error === "string" ? error : null);
 
   if (rawMessage && typeof rawMessage === "string") {
     const lower = rawMessage.toLowerCase();
-    // Catch confusing technical authentication errors
-    if (lower.includes("jwt expired") || 
-        lower.includes("invalid token") || 
-        lower.includes("invalid signature") || 
-        lower.includes("token missing") ||
-        lower.includes("token invalid or expired") ||
-        lower.includes("session_invalid") ||
-        lower.includes("session has been revoked")) {
+    // Catch confusing technical authentication and token errors
+    if (
+      lower.includes("jwt expired") ||
+      lower.includes("invalid token") ||
+      lower.includes("invalid signature") ||
+      lower.includes("jwt malformed") ||
+      lower.includes("token missing") ||
+      lower.includes("token invalid or expired") ||
+      lower.includes("session_invalid") ||
+      lower.includes("session_expired") ||
+      lower.includes("session has been revoked") ||
+      lower.includes("session expired")
+    ) {
       return "Session expired. Please log in again.";
     }
 
-    if (lower.includes("econnrefused") || lower.includes("etimedout")) {
-      return "Server connection timed out. Please try again shortly.";
+    // Never show raw technical database or server exceptions
+    if (
+      lower.includes("sequelizenameerror") ||
+      lower.includes("syntaxerror") ||
+      lower.includes("referenceerror") ||
+      lower.includes("sql")
+    ) {
+      return "The server encountered an error. Please try again in a moment.";
     }
 
     return rawMessage;
@@ -133,6 +187,83 @@ const getApiErrorMessage = (error, fallback = "An unexpected error occurred.") =
 
   return fallback;
 };
+
+/**
+ * Installs a centralized global fetch interceptor in the browser
+ * Ensures ALL outgoing API requests across POS, Dashboard, Inventory, Sales, Customers,
+ * Services, Analytics, and Settings automatically include credentials and tokens,
+ * and seamlessly handles 401 session expirations consistently without page-by-page logic.
+ */
+const installGlobalAuthInterceptor = () => {
+  if (typeof window === "undefined" || typeof window.fetch !== "function" || window.__pc_auth_interceptor_installed) return;
+  window.__pc_auth_interceptor_installed = true;
+
+  const originalFetch = window.fetch.bind(window);
+
+  window.fetch = async function (input, init = {}) {
+    let url = typeof input === "string" ? input : (input instanceof URL ? input.href : input?.url || "");
+    const base = getBaseUrl();
+    const isApiRequest = url.includes("/api/") || 
+                         url.startsWith(base) || 
+                         url.includes("api.pcalley.shop") || 
+                         url.includes(":5000");
+
+    let modifiedInit = { ...init };
+
+    if (isApiRequest) {
+      const headers = new Headers(init.headers || {});
+      const token = localStorage.getItem("token");
+      if (token && !headers.has("Authorization") && !headers.has("authorization")) {
+        headers.set("Authorization", `Bearer ${token}`);
+      }
+      modifiedInit.headers = headers;
+      if (!modifiedInit.credentials) {
+        modifiedInit.credentials = "include";
+      }
+    }
+
+    try {
+      const response = await originalFetch(input, modifiedInit);
+
+      if (response.status === 401 && isApiRequest) {
+        const isPublicAuthEndpoint = url.includes("/auth/login") || 
+                                     url.includes("/auth/forgot-password") || 
+                                     url.includes("/auth/verify-reset-token") || 
+                                     url.includes("/auth/reset-password");
+
+        if (!isPublicAuthEndpoint) {
+          handleSessionExpired();
+
+          // Return a sanitized response so calling code never sees raw "Invalid token"
+          return new Response(
+            JSON.stringify({
+              message: "Session expired. Please log in again.",
+              code: "SESSION_EXPIRED",
+              valid: false
+            }),
+            {
+              status: 401,
+              statusText: "Unauthorized",
+              headers: {
+                "Content-Type": "application/json",
+                "X-Auth-Handled": "session-expired"
+              }
+            }
+          );
+        }
+      }
+
+      return response;
+    } catch (networkError) {
+      throw networkError;
+    }
+  };
+};
+
+// Automatically install in browser runtime upon module import
+if (typeof window !== "undefined") {
+  installGlobalAuthInterceptor();
+}
 
 /**
  * Centralized API fetch wrapper with automated auth credentials and session handling
@@ -161,6 +292,7 @@ const apiFetch = async (path, options = {}) => {
     if (response.status === 401) {
       const isLoginOrPublicAuth = path.includes("/auth/login") || 
                                  path.includes("/auth/forgot-password") || 
+                                 path.includes("/auth/verify-reset-token") ||
                                  path.includes("/auth/reset-password");
       if (!isLoginOrPublicAuth) {
         handleSessionExpired();
@@ -207,5 +339,7 @@ export {
   apiFetch, 
   getApiErrorMessage, 
   handleSessionExpired, 
+  resetSessionExpiryLock,
+  installGlobalAuthInterceptor,
   logoutUser 
 };

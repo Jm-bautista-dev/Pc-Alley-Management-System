@@ -45,6 +45,7 @@ export const viewport = {
 
 import { ThemeProvider } from '../context/ThemeContext';
 import SessionWatcher from '../components/SessionWatcher';
+import { installGlobalAuthInterceptor } from '../lib/api';
 
 export default function RootLayout({ children }) {
   return (

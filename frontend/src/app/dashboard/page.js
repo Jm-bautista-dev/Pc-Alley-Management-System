@@ -63,7 +63,7 @@ const Bar = dynamic(() => import('react-chartjs-2').then((mod) => mod.Bar), {
 
 import StatCard from "@/components/StatCard";
 import { useTheme } from "@/context/ThemeContext";
-import { apiUrl, SOCKET_BASE_URL } from "@/lib/api";
+import { apiUrl, SOCKET_BASE_URL, handleSessionExpired } from "@/lib/api";
 import { getChartTheme } from "@/lib/chartTheme";
 import { limitData, getKPIs, getTrendData, getBurnRates, getProductPerformance } from "@/utils/analytics";
 
@@ -124,10 +124,14 @@ export default function Dashboard() {
   }, [customEndDate]);
 
   useEffect(() => {
+    const token = localStorage.getItem("token");
     const userData = localStorage.getItem("user");
-    if (!userData) {
-      window.location.href = "/";
-    } else {
+    if (!userData || !token) {
+      handleSessionExpired();
+      return;
+    }
+
+    try {
       const parsedUser = JSON.parse(userData);
       setUser(parsedUser);
       const isStaff = parsedUser.role === 'employee' || parsedUser.role === 'staff';
@@ -144,6 +148,8 @@ export default function Dashboard() {
         });
         return () => socket.disconnect();
       }
+    } catch {
+      handleSessionExpired();
     }
   }, []);
 

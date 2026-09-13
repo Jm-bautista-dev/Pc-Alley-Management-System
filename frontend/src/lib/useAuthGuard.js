@@ -30,6 +30,11 @@ export function useAuthGuard() {
     };
 
     if (!storedToken || !storedUser) {
+      if (typeof window !== 'undefined') {
+        try {
+          sessionStorage.setItem("auth_notice", "Session expired. Please log in again.");
+        } catch (e) {}
+      }
       router.replace(getRedirectTarget());
       return;
     }
@@ -41,6 +46,11 @@ export function useAuthGuard() {
     } catch {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      if (typeof window !== 'undefined') {
+        try {
+          sessionStorage.setItem("auth_notice", "Session expired. Please log in again.");
+        } catch (e) {}
+      }
       router.replace(getRedirectTarget());
     } finally {
       setIsChecking(false);

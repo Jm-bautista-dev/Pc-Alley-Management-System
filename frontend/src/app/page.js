@@ -5,7 +5,7 @@ import Link from "next/link";
 import { User, Lock, Eye, EyeOff, ShieldAlert, ArrowRight, Loader2, Sun, Moon, AlertCircle, Clock } from "lucide-react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { apiUrl, getApiErrorMessage } from "@/lib/api";
+import { apiUrl, getApiErrorMessage, resetSessionExpiryLock } from "@/lib/api";
 import { LogoIcon } from "@/components/Logo";
 import { useTheme } from "@/context/ThemeContext";
 
@@ -79,7 +79,7 @@ export default function LoginPage() {
             // Check if user was redirected from a specific page
             const params = new URLSearchParams(window.location.search);
             const redirectParam = params.get("redirect");
-            if (redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//")) {
+            if (redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//") && redirectParam !== "/") {
               router.replace(redirectParam);
               return;
             }
@@ -159,11 +159,12 @@ export default function LoginPage() {
       if (res.ok && data.token) {
         localStorage.setItem("token", data.token);
         localStorage.setItem("user", JSON.stringify(data.user));
+        resetSessionExpiryLock();
         
         // Direct seamless navigation to destination without disruptive modal popup
         const params = new URLSearchParams(window.location.search);
         const redirectParam = params.get("redirect");
-        if (redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//")) {
+        if (redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//") && redirectParam !== "/") {
           router.push(redirectParam);
         } else if (data.user?.role === "employee" || data.user?.role === "staff") {
           router.push("/sales");
