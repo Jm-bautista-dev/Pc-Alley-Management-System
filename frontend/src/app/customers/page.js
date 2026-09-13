@@ -121,7 +121,7 @@ export default function CustomersPage() {
       const productData = await res.json();
       const products = Array.isArray(productData) ? productData : (productData.products || []);
 
-      const customerName = customer?.name || "General Client";
+      const customerName = customer?.name || "Walk-in Customer";
       const customerSegment = customer ? segmentFromSpend(customer.totalSpent) : "Standard";
       const dateStr = new Date().toISOString().split("T")[0];
 
@@ -212,7 +212,7 @@ export default function CustomersPage() {
     <div className="flex bg-brand-bgbase min-h-screen text-main font-dmsans transition-all duration-500">
       <Sidebar />
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        <TopBar title="CUSTOMER MANAGEMENT" />
+        <TopBar title="CUSTOMER REGISTRY" />
         <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-10 custom-scrollbar bg-brand-bgbase text-main">
           <div className="max-w-[1600px] mx-auto w-full">
 
@@ -234,7 +234,7 @@ export default function CustomersPage() {
                   className="h-11 px-5 flex items-center gap-2 bg-brand-surface border border-brand-neonblue/30 text-brand-neonblue hover:bg-brand-neonblue hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm"
                 >
                   {exportingPricelist ? <Loader2 size={14} className="animate-spin" /> : <FileSpreadsheet size={14} />}
-                  Export Standard Pricelist
+                  Export Customer Pricelist
                 </motion.button>
                 <motion.button
                   whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}

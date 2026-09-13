@@ -274,7 +274,7 @@ export default function ProductsPage() {
       <Sidebar />
 
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        <TopBar title="PRODUCT LIST" />
+        <TopBar title="PRODUCT CATALOG" />
         <div className="flex-1 overflow-y-auto custom-scrollbar relative z-10 bg-brand-bgbase text-main">
           <div className="responsive-container">
             

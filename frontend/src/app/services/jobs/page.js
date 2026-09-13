@@ -299,7 +299,7 @@ export default function ServiceJobsPage() {
                 <ClipboardList size={20} />
               </div>
               <h1 className="text-2xl font-rajdhani font-black text-main uppercase tracking-wider">
-                Service Jobs &amp; Work Orders
+                Service Work Orders
               </h1>
             </div>
             <p className="text-xs text-brand-muted font-bold">

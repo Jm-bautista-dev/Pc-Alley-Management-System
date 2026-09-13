@@ -162,7 +162,7 @@ export default function BrandsPage() {
     <div className={`flex bg-brand-bgbase min-h-screen text-main font-dmsans transition-colors duration-300 ${theme === 'dark' ? 'bg-[#0a0a0a]' : 'bg-[#f0f0eb]'}`}>
       <Sidebar />
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        <TopBar title="BRAND MANAGEMENT" />
+        <TopBar title="BRAND DIRECTORY" />
         <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-10 custom-scrollbar relative z-10">
 
           {/* Header */}

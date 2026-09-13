@@ -157,7 +157,7 @@ export default function AddPage() {
     <div className={`flex bg-brand-bgbase min-h-screen text-main font-dmsans transition-colors duration-300 ${theme === 'dark' ? 'bg-[#0a0a0a]' : 'bg-[#f0f0eb]'}`}>
       <Sidebar />
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        <TopBar title="ADD NEW PRODUCT" />
+        <TopBar title="ADD PRODUCT" />
         <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-10 custom-scrollbar relative z-10 w-full max-w-6xl mx-auto">
           
           <div className="flex items-center justify-between mb-8">
@@ -234,7 +234,20 @@ export default function AddPage() {
                       value={formData.description}
                       onChange={handleChange}
                       placeholder="Write a detailed description..." 
-                      rows={5}
+                      rows={4}
+                      className="w-full bg-brand-bgbase border border-border/50 rounded-xl px-4 py-3 text-sm text-main font-bold outline-none focus:border-brand-neonblue transition-colors resize-none"
+                    ></textarea>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-muted uppercase tracking-[2px] mb-2">Product Specifications</label>
+                    <textarea 
+                      name="specifications"
+                      maxLength={2000}
+                      value={formData.specifications}
+                      onChange={handleChange}
+                      placeholder="e.g. 24GB GDDR6X, Boost Clock 2520 MHz, 384-bit, PCIe 4.0..." 
+                      rows={4}
                       className="w-full bg-brand-bgbase border border-border/50 rounded-xl px-4 py-3 text-sm text-main font-bold outline-none focus:border-brand-neonblue transition-colors resize-none"
                     ></textarea>
                   </div>
@@ -290,14 +303,14 @@ export default function AddPage() {
                 </h3>
                 <div className="space-y-5">
                   <div>
-                    <label className="block text-[10px] font-black text-muted uppercase tracking-[2px] mb-2">Category</label>
+                    <label className="block text-[10px] font-black text-muted uppercase tracking-[2px] mb-2">Product Category</label>
                     <select 
                       name="category_id"
                       value={formData.category_id}
                       onChange={handleChange}
                       className="w-full bg-brand-bgbase border border-border/50 rounded-xl px-4 py-3 text-sm text-main font-bold outline-none focus:border-brand-neonblue transition-colors appearance-none cursor-pointer"
                     >
-                      <option value="">Select Category</option>
+                      <option value="">Select Product Category</option>
                       {categories.map(cat => (
                         <option key={cat.id} value={cat.id}>{cat.name}</option>
                       ))}
@@ -320,7 +333,7 @@ export default function AddPage() {
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-black text-muted uppercase tracking-[2px] mb-2">Barcode / UPC</label>
+                    <label className="block text-[10px] font-black text-muted uppercase tracking-[2px] mb-2">Product Barcode / SKU</label>
                     <input 
                       type="text"
                       name="barcode"

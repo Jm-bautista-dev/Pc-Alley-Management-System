@@ -322,17 +322,17 @@ export default function QuotationsPage() {
     <div className="flex bg-brand-bgbase min-h-screen text-main font-dmsans transition-colors duration-300">
       <Sidebar />
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        <TopBar title="WARRANTIES" />
+        <TopBar title="CUSTOMER WARRANTIES" />
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-10 custom-scrollbar relative z-10 bg-brand-bgbase text-main">
 
           {/* Header */}
           <div className="mb-6">
             <motion.h2 initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="text-[10px] font-black tracking-[4px] uppercase text-main/40 mb-1">
-              Client Warranties
+              Customer Warranties
             </motion.h2>
             <h1 className="text-2xl font-rajdhani font-black uppercase">
-              LIST <span className="text-brand-neonblue">WARRANTIES</span>
+              CUSTOMER <span className="text-brand-neonblue">WARRANTIES</span>
             </h1>
           </div>
 
@@ -526,7 +526,7 @@ export default function QuotationsPage() {
                       onChange={e => { setForm({ ...form, customer_name: e.target.value }); setCustomerSearch(e.target.value); setShowCustomerDropdown(true); if (errors.customer_name) setErrors(prev => { const { customer_name, ...rest } = prev; return rest; }); }}
                       onFocus={() => customerSearch && setShowCustomerDropdown(true)}
                       onBlur={() => setTimeout(() => setShowCustomerDropdown(false), 200)}
-                      placeholder="Search or type client name..."
+                      placeholder="Search or type customer name..."
                       className={`w-full mt-1.5 bg-brand-bgbase border rounded-2xl py-3 px-4 text-sm text-main focus:outline-none transition-all ${errors.customer_name ? 'border-brand-crimson' : 'border-border focus:border-brand-neonblue'}`} />
                     {errors.customer_name && <p className="flex items-center gap-1 text-[9px] font-bold text-brand-crimson mt-1 ml-1"><AlertCircle size={10} />{errors.customer_name}</p>}
                     {showCustomerDropdown && filteredCustomers.length > 0 && (
@@ -714,7 +714,7 @@ export default function QuotationsPage() {
                     value={voidReason}
                     onChange={e => { setVoidReason(e.target.value); if (voidError) setVoidError(""); }}
                     rows={3}
-                    placeholder="e.g. Customer returned product for refund, physical damage/tampered seal, client cancellation request..."
+                    placeholder="e.g. Customer returned product for refund, physical damage/tampered seal, customer cancellation request..."
                     className={`w-full bg-brand-bgbase border rounded-2xl py-3 px-4 text-xs text-main focus:outline-none transition-all resize-none ${
                       voidError ? 'border-brand-crimson' : 'border-border focus:border-brand-crimson/50'
                     }`}

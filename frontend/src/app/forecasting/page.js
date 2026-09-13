@@ -659,7 +659,7 @@ function ForecastingPageContent() {
 
       <Sidebar />
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        <TopBar title="DECISION INTELLIGENCE FORECASTING" />
+        <TopBar title="SALES FORECASTING" />
         
         <div className="flex-1 overflow-y-auto custom-scrollbar relative z-10 bg-brand-bgbase text-main">
           <div className="responsive-container">
@@ -668,7 +668,7 @@ function ForecastingPageContent() {
             <div className="flex justify-between items-center mb-6 no-print">
               <div>
                 <h1 className="text-2xl font-rajdhani font-black uppercase mb-0">
-                  DECISION <span className="text-brand-neonblue">FORECASTING</span>
+                  SALES <span className="text-brand-neonblue">FORECASTING</span>
                 </h1>
                 <p className="text-[10px] text-muted font-black tracking-[2px] uppercase mt-1">
                   Linear regression forecast model &middot; {startDate && endDate ? `${startDate} to ${endDate}` : ""} ({groupBy} group)

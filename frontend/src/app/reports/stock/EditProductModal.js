@@ -452,13 +452,13 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
               />
             </div>
             <div>
-              <label className="block text-[10px] uppercase font-black text-muted mb-1">Category</label>
+              <label className="block text-[10px] uppercase font-black text-muted mb-1">Product Category</label>
               <select
                 value={formData.category_id || ""}
                 onChange={e => setFormData({ ...formData, category_id: e.target.value })}
                 className="w-full bg-brand-bgbase border border-border text-main rounded-lg px-3 py-2.5 text-sm font-bold appearance-none cursor-pointer"
               >
-                <option value="">Select Category</option>
+                <option value="">Select Product Category</option>
                 {categories.map(cat => (
                   <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
@@ -480,7 +480,7 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
               </select>
             </div>
             <div>
-              <label className="block text-[10px] uppercase font-black text-muted mb-1">Barcode / UPC</label>
+              <label className="block text-[10px] uppercase font-black text-muted mb-1">Product Barcode / SKU</label>
               <input
                 type="text"
                 value={formData.barcode || ""}
@@ -491,7 +491,7 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
             </div>
           </div>
           <div>
-            <label className="block text-[10px] uppercase font-black text-muted mb-1">SKU</label>
+            <label className="block text-[10px] uppercase font-black text-muted mb-1">Product SKU</label>
             <input
               type="text"
               value={formData.sku || ""}
@@ -500,7 +500,7 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
             />
           </div>
           <div>
-            <label className="block text-[10px] uppercase font-black text-muted mb-1">Description</label>
+            <label className="block text-[10px] uppercase font-black text-muted mb-1">Product Description</label>
             <textarea
               value={formData.description || ""}
               onChange={e => setFormData({ ...formData, description: e.target.value })}
@@ -509,7 +509,7 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
             />
           </div>
           <div>
-            <label className="block text-[10px] uppercase font-black text-muted mb-1">Specifications</label>
+            <label className="block text-[10px] uppercase font-black text-muted mb-1">Product Specifications</label>
             <textarea
               value={formData.specifications || ""}
               onChange={e => setFormData({ ...formData, specifications: e.target.value })}

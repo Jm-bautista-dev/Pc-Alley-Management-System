@@ -135,7 +135,7 @@ export default function CategoriesPage() {
     <div className={`flex bg-brand-bgbase min-h-screen text-main font-dmsans transition-colors duration-300 ${theme === 'dark' ? 'bg-[#0a0a0a]' : 'bg-[#f0f0eb]'}`}>
       <Sidebar />
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        <TopBar title="CATEGORIES" />
+        <TopBar title="PRODUCT CATEGORIES" />
         
         <div className="flex-1 overflow-y-auto custom-scrollbar relative z-10 text-main p-4">
           <div className="responsive-container">
@@ -143,7 +143,7 @@ export default function CategoriesPage() {
               <div>
                 <motion.h2 initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="text-[10px] font-black tracking-[4px] uppercase text-main/40 mb-1">Hardware Classification</motion.h2>
                 <motion.h1 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="text-2xl md:text-3xl font-rajdhani font-black tracking-tight text-main uppercase">
-                  Manage <span className="text-brand-neonblue">Categories</span>
+                  Product <span className="text-brand-neonblue">Categories</span>
                 </motion.h1>
               </div>
             </div>
@@ -154,12 +154,12 @@ export default function CategoriesPage() {
                 <div className="space-y-6">
                   <div className="bg-brand-surface border border-border/50 rounded-2xl p-6 md:p-8 shadow-sm">
                     <h3 className="text-sm font-black uppercase tracking-widest text-main mb-6 flex items-center gap-2 border-b border-border/50 pb-4">
-                      <Plus size={16} className="text-brand-neonblue" /> Create Category
+                      <Plus size={16} className="text-brand-neonblue" /> Create Product Category
                     </h3>
                     
                     <form onSubmit={handleCreateCategory} className="space-y-4">
                       <div>
-                        <label className="block text-[10px] font-black text-muted uppercase tracking-[2px] mb-2">Category Name *</label>
+                        <label className="block text-[10px] font-black text-muted uppercase tracking-[2px] mb-2">Product Category Name *</label>
                         <input 
                           type="text" 
                           maxLength={50}
@@ -178,7 +178,7 @@ export default function CategoriesPage() {
                         className="w-full bg-brand-neonblue text-white py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-600 shadow-lg shadow-brand-neonblue/20 transition-all flex items-center justify-center gap-2 disabled:opacity-70"
                       >
                         {createLoading ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-                        {createLoading ? "Creating..." : "Add Category"}
+                        {createLoading ? "Creating..." : "Add Product Category"}
                       </button>
                     </form>
                   </div>

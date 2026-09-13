@@ -816,7 +816,7 @@ export default function ProcurementPage() {
       <Sidebar />
 
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        <TopBar title={isSuperAdmin ? "SUPERADMIN RESTOCK DESK" : "BRANCH PROCUREMENT DESK"} />
+        <TopBar title={isSuperAdmin ? "HQ STOCK REQUESTS" : "BRANCH STOCK REQUESTS"} />
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-10 custom-scrollbar relative z-10 bg-brand-bgbase text-main">
           
@@ -842,7 +842,7 @@ export default function ProcurementPage() {
                 {/* Quick Metrics */}
                 <div className="flex items-center gap-3">
                   <div className="bg-brand-surface border border-border px-5 py-2.5 rounded-xl text-center shadow-sm">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-muted block">Restock Requests</span>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-muted block">Stock Requests</span>
                     <span className="text-lg font-rajdhani font-black text-brand-neonblue">{totalPendingRequests} Products</span>
                   </div>
                   <button
