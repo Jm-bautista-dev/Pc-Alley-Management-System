@@ -33,10 +33,14 @@ const BenchmarkResult = require('./BenchmarkResult');
 const Bundle = require('./Bundle');
 const BundleItem = require('./BundleItem');
 const BundleBranch = require('./BundleBranch');
+const UserSession = require('./UserSession');
 
 // ── Existing Associations ──
 Branch.hasMany(User, { foreignKey: 'branch_id' });
 User.belongsTo(Branch, { foreignKey: 'branch_id' });
+
+User.hasMany(UserSession, { foreignKey: 'user_id', as: 'sessions', onDelete: 'CASCADE' });
+UserSession.belongsTo(User, { foreignKey: 'user_id' });
 
 Branch.hasMany(Product, { foreignKey: 'branch_id' });
 Product.belongsTo(Branch, { foreignKey: 'branch_id' });
@@ -244,5 +248,6 @@ module.exports = {
   BenchmarkResult,
   Bundle,
   BundleItem,
-  BundleBranch
+  BundleBranch,
+  UserSession
 };

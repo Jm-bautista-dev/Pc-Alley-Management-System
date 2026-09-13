@@ -2,9 +2,15 @@ const express = require('express');
 const router = express.Router();
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
-const { register, login, logout, getUsers, updateProfile, changePassword, forgotPassword, verifyResetToken, resetPassword } = require('../controllers/authController');
+const { register, login, logout, getSession, getUsers, updateProfile, changePassword, forgotPassword, verifyResetToken, resetPassword } = require('../controllers/authController');
 const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
 const { loginRateLimiter } = require('../middleware/loginRateLimiter');
+
+const resilientLogoutAuth = (req, res, next) => {
+  authenticateToken(req, res, () => {
+    next();
+  });
+};
 
 router.post('/register', [
   authenticateToken, 
@@ -46,7 +52,8 @@ router.post('/login', [
   login
 ]);
 
-router.post('/logout', authenticateToken, logout);
+router.post('/logout', resilientLogoutAuth, logout);
+router.get('/session', authenticateToken, getSession);
 
 router.post('/forgot-password', [
   body('email').trim().notEmpty().withMessage('Email or username is required'),

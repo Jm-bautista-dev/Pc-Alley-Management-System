@@ -601,6 +601,31 @@ const migrateSchema = async () => {
     } catch (bErr) {
       console.warn('DATABASE: Bundles tables migration warning:', bErr.message);
     }
+
+    try {
+      await sequelize.query(`
+        CREATE TABLE IF NOT EXISTS \`user_sessions\` (
+          \`id\` VARCHAR(64) PRIMARY KEY,
+          \`user_id\` INT NOT NULL,
+          \`token_hash\` VARCHAR(64) NOT NULL,
+          \`ip_address\` VARCHAR(45) NULL,
+          \`user_agent\` VARCHAR(500) NULL,
+          \`is_active\` TINYINT(1) NOT NULL DEFAULT 1,
+          \`expires_at\` DATETIME NOT NULL,
+          \`last_activity_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          \`createdAt\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          \`updatedAt\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX \`idx_user_sessions_user\` (\`user_id\`),
+          INDEX \`idx_user_sessions_token_hash\` (\`token_hash\`),
+          INDEX \`idx_user_sessions_active\` (\`is_active\`),
+          INDEX \`idx_user_sessions_expires\` (\`expires_at\`),
+          FOREIGN KEY (\`user_id\`) REFERENCES \`users\` (\`id\`) ON DELETE CASCADE ON UPDATE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+      console.log('DATABASE: Verified user_sessions table.');
+    } catch (sErr) {
+      console.warn('DATABASE: user_sessions table migration warning:', sErr.message);
+    }
   } catch (error) {
     console.warn(`DATABASE: Schema migration skipped or failed: ${error.message}`);
   }

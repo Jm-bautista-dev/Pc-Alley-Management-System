@@ -5,7 +5,7 @@ import Link from "next/link";
 import { User, Lock, Eye, EyeOff, ShieldAlert, ArrowRight, Loader2, Sun, Moon } from "lucide-react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, getApiErrorMessage } from "@/lib/api";
 import { LogoIcon } from "@/components/Logo";
 import { useTheme } from "@/context/ThemeContext";
 import { showSuccess, showError, showInfo, showWarning, showConfirm, showModal } from "@/context/ModalContext";
@@ -45,22 +45,66 @@ export default function LoginPage() {
   }, [lockoutTimer]);
 
   useEffect(() => {
-    // If user is already logged in, redirect them away from the login page
-    const storedToken = localStorage.getItem("token");
-    const storedUser  = localStorage.getItem("user");
-    if (storedToken && storedUser) {
-      try {
-        const parsed = JSON.parse(storedUser);
-        if (parsed.role === "employee" || parsed.role === "staff") {
-          router.replace("/sell/all");
-        } else {
-          router.replace("/dashboard");
-        }
-      } catch (e) {
-        localStorage.clear();
+    // 1. Check if a session notification is queued from an expired session redirect
+    try {
+      const authNotice = sessionStorage.getItem("auth_notice");
+      if (authNotice) {
+        sessionStorage.removeItem("auth_notice");
+        showWarning(authNotice);
       }
-    }
-  }, []);
+    } catch (e) {}
+
+    // 2. Server-side session validation to prevent reusing stale or revoked tokens on localhost
+    const verifyExistingSession = async () => {
+      const storedToken = localStorage.getItem("token");
+      if (!storedToken) return;
+
+      try {
+        const res = await fetch(apiUrl("/api/auth/session"), {
+          method: "GET",
+          credentials: "include",
+          headers: {
+            "Authorization": `Bearer ${storedToken}`
+          }
+        });
+
+        if (res.ok) {
+          const sessionData = await res.json();
+          if (sessionData && sessionData.valid) {
+            if (sessionData.user) {
+              localStorage.setItem("user", JSON.stringify(sessionData.user));
+            }
+
+            // Check if user was redirected from a specific page
+            const params = new URLSearchParams(window.location.search);
+            const redirectParam = params.get("redirect");
+            if (redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//")) {
+              router.replace(redirectParam);
+              return;
+            }
+
+            const userRole = sessionData.user?.role;
+            if (userRole === "employee" || userRole === "staff") {
+              router.replace("/sales");
+            } else {
+              router.replace("/dashboard");
+            }
+            return;
+          }
+        }
+      } catch (checkErr) {
+        console.warn("[AUTH] Session verification offline/failed:", checkErr.message);
+      }
+
+      // If token is invalid or server rejected session, purge stale data so user sees clean login
+      try {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+      } catch (e) {}
+    };
+
+    verifyExistingSession();
+  }, [router]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.id]: e.target.value });
@@ -81,8 +125,13 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      // Clear old authentication state before establishing new session
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+
       const res = await fetch(apiUrl("/api/auth/login"), {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           username: formData.username.trim().toLowerCase(),
@@ -104,12 +153,17 @@ export default function LoginPage() {
         };
       }
 
-      if (res.ok) {
+      if (res.ok && data.token) {
         localStorage.setItem("token", data.token);
         localStorage.setItem("user", JSON.stringify(data.user));
         showSuccess("Security Clearance Verified.");
         
-        if (data.user.role === "employee" || data.user.role === "staff") {
+        // Check if destination was preserved
+        const params = new URLSearchParams(window.location.search);
+        const redirectParam = params.get("redirect");
+        if (redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//")) {
+          router.push(redirectParam);
+        } else if (data.user?.role === "employee" || data.user?.role === "staff") {
           router.push("/sales");
         } else {
           router.push("/dashboard");
@@ -126,11 +180,13 @@ export default function LoginPage() {
         if (data.attemptsRemaining !== undefined) {
           setAttemptsWarning(`Security Notice: ${data.attemptsRemaining} attempt(s) remaining before temporary lockout.`);
         }
-        showError(data.message || "Invalid Security Credentials");
+        const friendlyMsg = getApiErrorMessage(data.message, "Invalid Security Credentials");
+        showError(friendlyMsg);
       }
     } catch (err) {
       console.error(err);
-      showError("Uplink failed. Network connection error.");
+      const friendlyMsg = getApiErrorMessage(err, "Uplink failed. Network connection error.");
+      showError(friendlyMsg);
     } finally {
       setLoading(false);
     }

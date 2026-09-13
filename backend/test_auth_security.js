@@ -1,5 +1,5 @@
 
-const API_BASE = 'http://127.0.0.1:5001/api';
+const API_BASE = process.env.API_BASE || 'http://127.0.0.1:5000/api';
 
 async function runTests() {
   console.log('--- Starting BUG-06 & SEC-02 Test Suite: Auth Security & Rate Limiting ---');

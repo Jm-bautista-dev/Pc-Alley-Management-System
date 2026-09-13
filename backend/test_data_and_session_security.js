@@ -1,4 +1,4 @@
-const API_BASE = 'http://127.0.0.1:5001/api';
+const API_BASE = process.env.API_BASE || 'http://127.0.0.1:5000/api';
 
 async function runTests() {
   console.log('--- Starting DATA-01 & SEC-03 Test Suite: Production Data Hygiene & Session Security ---');

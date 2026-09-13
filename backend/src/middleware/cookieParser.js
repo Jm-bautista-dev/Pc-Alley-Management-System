@@ -1,6 +1,6 @@
 /**
  * Lightweight cookie parser middleware
- * Parses `Cookie` header into `req.cookies` object
+ * Parses `Cookie` header into `req.cookies` object and provides cookie setters
  */
 function cookieParser(req, res, next) {
   req.cookies = req.cookies || {};
@@ -16,7 +16,7 @@ function cookieParser(req, res, next) {
     }
   }
 
-  // Ensure helper for setting HttpOnly cookies if not present
+  // Ensure helper for setting HttpOnly cookies
   if (!res.cookie) {
     res.cookie = function(name, value, options = {}) {
       const parts = [`${name}=${encodeURIComponent(value)}`];
@@ -26,11 +26,20 @@ function cookieParser(req, res, next) {
       if (options.secure) parts.push('Secure');
       if (options.sameSite) parts.push(`SameSite=${options.sameSite}`);
       parts.push(`Path=${options.path || '/'}`);
-      res.setHeader('Set-Cookie', parts.join('; '));
+
+      const cookieStr = parts.join('; ');
+      const existing = res.getHeader('Set-Cookie');
+      if (!existing) {
+        res.setHeader('Set-Cookie', cookieStr);
+      } else if (Array.isArray(existing)) {
+        res.setHeader('Set-Cookie', [...existing, cookieStr]);
+      } else {
+        res.setHeader('Set-Cookie', [existing, cookieStr]);
+      }
     };
   }
 
-  // Ensure helper for clearing cookie if not present
+  // Ensure helper for clearing cookie
   if (!res.clearCookie) {
     res.clearCookie = function(name, options = {}) {
       const parts = [`${name}=`, 'Max-Age=0', 'Expires=Thu, 01 Jan 1970 00:00:00 GMT'];
@@ -38,7 +47,16 @@ function cookieParser(req, res, next) {
       if (options.secure) parts.push('Secure');
       if (options.sameSite) parts.push(`SameSite=${options.sameSite}`);
       parts.push(`Path=${options.path || '/'}`);
-      res.setHeader('Set-Cookie', parts.join('; '));
+
+      const cookieStr = parts.join('; ');
+      const existing = res.getHeader('Set-Cookie');
+      if (!existing) {
+        res.setHeader('Set-Cookie', cookieStr);
+      } else if (Array.isArray(existing)) {
+        res.setHeader('Set-Cookie', [...existing, cookieStr]);
+      } else {
+        res.setHeader('Set-Cookie', [existing, cookieStr]);
+      }
     };
   }
 

@@ -78,6 +78,36 @@ app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser);
 
+// ── CSRF Protection for cookie-authenticated state-changing operations ──
+app.use((req, res, next) => {
+  const isMutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method.toUpperCase());
+  const isApiRoute = req.path.startsWith('/api/');
+  const isPublicAuthRoute = [
+    '/api/auth/login',
+    '/api/auth/forgot-password',
+    '/api/auth/verify-reset-token',
+    '/api/auth/reset-password'
+  ].includes(req.path);
+
+  // Apply CSRF check if request relies on cookies without an explicit Authorization header
+  if (isMutation && isApiRoute && !isPublicAuthRoute) {
+    const hasAuthCookie = Boolean(req.cookies?.token || req.cookies?.access_token);
+    const hasAuthHeader = Boolean(req.headers['authorization']);
+
+    if (hasAuthCookie && !hasAuthHeader) {
+      const origin = req.headers['origin'] || (req.headers['referer'] ? new URL(req.headers['referer']).origin : null);
+      if (origin && !isOriginAllowed(origin)) {
+        console.warn(`[SECURITY] CSRF blocked mutation request from untrusted origin: ${origin}`);
+        return res.status(403).json({
+          message: 'Cross-Site Request Forgery attempt blocked',
+          code: 'CSRF_BLOCKED'
+        });
+      }
+    }
+  }
+  next();
+});
+
 // ── Security: Prevent API responses from being cached ──
 app.use((req, res, next) => {
   if (req.path.startsWith('/api')) {
@@ -176,11 +206,18 @@ app.use('/api', (req, res) => {
 });
 
 app.use((err, req, res, next) => {
-  console.error(`[SERVER] Unhandled error for ${req.method} ${req.originalUrl}:`, err);
-
   if (res.headersSent) {
     return next(err);
   }
+
+  if (err && (err.message?.includes('CORS blocked') || err.message?.includes('Cross-Site Request Forgery'))) {
+    return res.status(403).json({
+      message: 'Cross-Site Request Forgery attempt blocked',
+      code: 'CSRF_BLOCKED'
+    });
+  }
+
+  console.error(`[SERVER] Unhandled error for ${req.method} ${req.originalUrl}:`, err);
 
   res.status(err.status || 500).json({
     message: err.message || 'Internal Server Error',

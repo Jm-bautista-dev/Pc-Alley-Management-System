@@ -4,24 +4,33 @@ import { useRouter } from 'next/navigation';
 /**
  * useAuthGuard
  * 
- * Protects authenticated pages by checking for a valid token and user
- * in localStorage. If missing, immediately redirects to the login page.
+ * Protects authenticated pages by checking for a valid session and user.
+ * If missing, invalid, or expired, safely redirects to the login page
+ * preserving the intended destination.
  * 
  * @returns {{ user: object|null, token: string|null, isChecking: boolean }}
  */
 export function useAuthGuard() {
   const router = useRouter();
-  const [user, setUser]         = useState(null);
-  const [token, setToken]       = useState(null);
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(null);
   const [isChecking, setIsChecking] = useState(true);
 
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
-    const storedUser  = localStorage.getItem('user');
+    const storedUser = localStorage.getItem('user');
+
+    const getRedirectTarget = () => {
+      if (typeof window === 'undefined') return '/';
+      const currentPath = window.location.pathname + window.location.search;
+      if (currentPath && currentPath !== '/' && !currentPath.startsWith('/forgot-password') && !currentPath.startsWith('/register')) {
+        return `/?redirect=${encodeURIComponent(currentPath)}`;
+      }
+      return '/';
+    };
 
     if (!storedToken || !storedUser) {
-      // No session — send to login
-      router.replace('/');
+      router.replace(getRedirectTarget());
       return;
     }
 
@@ -30,9 +39,9 @@ export function useAuthGuard() {
       setToken(storedToken);
       setUser(parsed);
     } catch {
-      // Corrupted data — clear and redirect
-      localStorage.clear();
-      router.replace('/');
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      router.replace(getRedirectTarget());
     } finally {
       setIsChecking(false);
     }

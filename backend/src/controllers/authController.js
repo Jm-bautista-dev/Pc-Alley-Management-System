@@ -1,7 +1,8 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-const { User, Branch, AuditLog } = require('../models');
+const { User, Branch, AuditLog, UserSession } = require('../models');
+const { hashToken, revokeToken } = require('../utils/tokenRevocation');
 const pagination = require('../utils/pagination');
 const sequelize = require('../db');
 const {
@@ -172,9 +173,29 @@ const login = async (req, res) => {
       throw new Error('Server identity check failed. Please contact administrator.');
     }
 
+    // Generate cryptographically secure unique session ID (UUID v4)
+    const sessionId = crypto.randomUUID();
+
+    // Session Rotation: Invalidate previous active sessions for this user to enforce fresh session creation
+    try {
+      const { invalidateAllUserSessionsCache } = require('../middleware/authMiddleware');
+      if (typeof invalidateAllUserSessionsCache === 'function') {
+        invalidateAllUserSessionsCache(user.id);
+      }
+      if (UserSession) {
+        await UserSession.update(
+          { is_active: false },
+          { where: { user_id: user.id, is_active: true } }
+        );
+      }
+    } catch (rotErr) {
+      console.warn('[AUTH] Session rotation notice:', rotErr.message);
+    }
+
     const token = jwt.sign(
       {
         id: user.id,
+        sessionId,
         first_name: user.first_name,
         last_name: user.last_name,
         username: user.username,
@@ -184,6 +205,26 @@ const login = async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
+
+    // Persist new session in database
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const tokenHash = hashToken(token);
+    try {
+      if (UserSession) {
+        await UserSession.create({
+          id: sessionId,
+          user_id: user.id,
+          token_hash: tokenHash,
+          ip_address: req.ip || req.connection?.remoteAddress || null,
+          user_agent: req.headers['user-agent'] ? String(req.headers['user-agent']).slice(0, 500) : null,
+          is_active: true,
+          expires_at: expiresAt,
+          last_activity_at: new Date()
+        });
+      }
+    } catch (sessErr) {
+      console.warn('[AUTH] UserSession creation notice:', sessErr.message);
+    }
 
     // Set secure HttpOnly cookie for XSS protection
     res.cookie('token', token, {
@@ -196,6 +237,7 @@ const login = async (req, res) => {
 
     res.json({
       token,
+      sessionId,
       user: {
         id: user.id,
         first_name: user.first_name || 'Admin',
@@ -218,11 +260,33 @@ const login = async (req, res) => {
 
 const logout = async (req, res) => {
   try {
-    const { revokeToken } = require('../utils/tokenRevocation');
     const token = req.rawToken || req.cookies?.token || (req.headers['authorization'] ? req.headers['authorization'].replace(/^Bearer\s+/i, '').trim() : null);
+    const sessionId = req.session?.id || req.user?.sessionId || null;
 
-    if (token) {
-      revokeToken(token);
+    if (token || sessionId) {
+      revokeToken(token, null, sessionId);
+    }
+
+    try {
+      const { invalidateSessionCache, invalidateAllUserSessionsCache } = require('../middleware/authMiddleware');
+      if (sessionId && typeof invalidateSessionCache === 'function') {
+        invalidateSessionCache(sessionId);
+      }
+      if (req.user?.id && typeof invalidateAllUserSessionsCache === 'function') {
+        invalidateAllUserSessionsCache(req.user.id);
+      }
+    } catch (cErr) {}
+
+    if (sessionId && UserSession) {
+      await UserSession.update(
+        { is_active: false },
+        { where: { id: sessionId } }
+      ).catch(() => {});
+    } else if (req.user?.id && UserSession) {
+      await UserSession.update(
+        { is_active: false },
+        { where: { user_id: req.user.id } }
+      ).catch(() => {});
     }
 
     res.clearCookie('token', {
@@ -242,6 +306,28 @@ const logout = async (req, res) => {
     }
 
     res.json({ message: 'Logged out successfully. Session invalidated.' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const getSession = async (req, res) => {
+  try {
+    res.json({
+      valid: true,
+      user: {
+        id: req.user.id,
+        first_name: req.user.first_name,
+        last_name: req.user.last_name,
+        username: req.user.username,
+        role: req.user.role,
+        branch_id: req.user.branch_id
+      },
+      session: {
+        id: req.session?.id || req.user?.sessionId || null,
+        expiresAt: req.session?.expires_at || null
+      }
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -474,6 +560,7 @@ module.exports = {
   register,
   login,
   logout,
+  getSession,
   getUsers,
   updateProfile,
   changePassword,

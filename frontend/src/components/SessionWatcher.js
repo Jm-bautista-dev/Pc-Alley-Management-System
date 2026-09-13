@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Clock, ShieldAlert, LogOut, RefreshCw } from "lucide-react";
-import { logoutUser } from "@/lib/api";
+import { logoutUser, apiUrl } from "@/lib/api";
 
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 const WARNING_WINDOW_MS = 2 * 60 * 1000;      // 2 minutes before timeout
@@ -33,9 +33,18 @@ export default function SessionWatcher() {
     logoutUser();
   }, []);
 
-  const handleStaySignedIn = () => {
+  const handleStaySignedIn = async () => {
     resetActivity();
     setShowWarning(false);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      if (token) {
+        await fetch(apiUrl("/api/auth/session"), {
+          headers: { Authorization: `Bearer ${token}` },
+          credentials: "include"
+        }).catch(() => {});
+      }
+    } catch (e) {}
   };
 
   useEffect(() => {
