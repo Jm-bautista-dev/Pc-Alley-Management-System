@@ -30,6 +30,9 @@ const Service = require('./Service');
 const ServiceJob = require('./ServiceJob');
 const BenchmarkRun = require('./BenchmarkRun');
 const BenchmarkResult = require('./BenchmarkResult');
+const Bundle = require('./Bundle');
+const BundleItem = require('./BundleItem');
+const BundleBranch = require('./BundleBranch');
 
 // ── Existing Associations ──
 Branch.hasMany(User, { foreignKey: 'branch_id' });
@@ -193,6 +196,18 @@ BenchmarkResult.belongsTo(BenchmarkRun, { foreignKey: 'benchmark_run_id' });
 BenchmarkRun.belongsTo(Branch, { foreignKey: 'branch_id', as: 'branch' });
 BenchmarkRun.belongsTo(User, { foreignKey: 'created_by', as: 'Creator' });
 
+// Bundle associations
+Bundle.hasMany(BundleItem, { foreignKey: 'bundle_id', as: 'items', onDelete: 'CASCADE' });
+BundleItem.belongsTo(Bundle, { foreignKey: 'bundle_id' });
+BundleItem.belongsTo(Product, { foreignKey: 'product_id', as: 'Product' });
+Product.hasMany(BundleItem, { foreignKey: 'product_id' });
+
+Bundle.belongsToMany(Branch, { through: BundleBranch, foreignKey: 'bundle_id', otherKey: 'branch_id', as: 'branches' });
+Branch.belongsToMany(Bundle, { through: BundleBranch, foreignKey: 'branch_id', otherKey: 'bundle_id', as: 'bundles' });
+Bundle.hasMany(BundleBranch, { foreignKey: 'bundle_id', as: 'bundleBranches', onDelete: 'CASCADE' });
+BundleBranch.belongsTo(Bundle, { foreignKey: 'bundle_id' });
+BundleBranch.belongsTo(Branch, { foreignKey: 'branch_id', as: 'Branch' });
+
 module.exports = {
   Branch,
   User,
@@ -226,5 +241,8 @@ module.exports = {
   Service,
   ServiceJob,
   BenchmarkRun,
-  BenchmarkResult
+  BenchmarkResult,
+  Bundle,
+  BundleItem,
+  BundleBranch
 };

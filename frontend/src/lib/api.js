@@ -7,6 +7,11 @@ const getBaseUrl = () => {
     if (hostname === "localhost" || hostname === "127.0.0.1") {
       return process.env.NEXT_PUBLIC_API_BASE_URL?.trim()?.replace(/\/$/, "") || "http://localhost:5000";
     }
+    if (process.env.NEXT_PUBLIC_API_BASE_URL) {
+      return process.env.NEXT_PUBLIC_API_BASE_URL.trim().replace(/\/$/, "");
+    }
+    // Fallback for local network devices (tablets/phones on LAN)
+    return `${window.location.protocol}//${hostname}:5000`;
   }
   const rawBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
   return rawBaseUrl ? rawBaseUrl.replace(/\/$/, "") : "https://api.pcalley.shop";
@@ -26,6 +31,10 @@ const API_BASE_URL = getBaseUrl();
 const SOCKET_BASE_URL = getSocketUrl();
 
 const apiUrl = (path) => {
+  if (!path || typeof path !== "string") return "";
+  if (path.startsWith("http://") || path.startsWith("https://") || path.startsWith("data:") || path.startsWith("blob:")) {
+    return path;
+  }
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   const base = getBaseUrl();
   return `${base}${normalizedPath}`;

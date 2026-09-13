@@ -6,9 +6,11 @@ const sequelize = require('./db');
 require('./models');
 const migrateUsers = require('./db/migrateUsers');
 const migrateSchema = require('./db/migrateSchema');
+const syncExistingImages = require('./db/syncExistingImages');
 const backfillSkus = require('./db/backfillSkus');
 const cleanProductionData = require('./db/cleanProductionData');
 const cookieParser = require('./middleware/cookieParser');
+const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -76,16 +78,64 @@ app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser);
 
-// ── Security: Prevent all API responses from being cached ──
+// ── Security: Prevent API responses from being cached ──
 app.use((req, res, next) => {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  res.setHeader('Surrogate-Control', 'no-store');
+  if (req.path.startsWith('/api')) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Surrogate-Control', 'no-store');
+  }
   next();
 });
 
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+const UPLOADS_PATH = path.join(__dirname, '../uploads');
+const PRODUCTS_UPLOADS_PATH = path.join(UPLOADS_PATH, 'products');
+
+// Smart static handler for product images with automatic variant fallback
+app.get('/uploads/products/:filename', (req, res, next) => {
+  const filename = req.params.filename;
+  const requestedFile = path.join(PRODUCTS_UPLOADS_PATH, filename);
+
+  // Security check: prevent directory traversal
+  const rel = path.relative(PRODUCTS_UPLOADS_PATH, requestedFile);
+  if (rel.startsWith('..') || path.isAbsolute(rel)) {
+    return res.status(403).send('Forbidden');
+  }
+
+  // 1. If exact requested file exists on disk, serve it
+  if (fs.existsSync(requestedFile)) {
+    res.setHeader('Content-Type', 'image/webp');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.sendFile(requestedFile);
+  }
+
+  // 2. If requested file doesn't exist, try finding an existing variant
+  if (filename.endsWith('.webp')) {
+    const match = filename.match(/^(product_\d+_[a-z0-9]+)/i);
+    const baseName = match ? match[1] : filename.replace(/(_original|_medium|_thumbnail)?\.webp$/i, '');
+    const variants = [
+      `${baseName}.webp`,
+      `${baseName}_medium.webp`,
+      `${baseName}_original.webp`,
+      `${baseName}_thumbnail.webp`
+    ];
+
+    for (const variant of variants) {
+      const variantPath = path.join(PRODUCTS_UPLOADS_PATH, variant);
+      if (fs.existsSync(variantPath)) {
+        res.setHeader('Content-Type', 'image/webp');
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        return res.sendFile(variantPath);
+      }
+    }
+  }
+
+  // 3. Not found
+  return res.status(404).json({ error: 'Product image not found' });
+});
+
+app.use('/uploads', express.static(UPLOADS_PATH));
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   if (req.method === 'POST') {
@@ -115,6 +165,7 @@ app.use('/api/stock-transfers', require('./routes/transferRoutes'));
 app.use('/api/analytics', require('./routes/analyticsRoutes'));
 app.use('/api/warranties', require('./routes/warrantyRoutes'));
 app.use('/api/services', require('./routes/serviceRoutes'));
+app.use('/api/bundles', require('./routes/bundleRoutes'));
 
 app.get('/', (req, res) => {
   res.send('PC Alley API is running...');
@@ -195,6 +246,7 @@ server.on('error', (err) => {
     await sequelize.sync({ force: false });
     await migrateUsers();
     await migrateSchema();
+    await syncExistingImages();
     await backfillSkus();
     await cleanProductionData();
     console.log('DATABASE: Schema synced and migrations completed.');

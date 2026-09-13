@@ -47,6 +47,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiUrl } from "@/lib/api";
+import { resolveProductImageUrl, handleProductImageError } from "@/lib/imageHelper";
 import { showSuccess, showError, showConfirm } from "@/context/ModalContext";
 
 // ─────────────────────────────────────────────────────────────────
@@ -429,11 +430,19 @@ export default function SalesPage() {
   const [settingsOpen, setSettingsOpen] = useState(false); // gear options modal
 
   // ── TECHNICAL SERVICES STATES ──
-  const [posMode, setPosMode] = useState("products"); // "products" | "services"
+  const [posMode, setPosMode] = useState("products"); // "products" | "services" | "bundles"
   const [services, setServices] = useState([]);
   const [serviceCategories, setServiceCategories] = useState(["All"]);
   const [activeServiceCategory, setActiveServiceCategory] = useState("All");
   const [servicesLoading, setServicesLoading] = useState(false);
+
+  // ── BUNDLES STATES ──
+  const [bundles, setBundles] = useState([]);
+  const [bundlesLoading, setBundlesLoading] = useState(false);
+  const [selectedBundleForCustomization, setSelectedBundleForCustomization] = useState(null);
+  const [bundleCustomItems, setBundleCustomItems] = useState([]);
+  const [bundleProductSearch, setBundleProductSearch] = useState("");
+  const [bundleProductPickerOpen, setBundleProductPickerOpen] = useState(false);
 
   // Variable / Custom Service Price Input Modal
   const [selectedServiceDetail, setSelectedServiceDetail] = useState(null);
@@ -591,8 +600,10 @@ export default function SalesPage() {
   useEffect(() => {
     if (selectedBranchId) {
       fetchInventory(selectedBranchId);
+      fetchBundles(selectedBranchId);
     } else if (user && user.role !== "super_admin") {
       fetchInventory();
+      fetchBundles();
     }
   }, [selectedBranchId, user]);
 
@@ -705,9 +716,139 @@ export default function SalesPage() {
     }
   };
 
+  // ── BUNDLES FETCH & CART HANDLERS ──
+  const fetchBundles = async (branchId) => {
+    setBundlesLoading(true);
+    const token = localStorage.getItem("token");
+    const targetBranch = branchId || selectedBranchId || user?.branch_id;
+    let url = "/api/bundles?status=active";
+    if (targetBranch) {
+      url += `&branch_id=${targetBranch}`;
+    }
+    try {
+      const res = await fetch(apiUrl(url), {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setBundles(data);
+      }
+    } catch (e) {
+      console.error("Failed to load bundles:", e);
+    } finally {
+      setBundlesLoading(false);
+    }
+  };
+
+  const handleOpenBundleCustomizer = (bundle) => {
+    setSelectedBundleForCustomization(bundle);
+    setBundleCustomItems(
+      (bundle.items || []).map(item => ({
+        id: item.Product?.id || item.product_id,
+        name: item.Product?.name || `Product #${item.product_id}`,
+        sku: item.Product?.sku || "",
+        price: parseFloat(item.Product?.price || 0),
+        quantity: item.quantity || 1
+      }))
+    );
+    setBundleProductSearch("");
+    setBundleProductPickerOpen(false);
+  };
+
+  const handleUpdateBundleItemQty = (productId, delta) => {
+    setBundleCustomItems(prev =>
+      prev.map(i => {
+        if (i.id === productId) {
+          const newQty = i.quantity + delta;
+          return newQty > 0 ? { ...i, quantity: newQty } : null;
+        }
+        return i;
+      }).filter(Boolean)
+    );
+  };
+
+  const handleRemoveBundleItem = (productId) => {
+    setBundleCustomItems(prev => prev.filter(i => i.id !== productId));
+  };
+
+  const handleAddProductToBundleCustomization = (invItem) => {
+    const prod = invItem.Product || invItem;
+    const existing = bundleCustomItems.find(i => i.id === prod.id);
+    if (existing) {
+      setBundleCustomItems(prev =>
+        prev.map(i => i.id === prod.id ? { ...i, quantity: i.quantity + 1 } : i)
+      );
+    } else {
+      setBundleCustomItems(prev => [
+        ...prev,
+        {
+          id: prod.id,
+          name: prod.name,
+          sku: prod.sku || "",
+          price: parseFloat(prod.price || 0),
+          quantity: 1
+        }
+      ]);
+    }
+  };
+
+  const handleConfirmAddBundleToOrder = () => {
+    if (!selectedBundleForCustomization || bundleCustomItems.length === 0) {
+      showError("Bundle must contain at least one product.");
+      return;
+    }
+
+    const updatedCart = [...cart];
+
+    bundleCustomItems.forEach(bundleItem => {
+      const invItem = inventory.find(i => i.product_id === bundleItem.id || i.Product?.id === bundleItem.id);
+      const stock = invItem ? (invItem.quantity ?? invItem.stock ?? 9999) : 9999;
+
+      const existingIndex = updatedCart.findIndex(c => c.id === bundleItem.id && !c.isService);
+
+      if (existingIndex > -1) {
+        const currentQty = updatedCart[existingIndex].quantity;
+        const newQty = currentQty + bundleItem.quantity;
+        updatedCart[existingIndex] = {
+          ...updatedCart[existingIndex],
+          quantity: newQty,
+          isBundleItem: true,
+          bundleName: selectedBundleForCustomization.name,
+          selectionSummary: `Bundle: ${selectedBundleForCustomization.name} (${bundleItem.name})`
+        };
+      } else {
+        const cartItem = {
+          id: bundleItem.id,
+          name: bundleItem.name,
+          price: bundleItem.price,
+          unitPrice: bundleItem.price,
+          sku: bundleItem.sku,
+          quantity: bundleItem.quantity,
+          maxStock: stock,
+          isBundleItem: true,
+          bundleName: selectedBundleForCustomization.name,
+          item_type: "product",
+          isService: false,
+          selectedVariant: "Standard",
+          selectedAddons: [],
+          notes: "",
+          selectionSummary: `Bundle: ${selectedBundleForCustomization.name}`
+        };
+        updatedCart.push(cartItem);
+      }
+    });
+
+    setCart(updatedCart);
+    setToastMessage(`${t[language].addedToOrder}: Bundle ${selectedBundleForCustomization.name}`);
+    clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = setTimeout(() => setToastMessage(""), 2000);
+    setSelectedBundleForCustomization(null);
+  };
+
   useEffect(() => {
     fetchServices();
     fetchServiceCategories();
+    fetchBundles();
   }, []);
 
   // Customer search with debounce
@@ -1326,6 +1467,17 @@ export default function SalesPage() {
             >
               <Wrench size={13} /> Services
             </button>
+            <button
+              type="button"
+              onClick={() => { setPosMode("bundles"); }}
+              className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-wider uppercase transition-all flex items-center gap-1.5 ${
+                posMode === "bundles"
+                  ? "bg-brand-neonpurple text-white shadow-sm"
+                  : "text-brand-muted hover:text-main"
+              }`}
+            >
+              <Layers size={13} /> Bundles
+            </button>
           </div>
 
           <div className="flex bg-brand-bgbase p-1 rounded-full border border-brand-border">
@@ -1455,7 +1607,14 @@ export default function SalesPage() {
           CATEGORY TABS (STICKY BAR BELOW HEADER)
           ───────────────────────────────────────────────────────────────── */}
       <nav className="shrink-0 bg-brand-surface border-b border-brand-border shadow-sm dark:shadow-none relative z-20 flex gap-2 overflow-x-auto py-3 px-6 no-scrollbar">
-        {posMode === "products" ? (
+        {posMode === "bundles" ? (
+          <div className="flex items-center gap-2">
+            <div className="h-11 px-6 rounded-full border text-[11px] font-black uppercase tracking-wider bg-brand-neonpurple/15 text-brand-neonpurple border-brand-neonpurple/30 flex items-center gap-2">
+              <Layers size={14} />
+              <span>Branch Bundles Catalog ({bundles.length})</span>
+            </div>
+          </div>
+        ) : posMode === "products" ? (
           categories.map(cat => {
             const Icon = getCategoryIcon(cat);
             const isSelected = activeCategory === cat;
@@ -1522,10 +1681,126 @@ export default function SalesPage() {
       )}
 
       {/* ─────────────────────────────────────────────────────────────────
-          CATALOG GRID AREA (PRODUCTS OR TECHNICAL SERVICES)
+          CATALOG GRID AREA (BUNDLES, PRODUCTS, OR TECHNICAL SERVICES)
           ───────────────────────────────────────────────────────────────── */}
       <main className="flex-1 overflow-y-auto px-6 py-8 custom-scrollbar bg-brand-bgbase">
-        {posMode === "services" ? (
+        {posMode === "bundles" ? (
+          /* BUNDLES CATALOG FOR POS */
+          bundlesLoading ? (
+            <div className="w-full py-40 flex flex-col items-center justify-center opacity-40">
+              <Loader2 className="animate-spin mb-4 text-brand-neonpurple" size={40} />
+              <p className="text-[10px] font-black uppercase tracking-[4px] text-brand-muted">Loading Branch Bundles…</p>
+            </div>
+          ) : bundles.filter(b => {
+              if (!productSearch) return true;
+              const q = productSearch.toLowerCase();
+              return b.name.toLowerCase().includes(q) ||
+                (b.description && b.description.toLowerCase().includes(q)) ||
+                (b.items && b.items.some(i => i.Product?.name?.toLowerCase().includes(q)));
+            }).length === 0 ? (
+            <div className="w-full py-32 flex flex-col items-center justify-center opacity-40 text-center">
+              <Layers size={64} className="text-brand-neonpurple mb-4 stroke-[1px]" />
+              <h4 className="text-[12px] font-black uppercase tracking-[3px] text-brand-muted">No matching bundles</h4>
+              <p className="text-xs text-brand-muted mt-1">No bundle packages currently available for this branch</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-24">
+              {bundles
+                .filter(b => {
+                  if (!productSearch) return true;
+                  const q = productSearch.toLowerCase();
+                  return b.name.toLowerCase().includes(q) ||
+                    (b.description && b.description.toLowerCase().includes(q)) ||
+                    (b.items && b.items.some(i => i.Product?.name?.toLowerCase().includes(q)));
+                })
+                .map((bundle) => {
+                  const totalItems = (bundle.items || []).reduce((sum, i) => sum + (i.quantity || 1), 0);
+                  const retailSum = (bundle.items || []).reduce((sum, i) => {
+                    const p = parseFloat(i.Product?.price || 0);
+                    return sum + (p * (i.quantity || 1));
+                  }, 0);
+                  const bundlePrice = parseFloat(bundle.price || 0);
+                  const savings = retailSum > bundlePrice ? retailSum - bundlePrice : 0;
+
+                  return (
+                    <motion.div
+                      key={bundle.id}
+                      onClick={() => handleOpenBundleCustomizer(bundle)}
+                      className="bg-brand-surface rounded-3xl border border-brand-border hover:border-brand-neonpurple/40 p-5 flex flex-col justify-between cursor-pointer shadow-sm hover:shadow-md transition-all relative overflow-hidden group"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-3">
+                          <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-brand-neonpurple/10 text-brand-neonpurple border border-brand-neonpurple/20 flex items-center gap-1">
+                            <ShoppingBag size={11} /> {totalItems} {totalItems === 1 ? "Item" : "Items"}
+                          </span>
+                          {savings > 0 ? (
+                            <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                              Save ₱{savings.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-brand-panel text-brand-muted border border-brand-border">
+                              PACKAGE
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="w-full h-28 bg-brand-neonpurple/5 rounded-2xl border border-brand-neonpurple/10 mb-4 flex flex-col items-center justify-center text-brand-neonpurple group-hover:scale-102 transition-transform">
+                          <Layers size={36} className="stroke-[1.5px] mb-1" />
+                          <span className="text-[8px] font-black uppercase tracking-widest text-brand-neonpurple/70">
+                            Customizable Package
+                          </span>
+                        </div>
+
+                        <h3 className="text-sm font-rajdhani font-black text-main uppercase tracking-wide leading-tight line-clamp-1 group-hover:text-brand-neonpurple transition-colors">
+                          {bundle.name}
+                        </h3>
+
+                        <p className="text-[11px] text-brand-muted leading-relaxed line-clamp-2 my-2">
+                          {bundle.description || "Curated promotional bundle with customizable components for this branch."}
+                        </p>
+
+                        <div className="bg-brand-bgbase rounded-xl p-2.5 border border-brand-border/60 my-2 space-y-1">
+                          {(bundle.items || []).slice(0, 2).map((it, itIdx) => (
+                            <div key={itIdx} className="flex justify-between items-center text-[11px]">
+                              <span className="text-main font-bold truncate pr-2">{it.Product?.name || `Product #${it.product_id}`}</span>
+                              <span className="font-mono text-brand-neonpurple font-black">x{it.quantity || 1}</span>
+                            </div>
+                          ))}
+                          {(bundle.items || []).length > 2 && (
+                            <p className="text-[9px] font-bold text-brand-neonblue pt-0.5">
+                              +{(bundle.items || []).length - 2} more items...
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="border-t border-brand-border/60 pt-3 mt-2 flex items-center justify-between gap-2">
+                        <div>
+                          <span className="text-[9px] font-bold uppercase tracking-wider text-brand-muted block">
+                            Package Price
+                          </span>
+                          <span className="text-base font-rajdhani font-black text-brand-neonpurple">
+                            ₱{bundlePrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenBundleCustomizer(bundle);
+                          }}
+                          className="px-3.5 py-1.5 bg-brand-neonpurple hover:bg-brand-neonpurple/80 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all"
+                        >
+                          Customize &amp; Add
+                        </button>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+            </div>
+          )
+        ) : posMode === "services" ? (
           /* TECHNICAL SERVICES CATALOG */
           servicesLoading ? (
             <div className="w-full py-40 flex flex-col items-center justify-center opacity-40">
@@ -1644,7 +1919,7 @@ export default function SalesPage() {
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 pb-24">
               {filteredInventory.map((item) => {
-                const hasImage = item.Product?.product_image || item.Product?.image_url;
+                const cardImageUrl = resolveProductImageUrl(item.Product, "medium");
                 const formattedPrice = parseFloat(item.Product.price).toLocaleString();
                 const isLowStock = item.quantity <= 5;
                 const isOutOfStock = item.quantity <= 0;
@@ -1686,12 +1961,13 @@ export default function SalesPage() {
                         <span className="text-[7px] uppercase tracking-widest font-black mt-1">NO IMAGE</span>
                       </div>
                       
-                      {hasImage && (
+                      {cardImageUrl && (
                         <img
-                          src={apiUrl(item.Product.product_image || item.Product.image_url)}
+                          src={cardImageUrl}
                           alt={item.Product.name}
                           className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 z-10"
                           loading="lazy"
+                          onError={handleProductImageError}
                         />
                       )}
 
@@ -1839,14 +2115,17 @@ export default function SalesPage() {
               {/* Left Column: Image Area */}
               <div className="md:w-[40%] bg-brand-panel p-6 flex flex-col items-center justify-center border-r border-brand-border">
                 <div className="w-full max-w-[240px] aspect-square rounded-2xl bg-brand-surface border border-brand-border relative overflow-hidden flex items-center justify-center shadow-sm dark:shadow-none">
-                  {selectedProductDetail.Product?.product_image || selectedProductDetail.Product?.image_url ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center opacity-25 text-brand-muted">
+                    <Package size={64} className="stroke-[1px]" />
+                    <span className="text-[9px] uppercase tracking-widest font-black mt-2">NO IMAGE</span>
+                  </div>
+                  {resolveProductImageUrl(selectedProductDetail.Product, "original") && (
                     <img
-                      src={apiUrl(selectedProductDetail.Product?.product_image || selectedProductDetail.Product?.image_url)}
+                      src={resolveProductImageUrl(selectedProductDetail.Product, "original")}
                       alt={selectedProductDetail.Product.name}
-                      className="absolute inset-0 w-full h-full object-cover"
+                      className="absolute inset-0 w-full h-full object-cover z-10"
+                      onError={handleProductImageError}
                     />
-                  ) : (
-                    <Package size={64} className="text-brand-muted stroke-[1px]" />
                   )}
                 </div>
                 <h4 className="text-xs font-mono text-brand-muted mt-4 tracking-widest">{selectedProductDetail.Product.sku}</h4>
@@ -2213,6 +2492,12 @@ export default function SalesPage() {
                                 }`}>
                                   {item.isService ? 'Technical Service' : 'Physical Product'}
                                 </span>
+                                {item.isBundleItem && (
+                                  <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider bg-brand-neonpurple/20 text-brand-neonpurple border border-brand-neonpurple/40 flex items-center gap-1">
+                                    <Layers size={10} />
+                                    <span>{item.bundleName || "Bundle Item"}</span>
+                                  </span>
+                                )}
                                 {item.sku && <p className="text-[9px] font-mono text-brand-muted tracking-wider">{item.sku}</p>}
                               </div>
 
@@ -2790,6 +3075,199 @@ export default function SalesPage() {
                 >
                   Apply &amp; Close
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* BUNDLE CUSTOMIZATION MODAL FOR STAFF IN POS */}
+      <AnimatePresence>
+        {selectedBundleForCustomization && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 15 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 15 }}
+              className="bg-brand-surface rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden border border-brand-border shadow-2xl relative"
+            >
+              {/* Header */}
+              <div className="p-6 border-b border-brand-border flex justify-between items-center bg-brand-surface shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-brand-neonpurple/10 border border-brand-neonpurple/20 flex items-center justify-center text-brand-neonpurple">
+                    <Layers size={20} />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-rajdhani font-black text-main uppercase tracking-wide">
+                      Customize Bundle: {selectedBundleForCustomization.name}
+                    </h2>
+                    <p className="text-[10px] text-brand-muted uppercase tracking-widest font-bold">
+                      Modify products and quantities for this transaction
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedBundleForCustomization(null)}
+                  className="p-2 text-brand-muted hover:text-brand-crimson rounded-full hover:bg-brand-crimson/10 transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-6">
+                {/* Bundle Products List */}
+                <div>
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-brand-muted">
+                      Bundle Items ({bundleCustomItems.length})
+                    </span>
+                    <span className="text-[10px] font-mono font-bold text-brand-neonpurple">
+                      Total: ₱{bundleCustomItems.reduce((sum, i) => sum + (i.price * i.quantity), 0).toLocaleString()}
+                    </span>
+                  </div>
+
+                  {bundleCustomItems.length === 0 ? (
+                    <div className="text-center py-8 border border-dashed border-brand-border rounded-2xl bg-brand-bgbase text-brand-muted text-xs">
+                      All products removed. Use the product selector below to add items.
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {bundleCustomItems.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between p-3.5 rounded-2xl bg-brand-bgbase border border-brand-border"
+                        >
+                          <div className="flex-1 min-w-0 pr-3">
+                            <p className="text-xs font-bold text-main truncate capitalize">{item.name}</p>
+                            <p className="text-[10px] text-brand-muted font-mono">
+                              ₱{item.price.toLocaleString()} each • Total:{" "}
+                              <span className="text-main font-bold">₱{(item.price * item.quantity).toLocaleString()}</span>
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-3 shrink-0">
+                            <div className="flex items-center gap-1.5 bg-brand-surface p-1 rounded-xl border border-brand-border">
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateBundleItemQty(item.id, -1)}
+                                className="w-6 h-6 rounded-lg bg-brand-bgbase border border-brand-border flex items-center justify-center text-brand-muted hover:text-main text-xs font-black"
+                              >
+                                -
+                              </button>
+                              <span className="w-7 text-center text-xs font-mono font-black text-main">
+                                {item.quantity}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateBundleItemQty(item.id, 1)}
+                                className="w-6 h-6 rounded-lg bg-brand-bgbase border border-brand-border flex items-center justify-center text-brand-muted hover:text-main text-xs font-black"
+                              >
+                                +
+                              </button>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveBundleItem(item.id)}
+                              className="p-1.5 text-brand-muted hover:text-brand-crimson hover:bg-brand-crimson/10 rounded-lg transition-colors"
+                              title="Remove product from bundle"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Add More Products to Bundle */}
+                <div className="pt-4 border-t border-brand-border/60">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-brand-muted block mb-2">
+                    Add Products to Bundle (Search by Name or Price)
+                  </span>
+                  <div className="relative mb-3">
+                    <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-brand-muted" />
+                    <input
+                      type="text"
+                      value={bundleProductSearch}
+                      onFocus={() => setBundleProductPickerOpen(true)}
+                      onChange={e => {
+                        setBundleProductSearch(e.target.value);
+                        setBundleProductPickerOpen(true);
+                      }}
+                      placeholder="Search branch inventory to add to bundle..."
+                      className="w-full bg-brand-bgbase border border-brand-border rounded-xl py-2.5 pl-10 pr-4 text-xs font-bold text-main placeholder:text-brand-muted/50 focus:outline-none focus:border-brand-neonpurple"
+                    />
+                  </div>
+
+                  {bundleProductPickerOpen && (
+                    <div className="border border-brand-border rounded-2xl bg-brand-bgbase p-2.5 max-h-48 overflow-y-auto custom-scrollbar space-y-1.5">
+                      {inventory
+                        .filter(inv => {
+                          const prod = inv.Product || inv;
+                          if (!bundleProductSearch) return true;
+                          const q = bundleProductSearch.toLowerCase();
+                          const matchName = (prod.name || "").toLowerCase().includes(q);
+                          const matchPrice = String(prod.price || "").includes(q);
+                          return matchName || matchPrice;
+                        })
+                        .slice(0, 15)
+                        .map(inv => {
+                          const prod = inv.Product || inv;
+                          return (
+                            <div
+                              key={prod.id}
+                              className="flex items-center justify-between p-2 rounded-xl bg-brand-surface border border-brand-border hover:border-brand-neonpurple/30 transition-colors"
+                            >
+                              <div className="truncate pr-2 text-xs">
+                                <span className="font-bold text-main block truncate">{prod.name}</span>
+                                <span className="text-[9px] text-brand-muted font-mono">₱{parseFloat(prod.price || 0).toLocaleString()}</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleAddProductToBundleCustomization(inv)}
+                                className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-brand-neonpurple text-white hover:bg-brand-neonpurple/80 shrink-0 flex items-center gap-1"
+                              >
+                                <Plus size={11} /> Add
+                              </button>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="p-5 border-t border-brand-border bg-brand-surface flex justify-between items-center shrink-0">
+                <div>
+                  <span className="text-[10px] text-brand-muted font-black uppercase block">Customized Total</span>
+                  <span className="text-lg font-rajdhani font-black text-brand-neonpurple">
+                    ₱{bundleCustomItems.reduce((sum, i) => sum + (i.price * i.quantity), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedBundleForCustomization(null)}
+                    className="px-5 py-2.5 rounded-full font-bold uppercase tracking-wider text-xs text-brand-muted hover:text-main transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmAddBundleToOrder}
+                    disabled={bundleCustomItems.length === 0}
+                    className="btn-premium h-11 px-7 rounded-full text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-lg"
+                  >
+                    <ShoppingCart size={15} />
+                    <span>Add to Transaction</span>
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>

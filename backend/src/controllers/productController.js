@@ -135,6 +135,7 @@ const createProduct = async (req, res) => {
           status: status || 'active',
           supplier_id: supplier_id || null,
           image_url,
+          product_image: image_url,
           branch_id: targetBranchId ? parseInt(targetBranchId) : null
         });
         break; // success!
@@ -157,10 +158,13 @@ const createProduct = async (req, res) => {
 
     // Automatically initialize inventory for all branches
     const branches = await Branch.findAll();
+    const initialQty = parseInt(initial_stock || 0);
     const inventoryData = branches.map(branch => ({
       product_id: product.id,
       branch_id: branch.id,
-      quantity: (targetBranchId && String(branch.id) === String(targetBranchId)) ? parseInt(initial_stock || 0) : 0
+      stock: (!targetBranchId || String(branch.id) === String(targetBranchId)) ? initialQty : 0,
+      quantity: (!targetBranchId || String(branch.id) === String(targetBranchId)) ? initialQty : 0,
+      enabled: true
     }));
     await Inventory.bulkCreate(inventoryData);
 
@@ -250,21 +254,26 @@ const updateProduct = async (req, res) => {
     // Handle Image upload / replacement / removal
     if (req.file) {
       // Delete old file if it exists
-      if (product.image_url && product.image_url.startsWith('/uploads/products/')) {
-        imageService.deleteProductImageFiles(product.image_url);
+      const oldImage = product.image_url || product.product_image;
+      if (oldImage && oldImage.startsWith('/uploads/products/')) {
+        imageService.deleteProductImageFiles(oldImage);
       }
 
       try {
-        product.image_url = await imageService.processProductImage(req.file.buffer);
+        const newPath = await imageService.processProductImage(req.file.buffer);
+        product.image_url = newPath;
+        product.product_image = newPath;
       } catch (imgError) {
         console.error('[IMAGE PROCESS ERROR]', imgError);
         return res.status(400).json({ error: 'Image processing failed: ' + imgError.message });
       }
     } else if (remove_image === 'true' || remove_image === true) {
-      if (product.image_url && product.image_url.startsWith('/uploads/products/')) {
-        imageService.deleteProductImageFiles(product.image_url);
+      const oldImage = product.image_url || product.product_image;
+      if (oldImage && oldImage.startsWith('/uploads/products/')) {
+        imageService.deleteProductImageFiles(oldImage);
       }
       product.image_url = null;
+      product.product_image = null;
     }
 
     await product.save();

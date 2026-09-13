@@ -19,7 +19,11 @@ function generateFilenamePrefix() {
 }
 
 /**
- * Processes the uploaded image buffer, compresses it, and generates 3 sizes (Original, Medium, Thumbnail).
+ * Processes the uploaded image buffer, compresses it, and generates 4 sizes/files:
+ * - Base image (${prefix}.webp) for standard/default display (800x800, quality 80)
+ * - Original (${prefix}_original.webp) for high-resolution inspection (1200x1200, quality 85)
+ * - Medium (${prefix}_medium.webp) for product cards and modals (600x600, quality 80)
+ * - Thumbnail (${prefix}_thumbnail.webp) for tables and fast previews (150x150, quality 75)
  * All output files will be in WebP format.
  * 
  * @param {Buffer} fileBuffer 
@@ -28,52 +32,65 @@ function generateFilenamePrefix() {
 async function processProductImage(fileBuffer) {
   const prefix = generateFilenamePrefix();
   
+  const baseFilename = `${prefix}.webp`;
   const originalFilename = `${prefix}_original.webp`;
   const mediumFilename = `${prefix}_medium.webp`;
   const thumbnailFilename = `${prefix}_thumbnail.webp`;
 
+  const basePath = path.join(UPLOADS_DIR, baseFilename);
   const originalPath = path.join(UPLOADS_DIR, originalFilename);
   const mediumPath = path.join(UPLOADS_DIR, mediumFilename);
   const thumbnailPath = path.join(UPLOADS_DIR, thumbnailFilename);
 
-  // 1. Process and save Original image (Max width/height 1200px, quality 80)
+  // 1. Process and save Base display image (Max width/height 800px, quality 80)
+  await sharp(fileBuffer)
+    .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
+    .toFormat('webp', { quality: 80 })
+    .toFile(basePath);
+
+  // 2. Process and save Original high-res image (Max width/height 1200px, quality 85)
   await sharp(fileBuffer)
     .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true })
-    .toFormat('webp', { quality: 80 })
+    .toFormat('webp', { quality: 85 })
     .toFile(originalPath);
 
-  // 2. Process and save Medium image (Max width/height 600px, quality 75)
+  // 3. Process and save Medium image (Max width/height 600px, quality 80)
   await sharp(fileBuffer)
     .resize(600, 600, { fit: 'inside', withoutEnlargement: true })
-    .toFormat('webp', { quality: 75 })
+    .toFormat('webp', { quality: 80 })
     .toFile(mediumPath);
 
-  // 3. Process and save Thumbnail image (Max width/height 150px, quality 70)
+  // 4. Process and save Thumbnail image (Max width/height 150px, quality 75)
   await sharp(fileBuffer)
     .resize(150, 150, { fit: 'inside', withoutEnlargement: true })
-    .toFormat('webp', { quality: 70 })
+    .toFormat('webp', { quality: 75 })
     .toFile(thumbnailPath);
 
-  // Return base relative URL path (without suffix) to store in the DB
-  return `/uploads/products/${prefix}.webp`;
+  // Return base relative URL path (e.g., '/uploads/products/product_x_y.webp') to store in the DB
+  return `/uploads/products/${baseFilename}`;
 }
 
 /**
  * Deletes all sizes of a product image file from the disk to prevent orphaned files.
  * 
- * @param {string} baseRelativePath Base relative path (e.g., '/uploads/products/product_x_y.webp')
+ * @param {string} baseRelativePath Base relative path or any variant path (e.g., '/uploads/products/product_x_y.webp')
  */
 function deleteProductImageFiles(baseRelativePath) {
   if (!baseRelativePath) return;
 
-  // Extract prefix name from relative path
-  const basename = path.basename(baseRelativePath, '.webp');
+  // Extract base prefix name from relative path, stripping any variant suffixes
+  let basename = path.basename(baseRelativePath);
+  basename = basename.replace(/(_original|_medium|_thumbnail)?\.webp$/i, '');
   
-  // Resolve paths for all three resolutions
-  const suffixes = ['_original.webp', '_medium.webp', '_thumbnail.webp'];
+  // Resolve paths for base file and all three resolutions
+  const filenames = [
+    `${basename}.webp`,
+    `${basename}_original.webp`,
+    `${basename}_medium.webp`,
+    `${basename}_thumbnail.webp`
+  ];
   
-  suffixes.forEach(suffix => {
-    const filename = `${basename}${suffix}`;
+  filenames.forEach(filename => {
     const fullPath = path.join(UPLOADS_DIR, filename);
 
     // Secure path traversal protection

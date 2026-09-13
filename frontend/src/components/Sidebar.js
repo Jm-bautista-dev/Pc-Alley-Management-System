@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Package, Users, UserPlus, LogOut, LayoutDashboard,
   Settings, ShieldCheck, ChevronDown, Download, Upload, ClipboardList,
-  DollarSign, FileText, CornerDownLeft, Activity, Wrench
+  DollarSign, FileText, CornerDownLeft, Activity, Wrench, Layers
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import SettingsPanel from "./SettingsPanel";
@@ -29,6 +29,7 @@ const Sidebar = () => {
       "Sales":           ["/sell"],
       "Services":        ["/services"],
       "Products":        ["/products", "/reports/stock"],
+      "Bundles":         ["/bundles"],
       "Inventory":       ["/products", "/reports/stock"],
       "Buy Stock":       ["/purchases", "/admin/product-requests", "/products/my-requests"],
       "Procurement":     ["/purchases", "/admin/product-requests", "/products/my-requests"],
@@ -78,6 +79,7 @@ const Sidebar = () => {
           { title: "Brands", path: "/products/brands" },
           { title: "Import Products", path: "/products/import" }
         ] },
+        { title: "Bundles",         icon: Layers,          path: "/bundles",          group: "SALES" },
         { title: "Services",        icon: Wrench,          path: "#services",         group: "SALES", subItems: [
           { title: "Service Catalog", path: "/services" },
           { title: "Work Orders / Jobs", path: "/services/jobs" }
@@ -125,6 +127,7 @@ const Sidebar = () => {
         { title: "Categories", path: "/products/categories" },
         { title: "Brands", path: "/products/brands" }
       ] },
+      { title: "Bundles",         icon: Layers,          path: "/bundles",          group: "SALES" },
       { title: "Services",        icon: Wrench,          path: "#services",         group: "SALES", subItems: [
         { title: "Service Catalog", path: "/services" },
         { title: "Work Orders / Jobs", path: "/services/jobs" }

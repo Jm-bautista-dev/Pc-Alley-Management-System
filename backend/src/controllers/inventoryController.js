@@ -44,7 +44,8 @@ const createProduct = async (req, res) => {
           category_id: category_id || null, 
           price, 
           last_purchase_price: price,
-          image_url
+          image_url,
+          product_image: image_url
         });
         break; // success!
       } catch (err) {
@@ -74,10 +75,12 @@ const createProduct = async (req, res) => {
     
     // Automatically initialize inventory for all branches
     const branches = await Branch.findAll();
+    const initialQty = parseInt(initial_stock || 0);
     const inventoryData = branches.map(branch => ({
       product_id: product.id,
       branch_id: branch.id,
-      stock: (targetBranchId && String(branch.id) === String(targetBranchId)) ? parseInt(initial_stock || 0) : 0,
+      stock: (!targetBranchId || String(branch.id) === String(targetBranchId)) ? initialQty : 0,
+      quantity: (!targetBranchId || String(branch.id) === String(targetBranchId)) ? initialQty : 0,
       enabled: true
     }));
     await Inventory.bulkCreate(inventoryData);
@@ -471,8 +474,9 @@ const deleteProduct = async (req, res) => {
     await StockMovement.destroy({ where: { product_id: id } });
 
     // Delete image files from disk if they exist
-    if (product.image_url && product.image_url.startsWith('/uploads/products/')) {
-      imageService.deleteProductImageFiles(product.image_url);
+    const imgPath = product.image_url || product.product_image;
+    if (imgPath && imgPath.startsWith('/uploads/products/')) {
+      imageService.deleteProductImageFiles(imgPath);
     }
 
     await product.destroy({ force: true }); // Force: true bypasses paranoid and hard-deletes

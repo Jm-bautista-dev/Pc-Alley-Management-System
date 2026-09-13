@@ -6,6 +6,7 @@ import { X, Upload, ImageIcon, Trash2, RefreshCw, Camera } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { showSuccess, showError, showInfo, showWarning, showConfirm, showModal } from "@/context/ModalContext";
 import { apiUrl } from "@/lib/api";
+import { resolveProductImageUrl, handleProductImageError } from "@/lib/imageHelper";
 
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -275,7 +276,8 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
   if (!isOpen) return null;
 
   // Determine what image to display
-  const displayImage = imagePreview || (!removeImage && currentImageUrl ? apiUrl(currentImageUrl) : null);
+  const resolvedExistingImage = !removeImage && currentImageUrl ? resolveProductImageUrl(currentImageUrl, "medium") : null;
+  const displayImage = imagePreview || resolvedExistingImage;
   const hasExistingImage = !!currentImageUrl && !removeImage && !imageFile;
   const hasNewImage = !!imageFile;
   const noImage = !displayImage;
@@ -338,6 +340,7 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
                       src={displayImage}
                       alt={formData.name || "Product"}
                       className="max-h-full max-w-full object-contain rounded-lg"
+                      onError={handleProductImageError}
                     />
                   </div>
 

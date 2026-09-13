@@ -72,7 +72,7 @@ export default function AddPage() {
 
   const processImageFile = (file) => {
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) { showError("File size exceeds 5MB limit."); return; }
+    if (file.size > 10 * 1024 * 1024) { showError("File size exceeds 10MB limit."); return; }
     const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
     if (!validTypes.includes(file.type)) { showError("Unsupported format. Use JPG, PNG, or WEBP."); return; }
     setImageFile(file);
@@ -276,7 +276,7 @@ export default function AddPage() {
                         <UploadCloud size={24} />
                       </div>
                       <p className="text-xs font-bold text-main mb-1">Drag &amp; Drop or Click to upload</p>
-                      <p className="text-[10px] text-muted uppercase tracking-widest">JPG, JPEG, PNG, or WEBP (max. 5MB)</p>
+                      <p className="text-[10px] text-muted uppercase tracking-widest">JPG, JPEG, PNG, or WEBP (max. 10MB)</p>
                     </div>
                   )}
                   <input type="file" ref={fileInputRef} onChange={handleImageChange} accept="image/jpeg,image/png,image/webp" className="hidden" />

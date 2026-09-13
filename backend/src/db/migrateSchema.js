@@ -555,6 +555,52 @@ const migrateSchema = async () => {
     } catch (bmErr) {
       console.warn('DATABASE: Benchmark tables migration warning:', bmErr.message);
     }
+
+    // 9. Bundles, Bundle Items & Bundle Branches Tables Migration
+    try {
+      await sequelize.query(`
+        CREATE TABLE IF NOT EXISTS \`bundles\` (
+          \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+          \`name\` VARCHAR(200) NOT NULL,
+          \`description\` TEXT NULL,
+          \`price\` DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+          \`status\` VARCHAR(50) NOT NULL DEFAULT 'active',
+          \`createdAt\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          \`updatedAt\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+
+      await sequelize.query(`
+        CREATE TABLE IF NOT EXISTS \`bundle_items\` (
+          \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+          \`bundle_id\` INT NOT NULL,
+          \`product_id\` INT NOT NULL,
+          \`quantity\` INT NOT NULL DEFAULT 1,
+          \`createdAt\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          \`updatedAt\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX \`idx_bundle_items_bundle\` (\`bundle_id\`),
+          INDEX \`idx_bundle_items_product\` (\`product_id\`),
+          FOREIGN KEY (\`bundle_id\`) REFERENCES \`bundles\` (\`id\`) ON DELETE CASCADE ON UPDATE CASCADE,
+          FOREIGN KEY (\`product_id\`) REFERENCES \`products\` (\`id\`) ON DELETE CASCADE ON UPDATE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+
+      await sequelize.query(`
+        CREATE TABLE IF NOT EXISTS \`bundle_branches\` (
+          \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+          \`bundle_id\` INT NOT NULL,
+          \`branch_id\` INT NOT NULL,
+          \`createdAt\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          \`updatedAt\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY \`unique_bundle_branch\` (\`bundle_id\`, \`branch_id\`),
+          FOREIGN KEY (\`bundle_id\`) REFERENCES \`bundles\` (\`id\`) ON DELETE CASCADE ON UPDATE CASCADE,
+          FOREIGN KEY (\`branch_id\`) REFERENCES \`branches\` (\`id\`) ON DELETE CASCADE ON UPDATE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+      console.log('DATABASE: Verified bundles, bundle_items, and bundle_branches tables.');
+    } catch (bErr) {
+      console.warn('DATABASE: Bundles tables migration warning:', bErr.message);
+    }
   } catch (error) {
     console.warn(`DATABASE: Schema migration skipped or failed: ${error.message}`);
   }

@@ -25,6 +25,7 @@ import {
   Barcode
 } from "lucide-react";
 import { apiUrl } from "@/lib/api";
+import { resolveProductImageUrl, handleProductImageError } from "@/lib/imageHelper";
 import { showSuccess, showError, showInfo, showWarning, showConfirm, showModal } from "@/context/ModalContext";
 
 export default function ProductsPage() {
@@ -502,19 +503,13 @@ export default function ProductsPage() {
                         <div className={`absolute inset-0 w-full h-full flex items-center justify-center ${getCategoryColor(catName)}`}>
                           {getCategoryIcon(catName)}
                         </div>
-                        {(product.product_image || product.image_url) && (
+                        {resolveProductImageUrl(product, "thumbnail") && (
                           <img 
-                            src={apiUrl(product.product_image || product.image_url).replace('.webp', '_thumbnail.webp')} 
+                            src={resolveProductImageUrl(product, "thumbnail")} 
                             alt={product.name} 
                             className="absolute inset-0 w-full h-full object-cover z-10" 
                             loading="lazy"
-                            onError={(e) => {
-                              if (e.target.src.includes('_thumbnail.webp')) {
-                                e.target.src = e.target.src.replace('_thumbnail.webp', '_medium.webp');
-                              } else {
-                                e.target.style.display = 'none';
-                              }
-                            }}
+                            onError={handleProductImageError}
                           />
                         )}
                       </div>

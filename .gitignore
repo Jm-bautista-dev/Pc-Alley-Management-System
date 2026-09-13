@@ -43,3 +43,9 @@ conflicts_utf8.txt
 frontend_dev_section.txt
 docx_content/
 scratch/
+*.tar.gz
+*.tar
+*.zip
+*.rar
+*.7z
+

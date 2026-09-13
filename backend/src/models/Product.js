@@ -25,7 +25,21 @@ const Product = sequelize.define('Product', {
   tableName: 'products',
   paranoid: true,
   deletedAt: 'deleted_at',
-  timestamps: true
+  timestamps: true,
+  hooks: {
+    beforeSave: (product) => {
+      // Keep image_url and product_image strictly synchronized across the system
+      if (product.image_url && !product.product_image) {
+        product.product_image = product.image_url;
+      } else if (product.product_image && !product.image_url) {
+        product.image_url = product.product_image;
+      } else if (product.changed && product.changed('image_url') && !product.image_url) {
+        product.product_image = null;
+      } else if (product.changed && product.changed('product_image') && !product.product_image) {
+        product.image_url = null;
+      }
+    }
+  }
 });
 
 module.exports = Product;
