@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = { 
   output: 'standalone',
+  experimental: {
+    cpus: 1,
+    workerThreads: false,
+  },
   allowedDevOrigins: ['192.168.1.5', 'localhost'],
   async rewrites() {
     const backendBaseUrl =
