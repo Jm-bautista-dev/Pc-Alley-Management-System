@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import { motion, AnimatePresence } from "framer-motion";
+import { apiUrl } from "@/lib/api";
 import {
   Shield,
   ShieldCheck,
@@ -135,6 +136,31 @@ export default function RolesPage() {
   const [activeTab, setActiveTab] = useState("matrix");
   const [selectedRole, setSelectedRole] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [roleStats, setRoleStats] = useState({});
+
+  useEffect(() => {
+    const fetchRoleCounts = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch(apiUrl("/api/roles"), {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (Array.isArray(json.data)) {
+            const counts = {};
+            json.data.forEach(r => {
+              counts[r.name] = r.user_count;
+            });
+            setRoleStats(counts);
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to fetch role counts:", err);
+      }
+    };
+    fetchRoleCounts();
+  }, []);
 
   const filteredMatrix = PERMISSIONS_MATRIX.map(section => ({
     ...section,
@@ -201,8 +227,16 @@ export default function RolesPage() {
                     </p>
                   </div>
                   <div className="pt-4 border-t border-border/20 flex items-center justify-between text-xs">
-                    <span className="text-[10px] font-black uppercase text-muted/50 tracking-wider">Scope</span>
-                    <span className="font-bold text-main">{role.userCount}</span>
+                    <div>
+                      <span className="text-[9px] font-black uppercase text-muted/50 tracking-wider block">Assigned Accounts</span>
+                      <span className="font-mono font-bold text-main">
+                        {roleStats[role.id] !== undefined ? `${roleStats[role.id]} Active User${roleStats[role.id] === 1 ? '' : 's'}` : "Syncing..."}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[9px] font-black uppercase text-muted/50 tracking-wider block">Scope</span>
+                      <span className="font-bold text-main">{role.userCount}</span>
+                    </div>
                   </div>
                 </motion.div>
               ))}

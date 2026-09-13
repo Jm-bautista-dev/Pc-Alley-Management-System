@@ -34,10 +34,22 @@ const Bundle = require('./Bundle');
 const BundleItem = require('./BundleItem');
 const BundleBranch = require('./BundleBranch');
 const UserSession = require('./UserSession');
+const Role = require('./Role');
+const UserRole = require('./UserRole');
 
 // ── Existing Associations ──
 Branch.hasMany(User, { foreignKey: 'branch_id' });
 User.belongsTo(Branch, { foreignKey: 'branch_id' });
+
+// User <-> Role Normalized Relationships
+User.belongsToMany(Role, { through: UserRole, foreignKey: 'user_id', otherKey: 'role_id', as: 'roles' });
+Role.belongsToMany(User, { through: UserRole, foreignKey: 'role_id', otherKey: 'user_id', as: 'users' });
+
+User.hasMany(UserRole, { foreignKey: 'user_id', as: 'userRoles', onDelete: 'CASCADE' });
+UserRole.belongsTo(User, { foreignKey: 'user_id' });
+
+Role.hasMany(UserRole, { foreignKey: 'role_id', as: 'userRoles', onDelete: 'CASCADE' });
+UserRole.belongsTo(Role, { foreignKey: 'role_id', as: 'Role' });
 
 User.hasMany(UserSession, { foreignKey: 'user_id', as: 'sessions', onDelete: 'CASCADE' });
 UserSession.belongsTo(User, { foreignKey: 'user_id' });
@@ -249,5 +261,7 @@ module.exports = {
   Bundle,
   BundleItem,
   BundleBranch,
-  UserSession
+  UserSession,
+  Role,
+  UserRole
 };

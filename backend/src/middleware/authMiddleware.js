@@ -123,11 +123,18 @@ const authenticateToken = (req, res, next) => {
 
 const authorizeRoles = (...roles) => {
   return (req, res, next) => {
-    // Normalize role for robust comparison
-    const userRole = (req.user?.role || '').toLowerCase();
-    const allowedRoles = roles.map(r => r.toLowerCase());
+    // Normalize allowed roles
+    const allowedRoles = roles.map(r => String(r).trim().toLowerCase());
 
-    if (!allowedRoles.includes(userRole)) {
+    // Extract user roles (both scalar string and array from normalized relations)
+    const userRole = String(req.user?.role || '').trim().toLowerCase();
+    const userRoles = Array.isArray(req.user?.roles)
+      ? req.user.roles.map(r => (typeof r === 'string' ? r : r.name)).filter(Boolean).map(r => String(r).trim().toLowerCase())
+      : [];
+
+    const hasAccess = allowedRoles.includes(userRole) || userRoles.some(r => allowedRoles.includes(r));
+
+    if (!hasAccess) {
       return res.status(403).json({ 
         message: 'Access denied: Insufficient permissions for this resource.',
         code: 'FORBIDDEN'

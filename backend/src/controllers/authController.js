@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-const { User, Branch, AuditLog, UserSession } = require('../models');
+const { User, Branch, AuditLog, UserSession, Role, UserRole } = require('../models');
 const { hashToken, revokeToken } = require('../utils/tokenRevocation');
 const pagination = require('../utils/pagination');
 const sequelize = require('../db');
@@ -49,7 +49,7 @@ const register = async (req, res) => {
     }
 
     const allowedRolesByCreator = {
-      super_admin: ['branch_admin', 'employee'],
+      super_admin: ['super_admin', 'branch_admin', 'employee'],
       branch_admin: ['employee']
     };
 
@@ -66,37 +66,64 @@ const register = async (req, res) => {
       return res.status(400).json({ message: 'Password must be at least 6 characters' });
     }
 
+    if (req.user.role === 'branch_admin') {
+      const requestedBranchId = normalizeBranchId(branch_id);
+      if (requestedBranchId !== null && requestedBranchId !== Number(req.user.branch_id)) {
+        return res.status(403).json({ message: 'Managers can only provision accounts for their own sector' });
+      }
+    }
+
     const normalizedBranchId = req.user.role === 'branch_admin'
       ? normalizeBranchId(req.user.branch_id)
       : normalizeBranchId(branch_id);
 
-    if (normalizedBranchId === null) {
+    if (role !== 'super_admin' && normalizedBranchId === null) {
       return res.status(400).json({ message: 'A branch assignment is required for Manager and Staff accounts' });
     }
 
-    if (Number.isNaN(normalizedBranchId)) {
+    if (normalizedBranchId !== null && Number.isNaN(normalizedBranchId)) {
       return res.status(400).json({ message: 'Invalid branch assignment' });
     }
 
-    if (req.user.role === 'branch_admin' && normalizedBranchId !== Number(req.user.branch_id)) {
-      return res.status(403).json({ message: 'Managers can only provision accounts for their own sector' });
-    }
-
-    const branch = await Branch.findByPk(normalizedBranchId);
-    if (!branch) {
-      return res.status(404).json({ message: 'Assigned branch does not exist' });
+    if (normalizedBranchId !== null) {
+      const branch = await Branch.findByPk(normalizedBranchId);
+      if (!branch) {
+        return res.status(404).json({ message: 'Assigned branch does not exist' });
+      }
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const user = await User.create({
-      first_name: firstName,
-      last_name: lastName,
-      username,
-      password: hashedPassword,
-      role,
-      branch_id: normalizedBranchId
+
+    const targetRoleRecord = await Role.findOne({ where: { name: role } });
+
+    const newUser = await sequelize.transaction(async (t) => {
+      const createdUser = await User.create({
+        first_name: firstName,
+        last_name: lastName,
+        username,
+        password: hashedPassword,
+        role,
+        branch_id: normalizedBranchId
+      }, { transaction: t });
+
+      if (targetRoleRecord) {
+        await UserRole.create({
+          user_id: createdUser.id,
+          role_id: targetRoleRecord.id
+        }, { transaction: t });
+      }
+
+      return createdUser;
     });
-    res.status(201).json({ message: 'User provisioned successfully', userId: user.id });
+
+    await AuditLog.create({
+      action: 'USER_PROVISIONED',
+      user_id: req.user.id,
+      details: `Provisioned ${role} account for ${username} (Branch: ${normalizedBranchId || 'HQ'})`,
+      ip_address: req.ip
+    }).catch(e => console.warn('[AUTH] AuditLog error:', e.message));
+
+    res.status(201).json({ message: 'User provisioned successfully', userId: newUser.id });
   } catch (error) {
     if (error.name === 'SequelizeUniqueConstraintError') {
       return res.status(409).json({ message: 'A duplicate database value blocked this registration. Please restart the backend so account migrations can run, then try again.' });
@@ -112,7 +139,15 @@ const login = async (req, res) => {
     const username = String(req.body.username || '').trim().toLowerCase();
     const matchingUsers = await User.findAll({
       where: { username },
-      include: [Branch],
+      include: [
+        Branch,
+        {
+          model: Role,
+          as: 'roles',
+          attributes: ['id', 'name', 'display_name', 'description'],
+          through: { attributes: [] }
+        }
+      ],
       order: [['id', 'ASC']]
     });
 
@@ -166,7 +201,12 @@ const login = async (req, res) => {
     // Reset failed attempt counters upon successful login
     recordSuccessfulLogin(req, username);
 
-    console.log(`[AUTH] User successfully authenticated: ${username} (Role: ${user.role})`);
+    const userRoles = user.roles && user.roles.length
+      ? user.roles.map(r => r.name)
+      : [user.role];
+    const primaryRole = userRoles[0] || user.role;
+
+    console.log(`[AUTH] User successfully authenticated: ${username} (Role: ${primaryRole}, Roles: ${userRoles.join(', ')})`);
 
     if (!process.env.JWT_SECRET) {
       console.error('[AUTH] FATAL ERROR: JWT_SECRET is not defined in environment variables.');
@@ -199,7 +239,8 @@ const login = async (req, res) => {
         first_name: user.first_name,
         last_name: user.last_name,
         username: user.username,
-        role: user.role,
+        role: primaryRole,
+        roles: userRoles,
         branch_id: user.branch_id
       },
       process.env.JWT_SECRET,
@@ -243,7 +284,10 @@ const login = async (req, res) => {
         first_name: user.first_name || 'Admin',
         last_name: user.last_name || 'User',
         username: user.username,
-        role: user.role,
+        role: primaryRole,
+        roles: user.roles && user.roles.length
+          ? user.roles.map(r => ({ id: r.id, name: r.name, display_name: r.display_name }))
+          : [{ name: primaryRole, display_name: primaryRole }],
         branch_id: user.branch_id,
         branch_name: user.Branch ? user.Branch.name : 'All'
       }
@@ -313,6 +357,11 @@ const logout = async (req, res) => {
 
 const getSession = async (req, res) => {
   try {
+    const userRoles = Array.isArray(req.user.roles) && req.user.roles.length
+      ? req.user.roles
+      : [req.user.role];
+    const primaryRole = req.user.role || userRoles[0];
+
     res.json({
       valid: true,
       user: {
@@ -320,7 +369,8 @@ const getSession = async (req, res) => {
         first_name: req.user.first_name,
         last_name: req.user.last_name,
         username: req.user.username,
-        role: req.user.role,
+        role: primaryRole,
+        roles: userRoles,
         branch_id: req.user.branch_id
       },
       session: {
@@ -342,7 +392,7 @@ const getUsers = async (req, res) => {
       search: req.query.search,
       searchableFields: ['username', 'first_name', 'last_name']
     });
-    // Apply role‑based branch filter
+    // Apply role-based branch filter
     if (req.user.role === 'branch_admin') {
       where.branch_id = req.user.branch_id;
     } else if (branch_id) {
@@ -354,11 +404,20 @@ const getUsers = async (req, res) => {
     }
     const { count, rows } = await User.findAndCountAll({
       where,
-      include: [Branch],
+      include: [
+        Branch,
+        {
+          model: Role,
+          as: 'roles',
+          attributes: ['id', 'name', 'display_name', 'description'],
+          through: { attributes: [] }
+        }
+      ],
       attributes: { exclude: ['password'] },
       offset,
       limit: limitNum,
-      order
+      order,
+      distinct: true
     });
     res.json({
       data: rows,
@@ -556,12 +615,242 @@ const resetPassword = async (req, res) => {
   }
 };
 
+const getRoles = async (req, res) => {
+  try {
+    const roles = await Role.findAll({
+      order: [['id', 'ASC']]
+    });
+
+    // Compute user counts per role from user_roles
+    const roleCounts = await sequelize.query(`
+      SELECT r.id, r.name, COUNT(ur.user_id) AS user_count
+      FROM roles r
+      LEFT JOIN user_roles ur ON r.id = ur.role_id
+      GROUP BY r.id, r.name
+    `, { type: sequelize.QueryTypes.SELECT });
+
+    const countMap = {};
+    for (const rc of roleCounts) {
+      countMap[rc.id] = parseInt(rc.user_count || 0, 10);
+    }
+
+    const data = roles.map(r => ({
+      id: r.id,
+      name: r.name,
+      display_name: r.display_name,
+      description: r.description,
+      user_count: countMap[r.id] || 0
+    }));
+
+    res.json({ data });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const updateUserRole = async (req, res) => {
+  try {
+    const targetUserId = Number(req.params.id);
+    const { role: newRoleName } = req.body;
+
+    if (!newRoleName) {
+      return res.status(400).json({ message: 'Target role designation is required' });
+    }
+
+    const normalizedNewRole = String(newRoleName).trim().toLowerCase();
+
+    // 1. Prevent self-role modification (prevent privilege escalation or self-lockout)
+    if (req.user.id === targetUserId) {
+      return res.status(400).json({ message: 'Cannot modify your own account role' });
+    }
+
+    // 2. Fetch target user with branch and roles
+    const targetUser = await User.findByPk(targetUserId, {
+      include: [Branch, { model: Role, as: 'roles' }]
+    });
+
+    if (!targetUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // 3. Find target Role in database
+    const targetRoleRecord = await Role.findOne({
+      where: { name: normalizedNewRole }
+    });
+
+    if (!targetRoleRecord) {
+      return res.status(400).json({ message: `Role '${normalizedNewRole}' is not a valid system role` });
+    }
+
+    // 4. Server-Side Authorization: Protect Super Admin accounts & enforce role boundaries
+    if (req.user.role === 'branch_admin') {
+      // Branch Admin cannot modify Super Admin or other Branch Admins
+      if (targetUser.role === 'super_admin' || targetUser.role === 'branch_admin') {
+        return res.status(403).json({
+          message: 'Access denied: Branch Managers cannot modify Super Admin or Manager accounts'
+        });
+      }
+
+      // Branch Admin cannot modify users outside their assigned branch
+      if (Number(targetUser.branch_id) !== Number(req.user.branch_id)) {
+        return res.status(403).json({
+          message: 'Access denied: Cannot modify users from other branches'
+        });
+      }
+
+      // Branch Admin cannot promote anyone to super_admin or branch_admin
+      if (normalizedNewRole !== 'employee') {
+        return res.status(403).json({
+          message: 'Access denied: Branch Managers can only assign the Staff role'
+        });
+      }
+    }
+
+    // 5. If target user is super_admin and being demoted, prevent demoting the last Super Admin
+    if (targetUser.role === 'super_admin' && normalizedNewRole !== 'super_admin') {
+      const superAdminCount = await User.count({ where: { role: 'super_admin' } });
+      if (superAdminCount <= 1) {
+        return res.status(400).json({
+          message: 'Cannot demote the last remaining Super Admin account'
+        });
+      }
+    }
+
+    // 6. Update user_roles and users.role transactionally
+    await sequelize.transaction(async (t) => {
+      // Clear existing user_roles for this user
+      await UserRole.destroy({
+        where: { user_id: targetUserId },
+        transaction: t
+      });
+
+      // Insert new role association
+      await UserRole.create({
+        user_id: targetUserId,
+        role_id: targetRoleRecord.id
+      }, { transaction: t });
+
+      // Synchronize users.role column
+      targetUser.role = normalizedNewRole;
+      await targetUser.save({ transaction: t });
+    });
+
+    // 7. Revoke active sessions for target user so permission changes take effect immediately
+    try {
+      const { invalidateAllUserSessionsCache } = require('../middleware/authMiddleware');
+      if (typeof invalidateAllUserSessionsCache === 'function') {
+        invalidateAllUserSessionsCache(targetUserId);
+      }
+      if (UserSession) {
+        await UserSession.update(
+          { is_active: false },
+          { where: { user_id: targetUserId, is_active: true } }
+        );
+      }
+    } catch (sErr) {
+      console.warn('[AUTH] Role change session invalidation:', sErr.message);
+    }
+
+    // 8. Log audit trail
+    await AuditLog.create({
+      action: 'USER_ROLE_UPDATED',
+      user_id: req.user.id,
+      details: `User ${targetUser.username} (ID: ${targetUser.id}) role changed to ${normalizedNewRole} by ${req.user.username}`,
+      ip_address: req.ip
+    }).catch(e => console.warn('[AUTH] AuditLog error:', e.message));
+
+    res.json({
+      message: 'User role updated successfully',
+      user: {
+        id: targetUser.id,
+        username: targetUser.username,
+        first_name: targetUser.first_name,
+        last_name: targetUser.last_name,
+        role: targetUser.role,
+        role_display: targetRoleRecord.display_name,
+        branch_id: targetUser.branch_id
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const deleteUser = async (req, res) => {
+  try {
+    const targetUserId = Number(req.params.id);
+
+    // 1. Prevent deleting self
+    if (targetUserId === req.user.id) {
+      return res.status(400).json({ message: 'Cannot delete your own account' });
+    }
+
+    const targetUser = await User.findByPk(targetUserId);
+    if (!targetUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // 2. Server-side role boundaries for deletion
+    if (req.user.role === 'branch_admin') {
+      if (targetUser.role === 'super_admin') {
+        return res.status(403).json({ message: 'Access denied: Cannot delete Super Admin accounts' });
+      }
+      if (targetUser.role === 'branch_admin') {
+        return res.status(403).json({ message: 'Access denied: Cannot delete Branch Manager accounts' });
+      }
+      if (targetUser.branch_id !== req.user.branch_id) {
+        return res.status(403).json({ message: 'Access denied: Cannot delete users from other branches' });
+      }
+    }
+
+    // 3. Prevent deleting the last Super Admin
+    if (targetUser.role === 'super_admin') {
+      const superAdminCount = await User.count({ where: { role: 'super_admin' } });
+      if (superAdminCount <= 1) {
+        return res.status(400).json({ message: 'Cannot delete the last remaining Super Admin account' });
+      }
+    }
+
+    // 4. Invalidate sessions
+    try {
+      const { invalidateAllUserSessionsCache } = require('../middleware/authMiddleware');
+      if (typeof invalidateAllUserSessionsCache === 'function') {
+        invalidateAllUserSessionsCache(targetUserId);
+      }
+      if (UserSession) {
+        await UserSession.update(
+          { is_active: false },
+          { where: { user_id: targetUserId } }
+        );
+      }
+    } catch (sErr) {}
+
+    // 5. Delete target user (cascades to user_roles due to foreign key ON DELETE CASCADE)
+    await targetUser.destroy();
+
+    // 6. Audit log
+    await AuditLog.create({
+      action: 'USER_ACCOUNT_TERMINATED',
+      user_id: req.user.id,
+      details: `User account ${targetUser.username} (ID: ${targetUserId}) terminated by ${req.user.username}`,
+      ip_address: req.ip
+    }).catch(e => console.warn('[AUTH] AuditLog error:', e.message));
+
+    res.json({ message: 'User account terminated successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   register,
   login,
   logout,
   getSession,
   getUsers,
+  getRoles,
+  updateUserRole,
+  deleteUser,
   updateProfile,
   changePassword,
   forgotPassword,

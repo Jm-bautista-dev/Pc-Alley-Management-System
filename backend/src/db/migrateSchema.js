@@ -626,6 +626,93 @@ const migrateSchema = async () => {
     } catch (sErr) {
       console.warn('DATABASE: user_sessions table migration warning:', sErr.message);
     }
+
+    // ── Normalized Roles & UserRoles Migration ─────────────────────────────
+    try {
+      // 1. Create roles table
+      await sequelize.query(`
+        CREATE TABLE IF NOT EXISTS \`roles\` (
+          \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+          \`name\` VARCHAR(50) NOT NULL UNIQUE,
+          \`display_name\` VARCHAR(100) NOT NULL,
+          \`description\` TEXT NULL,
+          \`createdAt\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          \`updatedAt\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+
+      // 2. Seed canonical roles
+      const canonicalRoles = [
+        {
+          name: 'super_admin',
+          display_name: 'Super Admin',
+          description: 'Full global system authority across all branches. Manages all products, global stock requisitions, high-level approvals, financial reports, and branch staff provision.'
+        },
+        {
+          name: 'branch_admin',
+          display_name: 'Branch Manager',
+          description: 'Branch-level administrative operations. Approves branch restock requests, creates branch staff accounts, manages branch sales, customer registry, and local inventory stock.'
+        },
+        {
+          name: 'employee',
+          display_name: 'Staff Associate',
+          description: 'Daily frontline retail and service operations. Processes POS sales terminal transactions, creates draft quotes, logs work order jobs, and submits restock replenishment requests.'
+        }
+      ];
+
+      for (const cr of canonicalRoles) {
+        await sequelize.query(`
+          INSERT INTO \`roles\` (\`name\`, \`display_name\`, \`description\`, \`createdAt\`, \`updatedAt\`)
+          VALUES (?, ?, ?, NOW(), NOW())
+          ON DUPLICATE KEY UPDATE
+            \`display_name\` = VALUES(\`display_name\`),
+            \`description\` = VALUES(\`description\`),
+            \`updatedAt\` = NOW()
+        `, { replacements: [cr.name, cr.display_name, cr.description] });
+      }
+
+      // 3. Create user_roles table with foreign keys, unique constraint, and indexes
+      await sequelize.query(`
+        CREATE TABLE IF NOT EXISTS \`user_roles\` (
+          \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+          \`user_id\` INT NOT NULL,
+          \`role_id\` INT NOT NULL,
+          \`createdAt\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          \`updatedAt\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY \`unique_user_role\` (\`user_id\`, \`role_id\`),
+          INDEX \`idx_user_roles_user\` (\`user_id\`),
+          INDEX \`idx_user_roles_role\` (\`role_id\`),
+          FOREIGN KEY (\`user_id\`) REFERENCES \`users\` (\`id\`) ON DELETE CASCADE ON UPDATE CASCADE,
+          FOREIGN KEY (\`role_id\`) REFERENCES \`roles\` (\`id\`) ON DELETE CASCADE ON UPDATE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+
+      // 4. Safely backfill existing users into user_roles
+      const existingUsers = await sequelize.query("SELECT id, role FROM `users`", { type: sequelize.QueryTypes.SELECT });
+      const currentRoles = await sequelize.query("SELECT id, name FROM `roles`", { type: sequelize.QueryTypes.SELECT });
+      const roleMap = {};
+      for (const r of currentRoles) {
+        roleMap[r.name.toLowerCase()] = r.id;
+      }
+
+      let migratedCount = 0;
+      for (const u of existingUsers) {
+        const targetRoleId = roleMap[(u.role || 'employee').toLowerCase()] || roleMap['employee'];
+        if (targetRoleId) {
+          const [insertRes] = await sequelize.query(`
+            INSERT IGNORE INTO \`user_roles\` (\`user_id\`, \`role_id\`, \`createdAt\`, \`updatedAt\`)
+            VALUES (?, ?, NOW(), NOW())
+          `, { replacements: [u.id, targetRoleId] });
+          if (insertRes && insertRes.affectedRows > 0) {
+            migratedCount += insertRes.affectedRows;
+          }
+        }
+      }
+
+      console.log(`DATABASE: Verified roles & user_roles tables. Migrated/synced ${migratedCount} user role relationships.`);
+    } catch (roleErr) {
+      console.warn('DATABASE: Roles and user_roles migration warning:', roleErr.message);
+    }
   } catch (error) {
     console.warn(`DATABASE: Schema migration skipped or failed: ${error.message}`);
   }

@@ -10,6 +10,8 @@ import {
   Building2,
   Eye,
   EyeOff,
+  Shield,
+  Trash2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiUrl } from "@/lib/api";
@@ -238,6 +240,41 @@ export default function StaffPage() {
     }
   };
 
+  const handleUpdateRole = async (targetUser) => {
+    const nextRole = targetUser.role === "branch_admin" ? "employee" : "branch_admin";
+    const nextRoleLabel = nextRole === "branch_admin" ? "Branch Manager" : "Staff Associate";
+    const currentName = targetUser.first_name ? `${targetUser.first_name} ${targetUser.last_name}` : targetUser.username;
+
+    const confirmed = await showConfirm(
+      "Update Account Role",
+      `Switch ${currentName}'s authority from ${targetUser.role === 'branch_admin' ? 'Manager' : 'Staff'} to ${nextRoleLabel}?`,
+      { confirmLabel: "Change Role" }
+    );
+    if (!confirmed) return;
+
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(apiUrl(`/api/auth/users/${targetUser.id}/role`), {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ role: nextRole })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        showSuccess(`Account authority updated to ${nextRoleLabel}`);
+        fetchData();
+      } else {
+        showError(data.message || "Failed to update role");
+      }
+    } catch (err) {
+      console.error("Role update failed:", err);
+      showError("Connection error while updating role");
+    }
+  };
+
   const handleDeleteUser = async (userId) => {
     const confirmed = await showConfirm(
       "Terminate Account",
@@ -251,14 +288,16 @@ export default function StaffPage() {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` }
       });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         showSuccess("Account terminated successfully");
         fetchData();
       } else {
-        showError("Failed to terminate account");
+        showError(data.message || "Failed to terminate account");
       }
     } catch (err) {
       console.error(err);
+      showError("Connection error while terminating account");
     }
   };
 
@@ -407,9 +446,24 @@ export default function StaffPage() {
                           </div>
                         </td>
                         <td className="py-4 pl-4 text-right">
-                          <button onClick={() => handleDeleteUser(staff.id)} className="p-2.5 bg-brand-surface border border-border rounded-xl text-muted hover:text-main transition-all shadow-sm">
-                            <MoreVertical size={14} />
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            {isSuperAdmin && (
+                              <button
+                                onClick={() => handleUpdateRole(staff)}
+                                title={staff.role === 'branch_admin' ? 'Change to Staff' : 'Promote to Manager'}
+                                className="p-2.5 bg-brand-surface border border-border rounded-xl text-muted hover:text-brand-neonblue hover:border-brand-neonblue/40 transition-all shadow-sm"
+                              >
+                                <Shield size={14} />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleDeleteUser(staff.id)}
+                              title="Terminate Account"
+                              className="p-2.5 bg-brand-surface border border-border rounded-xl text-muted hover:text-brand-crimson hover:border-brand-crimson/40 transition-all shadow-sm"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))

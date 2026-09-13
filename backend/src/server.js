@@ -174,7 +174,11 @@ app.use((req, res, next) => {
   next();
 });
 
+const { authenticateToken } = require('./middleware/authMiddleware');
+const { getRoles } = require('./controllers/authController');
+
 app.use('/api/auth', require('./routes/authRoutes'));
+app.get('/api/roles', authenticateToken, getRoles);
 app.use('/api/inventory', require('./routes/inventoryRoutes'));
 app.use('/api/sales', require('./routes/salesRoutes'));
 app.use('/api/branches', require('./routes/branchRoutes'));
