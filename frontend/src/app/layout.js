@@ -24,6 +24,11 @@ const bebasNeue = Bebas_Neue({
 export const metadata = {
   title: 'PC Alley — Integrated Multi-Branch System',
   description: 'Enterprise ERP for IT resource management',
+  icons: {
+    icon: '/images/logo.png',
+    shortcut: '/images/logo.png',
+    apple: '/images/logo.png',
+  },
   other: {
     // Prevent browsers from caching authenticated pages
     'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',

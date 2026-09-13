@@ -200,7 +200,7 @@ BenchmarkRun.belongsTo(User, { foreignKey: 'created_by', as: 'Creator' });
 Bundle.hasMany(BundleItem, { foreignKey: 'bundle_id', as: 'items', onDelete: 'CASCADE' });
 BundleItem.belongsTo(Bundle, { foreignKey: 'bundle_id' });
 BundleItem.belongsTo(Product, { foreignKey: 'product_id', as: 'Product' });
-Product.hasMany(BundleItem, { foreignKey: 'product_id' });
+Product.hasMany(BundleItem, { foreignKey: 'product_id', as: 'bundleAssignments' });
 
 Bundle.belongsToMany(Branch, { through: BundleBranch, foreignKey: 'bundle_id', otherKey: 'branch_id', as: 'branches' });
 Branch.belongsToMany(Bundle, { through: BundleBranch, foreignKey: 'branch_id', otherKey: 'bundle_id', as: 'bundles' });
