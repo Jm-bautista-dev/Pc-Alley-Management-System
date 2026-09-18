@@ -256,10 +256,10 @@ const Sidebar = () => {
           x: isMobile ? (isSidebarOpen ? 0 : -240) : 0,
         }}
         transition={{ type: "tween", ease: "easeOut", duration: 0.2 }}
-        className="fixed left-0 top-0 h-screen bg-brand-surface border-r border-border flex flex-col z-50 overflow-hidden"
+        className="fixed left-0 top-0 h-screen bg-[#1a172e] border-r border-[#2e2a4a] text-slate-200 flex flex-col z-50 overflow-hidden shadow-2xl"
       >
         {/* ── Logo header ── */}
-        <div className="h-16 flex items-center px-4 border-b border-border shrink-0">
+        <div className="h-16 flex items-center px-4 border-b border-[#2e2a4a] shrink-0">
           <Link href="/dashboard" className="flex items-center h-full w-full">
             {!isExpanded ? <LogoIcon className="w-7 h-7 mx-auto" /> : <LogoBrandingV2 size="normal" />}
           </Link>
@@ -284,14 +284,14 @@ const Sidebar = () => {
                       w-full flex items-center justify-center
                       h-10 rounded-lg transition-colors
                       ${active
-                        ? "bg-brand-bgbase"
-                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-brand-hover"
+                        ? "bg-white/[0.08]"
+                        : "text-slate-300 hover:text-white hover:bg-white/[0.08]"
                       }
                     `}
                   >
                     <div
                       className="w-7 h-7 flex items-center justify-center rounded-md"
-                      style={active ? { backgroundColor: roleTheme.color + "25", color: roleTheme.color } : {}}
+                      style={active ? { backgroundColor: roleTheme.color + "30", color: roleTheme.color } : {}}
                     >
                       <item.icon size={15} strokeWidth={active ? 2.5 : 1.8} />
                     </div>
@@ -310,7 +310,7 @@ const Sidebar = () => {
                   <div key={group}>
                     {/* Group label */}
                     {group !== "SALES" && (
-                      <p className="px-3 mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 select-none">
+                      <p className="px-3 mb-2 text-[10px] font-bold uppercase tracking-widest text-[#7b8cde] select-none">
                         {group}
                       </p>
                     )}
@@ -332,11 +332,11 @@ const Sidebar = () => {
                                 h-10 px-3 rounded-lg
                                 text-sm font-medium transition-colors
                                 ${active
-                                  ? "font-semibold"
-                                  : "text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-brand-hover"
+                                  ? "font-semibold text-white"
+                                  : "text-slate-200 hover:text-white hover:bg-white/[0.06]"
                                 }
                               `}
-                              style={active ? { backgroundColor: roleTheme.color + "15", color: roleTheme.color } : {}}
+                              style={active ? { backgroundColor: roleTheme.color + "25", color: roleTheme.color } : {}}
                             >
                               {/* Active left bar */}
                               {active && (
@@ -349,7 +349,7 @@ const Sidebar = () => {
                               {/* Icon — fixed 28×28 box so all labels align */}
                               <span
                                 className="w-7 h-7 flex items-center justify-center rounded-md shrink-0"
-                                style={active ? { backgroundColor: roleTheme.color + "25" } : {}}
+                                style={active ? { backgroundColor: roleTheme.color + "30" } : {}}
                               >
                                 <item.icon size={15} strokeWidth={active ? 2.5 : 1.8} />
                               </span>
@@ -361,7 +361,7 @@ const Sidebar = () => {
                               {item.subItems && (
                                 <ChevronDown
                                   size={13}
-                                  className={`shrink-0 text-slate-400 dark:text-slate-500 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+                                  className={`shrink-0 text-slate-400 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
                                 />
                               )}
                             </Wrapper>
@@ -389,10 +389,10 @@ const Sidebar = () => {
                                             text-sm font-medium transition-colors
                                             ${subActive
                                               ? "font-semibold"
-                                              : "text-slate-600 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white hover:bg-brand-hover"
+                                              : "text-slate-300 hover:text-white hover:bg-white/[0.06]"
                                             }
                                           `}
-                                          style={subActive ? { color: roleTheme.color, backgroundColor: roleTheme.color + "12" } : {}}
+                                          style={subActive ? { color: roleTheme.color, backgroundColor: roleTheme.color + "20" } : {}}
                                         >
                                           <span
                                             className="w-1.5 h-1.5 rounded-full shrink-0"
@@ -420,7 +420,7 @@ const Sidebar = () => {
           )}
 
           {/* Settings row */}
-          <div className="pt-3 mt-3 border-t border-border">
+          <div className="pt-3 mt-3 border-t border-[#2e2a4a]">
             <Link
               href="/settings"
               className={`
@@ -428,8 +428,8 @@ const Sidebar = () => {
                 h-10 px-3 rounded-lg
                 text-sm font-medium transition-colors
                 ${pathname === "/settings"
-                  ? "bg-brand-crimson/10 text-brand-crimson font-semibold"
-                  : "text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-brand-hover"
+                  ? "bg-brand-crimson/20 text-brand-crimson font-semibold"
+                  : "text-slate-200 hover:text-white hover:bg-white/[0.06]"
                 }
                 ${!isExpanded ? "justify-center" : ""}
               `}
@@ -443,30 +443,30 @@ const Sidebar = () => {
         </nav>
 
         {/* ── Profile footer ── */}
-        <div className="p-3 border-t border-border">
+        <div className="p-3 border-t border-[#2e2a4a]">
           <div
             className={`
               flex items-center gap-3 px-3 py-2.5
-              rounded-lg bg-brand-bgbase border border-border
+              rounded-xl bg-[#24203d] border border-[#373258]
               ${!isExpanded ? "justify-center" : ""}
             `}
           >
             {/* Avatar */}
             <div className="relative shrink-0">
               <div
-                className={`w-8 h-8 rounded-lg border-2 ${roleTheme.border} flex items-center justify-center text-white text-xs font-bold`}
+                className={`w-8 h-8 rounded-lg border-2 ${roleTheme.border} flex items-center justify-center text-white text-xs font-bold shadow-sm`}
                 style={{ backgroundColor: roleTheme.color }}
               >
                 {initials}
               </div>
-              <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-green-400 rounded-full border-2 border-brand-surface" />
+              <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-green-400 rounded-full border-2 border-[#1a172e]" />
             </div>
 
             {isExpanded && (
               <>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate leading-tight">{userName}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{roleName}</p>
+                  <p className="text-sm font-semibold text-white truncate leading-tight">{userName}</p>
+                  <p className="text-xs text-[#a78bd2] truncate font-medium">{roleName}</p>
                 </div>
               </>
             )}

@@ -42,10 +42,10 @@ export const LogoBrandingV2 = ({ className = "", size = "normal" }) => {
         transition={{ delay: 0.1 }}
         className="flex flex-col justify-center"
       >
-        <span className={`${mainTextSize} font-black tracking-tighter text-main font-rajdhani leading-[0.9]`}>
+        <span className={`${mainTextSize} font-black tracking-tighter text-white font-rajdhani leading-[0.9]`}>
           PC ALLEY
         </span>
-        <span className={`${subTextSize} tracking-[0.4em] text-muted font-bold uppercase leading-tight mt-1.5 opacity-70`}>
+        <span className={`${subTextSize} tracking-[0.4em] text-slate-400 font-bold uppercase leading-tight mt-1.5`}>
           Integrated Systems
         </span>
       </motion.div>

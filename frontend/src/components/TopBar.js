@@ -47,14 +47,14 @@ const TopBar = ({ title }) => {
   }, [isProfileOpen]);
 
   return (
-    <header className="h-16 flex items-center justify-between px-4 md:px-6 bg-brand-surface border-b border-border sticky top-0 z-40">
+    <header className="h-16 flex items-center justify-between px-4 md:px-6 bg-[#1a172e] border-b border-[#2e2a4a] text-white sticky top-0 z-40 shadow-sm">
 
       {/* ── Left: mobile toggle + breadcrumb ── */}
       <div className="flex items-center gap-3 min-w-0">
         {isMobile && (
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="w-9 h-9 flex items-center justify-center rounded-lg bg-brand-bgbase border border-border text-muted hover:text-main hover:bg-brand-hover"
+            className="w-9 h-9 flex items-center justify-center rounded-lg bg-[#24203d] border border-[#373258] text-slate-200 hover:text-white hover:bg-[#2d284d] transition-colors"
           >
             <Menu size={16} />
           </button>
@@ -69,7 +69,7 @@ const TopBar = ({ title }) => {
         <button
           onClick={toggleTheme}
           title={`Switch to ${theme === "dark" ? "Light" : "Dark"} mode`}
-          className="w-9 h-9 flex items-center justify-center rounded-lg bg-brand-bgbase border border-border text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-brand-hover transition-colors"
+          className="w-9 h-9 flex items-center justify-center rounded-lg bg-[#24203d] border border-[#373258] text-slate-200 hover:text-white hover:bg-[#2d284d] transition-colors shadow-sm"
         >
           <AnimatePresence mode="wait">
             <motion.span
@@ -78,7 +78,7 @@ const TopBar = ({ title }) => {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.75 }}
               transition={{ duration: 0.1 }}
-              className="flex items-center justify-center text-slate-700 dark:text-slate-200"
+              className="flex items-center justify-center text-slate-200"
             >
               {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
             </motion.span>
@@ -86,17 +86,17 @@ const TopBar = ({ title }) => {
         </button>
 
         {/* Divider */}
-        <span className="w-px h-5 bg-border mx-1 hidden md:block" />
+        <span className="w-px h-5 bg-[#2e2a4a] mx-1 hidden md:block" />
 
         {/* Notifications */}
         <button
           onClick={() => setIsNotificationsOpen(true)}
           title="Notifications"
           className={`
-            relative w-9 h-9 flex items-center justify-center rounded-lg border transition-colors
+            relative w-9 h-9 flex items-center justify-center rounded-lg border transition-colors shadow-sm
             ${unreadCount > 0
-              ? "bg-rose-50 border-rose-200 text-rose-500 dark:bg-rose-400/10 dark:border-rose-400/20"
-              : "bg-brand-bgbase border-border text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-brand-hover"
+              ? "bg-rose-500/15 border-rose-500/30 text-rose-400 hover:bg-rose-500/25"
+              : "bg-[#24203d] border-[#373258] text-slate-200 hover:text-white hover:bg-[#2d284d]"
             }
           `}
         >
@@ -109,24 +109,24 @@ const TopBar = ({ title }) => {
         </button>
 
         {/* Divider */}
-        <span className="w-px h-5 bg-border mx-1 hidden md:block" />
+        <span className="w-px h-5 bg-[#2e2a4a] mx-1 hidden md:block" />
 
         {/* Profile */}
         <div className="relative" data-profile-dropdown>
           <button
             onClick={() => setIsProfileOpen((v) => !v)}
-            className="flex items-center gap-2 h-9 pl-2 pr-2.5 rounded-lg bg-brand-bgbase border border-border text-slate-800 dark:text-slate-100 hover:bg-brand-hover transition-colors"
+            className="flex items-center gap-2 h-9 pl-2 pr-2.5 rounded-lg bg-[#24203d] border border-[#373258] text-slate-100 hover:bg-[#2d284d] transition-colors shadow-sm"
           >
             {/* Avatar */}
             <span className="w-6 h-6 rounded-md bg-brand-neonblue/20 border border-brand-neonblue/30 flex items-center justify-center text-[10px] font-bold text-brand-neonblue shrink-0">
               {getInitials(displayName)}
             </span>
-            <span className="text-sm font-medium hidden md:block max-w-[96px] truncate">
+            <span className="text-sm font-medium hidden md:block max-w-[96px] truncate text-slate-200">
               {displayName}
             </span>
             <ChevronDown
               size={12}
-              className={`text-slate-400 dark:text-slate-500 shrink-0 transition-transform duration-150 ${isProfileOpen ? "rotate-180" : ""}`}
+              className={`text-slate-400 shrink-0 transition-transform duration-150 ${isProfileOpen ? "rotate-180" : ""}`}
             />
           </button>
 
@@ -138,34 +138,34 @@ const TopBar = ({ title }) => {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 4 }}
                 transition={{ duration: 0.1 }}
-                className="absolute right-0 mt-1.5 w-48 bg-brand-surface border border-border rounded-xl shadow-lg z-50 overflow-hidden"
+                className="absolute right-0 mt-1.5 w-48 bg-[#24203d] border border-[#373258] rounded-xl shadow-2xl z-50 overflow-hidden text-slate-200"
               >
                 {/* User info */}
-                <div className="px-4 py-3 border-b border-border">
-                  <p className="text-sm font-semibold text-main truncate">{displayName}</p>
-                  <p className="text-xs text-muted mt-0.5 truncate capitalize">{(user?.role || "admin").replace("_", " ")}</p>
+                <div className="px-4 py-3 border-b border-[#373258]">
+                  <p className="text-sm font-semibold text-white truncate">{displayName}</p>
+                  <p className="text-xs text-slate-400 mt-0.5 truncate capitalize">{(user?.role || "admin").replace("_", " ")}</p>
                 </div>
 
                 {/* Menu items */}
                 <div className="p-1">
                   <button
                     onClick={() => { setIsProfileOpen(false); router.push("/profile"); }}
-                    className="w-full flex items-center gap-2.5 px-3 h-9 rounded-lg text-sm font-medium text-muted hover:text-main hover:bg-brand-bgbase"
+                    className="w-full flex items-center gap-2.5 px-3 h-9 rounded-lg text-sm font-medium text-slate-200 hover:text-white hover:bg-white/[0.08] transition-colors"
                   >
-                    <User size={14} className="shrink-0" />
+                    <User size={14} className="shrink-0 text-slate-400" />
                     Profile
                   </button>
                   <button
                     onClick={() => { setIsProfileOpen(false); router.push("/settings"); }}
-                    className="w-full flex items-center gap-2.5 px-3 h-9 rounded-lg text-sm font-medium text-muted hover:text-main hover:bg-brand-bgbase"
+                    className="w-full flex items-center gap-2.5 px-3 h-9 rounded-lg text-sm font-medium text-slate-200 hover:text-white hover:bg-white/[0.08] transition-colors"
                   >
-                    <Settings size={14} className="shrink-0" />
+                    <Settings size={14} className="shrink-0 text-slate-400" />
                     Settings
                   </button>
-                  <div className="h-px bg-border my-1" />
+                  <div className="h-px bg-[#373258] my-1" />
                   <button
                     onClick={handleLogout}
-                    className="w-full flex items-center gap-2.5 px-3 h-9 rounded-lg text-sm font-medium text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-400/10"
+                    className="w-full flex items-center gap-2.5 px-3 h-9 rounded-lg text-sm font-medium text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition-colors"
                   >
                     <LogOut size={14} className="shrink-0" />
                     Log Out

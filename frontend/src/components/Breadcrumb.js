@@ -25,16 +25,16 @@ const Breadcrumb = ({ defaultTitle }) => {
             <Link 
               href={crumb.path}
               className={`text-[9px] font-black uppercase tracking-[2px] transition-colors ${
-                i === breadcrumbs.length - 1 ? 'text-brand-neonblue' : 'text-muted/50 hover:text-muted'
+                i === breadcrumbs.length - 1 ? 'text-brand-neonblue' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               {crumb.name}
             </Link>
-            {i < breadcrumbs.length - 1 && <span className="text-[9px] text-muted/30">/</span>}
+            {i < breadcrumbs.length - 1 && <span className="text-[9px] text-slate-500">/</span>}
           </div>
         ))}
       </div>
-      <h1 className="text-sm md:text-xl font-rajdhani font-black text-main tracking-widest uppercase flex items-center gap-2 md:gap-3">
+      <h1 className="text-sm md:text-xl font-rajdhani font-black text-white tracking-widest uppercase flex items-center gap-2 md:gap-3">
         <div className="w-1 h-1 md:w-1.5 md:h-1.5 rounded-full bg-brand-crimson shadow-[0_0_8px_rgba(215,38,56,0.5)] flex-shrink-0" />
         <span className="truncate">{currentTitle}</span>
       </h1>
