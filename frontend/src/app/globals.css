@@ -15,7 +15,7 @@
    ============================================================ */
 
 :root {
-  /* ── 60% Dominant — pastel lavender background ── */
+  /* ── 60% Dominant — crisp light background ── */
   --brand-bgbase-rgb: 244, 240, 251;       /* #F4F0FB soft lavender */
   --brand-navy-rgb:   235, 230, 248;       /* slightly deeper lavender */
 
@@ -23,19 +23,19 @@
   --brand-surface-rgb: 255, 255, 255;      /* #FFFFFF pure white cards */
   --brand-panel-rgb:   248, 245, 255;      /* #F8F5FF faint lavender panel */
 
-  /* ── 10% Accent — soft periwinkle blue ── */
-  --brand-neonblue-rgb:   123, 140, 222;   /* #7B8CDE periwinkle */
-  --brand-neonpurple-rgb: 167, 139, 210;   /* #A78BD2 soft purple */
-  --accent:               123, 140, 222;   /* same as neonblue */
+  /* ── 10% Accent — vibrant periwinkle / blue ── */
+  --brand-neonblue-rgb:   99, 102, 241;    /* #6366F1 vibrant indigo */
+  --brand-neonpurple-rgb: 168, 85, 247;    /* #A855F7 vibrant purple */
+  --accent:               99, 102, 241;    /* same as neonblue */
 
-  /* ── Text — soft dark, not harsh black ── */
-  --text-main-rgb:   60, 55, 80;           /* #3C3750 soft dark purple-gray */
-  --text-title-rgb:  45, 40, 65;           /* #2D2841 */
-  --text-muted-rgb:  140, 130, 170;        /* #8C82AA muted lavender */
+  /* ── Text — high contrast, crisp & clear in Light Mode ── */
+  --text-main-rgb:   30, 41, 59;           /* #1E293B slate-800 crisp readable */
+  --text-title-rgb:  15, 23, 42;           /* #0F172A slate-900 */
+  --text-muted-rgb:  100, 116, 139;        /* #64748B slate-500 clearly legible */
 
-  /* ── Border — very soft ── */
-  --brand-border-rgb: 220, 215, 240;       /* #DCD7F0 */
-  --brand-hover-rgb:  235, 230, 250;       /* #EBE6FA */
+  /* ── Border — clean subtle border ── */
+  --brand-border-rgb: 226, 232, 240;       /* #E2E8F0 */
+  --brand-hover-rgb:  241, 245, 249;       /* #F1F5F9 */
 
   /* ── Shorthands ── */
   --brand-bgbase:  rgb(var(--brand-bgbase-rgb));
@@ -44,8 +44,8 @@
   --text-muted:    rgb(var(--text-muted-rgb));
   --brand-crimson: rgb(var(--accent));
 
-  --glass-bg:     rgba(255, 255, 255, 0.7);
-  --glass-border: rgba(123, 140, 222, 0.1);
+  --glass-bg:     rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(99, 102, 241, 0.12);
   --card-shadow:  0 8px 32px -8px rgba(100, 80, 180, 0.08);
 
   /* ── Fluid Typography ── */
@@ -55,32 +55,32 @@
   --fluid-text-h3:  clamp(1rem, 3vw, 1.25rem);
 }
 
-/* ── DARK MODE — pastel dark, still soft on eyes ── */
+/* ── DARK MODE — rich modern dark slate ── */
 .dark {
-  /* 60% — deep muted purple-navy base */
-  --brand-bgbase-rgb: 28, 25, 45;          /* #1C192D */
-  --brand-navy-rgb:   35, 32, 58;          /* #23203A */
+  /* 60% — deep slate base */
+  --brand-bgbase-rgb: 15, 23, 42;          /* #0F172A */
+  --brand-navy-rgb:   23, 32, 54;          /* #172036 */
 
   /* 30% — soft dark surfaces */
-  --brand-surface-rgb: 42, 38, 68;         /* #2A2644 */
-  --brand-panel-rgb:   52, 48, 82;         /* #343052 */
+  --brand-surface-rgb: 30, 41, 59;         /* #1E293B */
+  --brand-panel-rgb:   40, 53, 76;         /* #28354C */
 
   /* 10% — pastel periwinkle accent */
-  --brand-neonblue-rgb:   167, 182, 255;   /* #A7B6FF soft pastel blue */
-  --brand-neonpurple-rgb: 196, 167, 231;   /* #C4A7E7 pastel purple */
-  --accent:               220, 130, 143;   /* #DC828F soft pastel rose for alerts */
+  --brand-neonblue-rgb:   129, 140, 248;   /* #818CF8 soft blue */
+  --brand-neonpurple-rgb: 192, 132, 252;   /* #C084FC soft purple */
+  --accent:               244, 63, 94;     /* #F43F5E soft rose */
 
   /* ── Text ── */
-  --text-main-rgb:   220, 215, 240;        /* #DCD7F0 soft lavender white */
-  --text-title-rgb:  240, 237, 255;        /* #F0EDFF */
-  --text-muted-rgb:  150, 140, 180;        /* #968CB4 */
+  --text-main-rgb:   241, 245, 249;        /* #F1F5F9 */
+  --text-title-rgb:  255, 255, 255;        /* #FFFFFF */
+  --text-muted-rgb:  148, 163, 184;        /* #94A3B8 */
 
   /* ── Border ── */
-  --brand-border-rgb: 60, 55, 90;          /* #3C375A */
-  --brand-hover-rgb:  70, 65, 105;         /* #464169 */
+  --brand-border-rgb: 51, 65, 85;          /* #334155 */
+  --brand-hover-rgb:  45, 58, 80;          /* #2D3A50 */
 
-  --glass-bg:     rgba(28, 25, 45, 0.75);
-  --glass-border: rgba(167, 182, 255, 0.08);
+  --glass-bg:     rgba(30, 41, 59, 0.85);
+  --glass-border: rgba(129, 140, 248, 0.1);
   --card-shadow:  0 10px 40px -10px rgba(0, 0, 0, 0.4);
 }
 

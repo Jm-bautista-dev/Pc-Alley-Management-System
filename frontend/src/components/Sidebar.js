@@ -283,10 +283,10 @@ const Sidebar = () => {
                     title={item.title}
                     className={`
                       w-full flex items-center justify-center
-                      h-10 rounded-lg
+                      h-10 rounded-lg transition-colors
                       ${active
                         ? "bg-brand-bgbase"
-                        : "text-muted hover:text-main hover:bg-brand-bgbase"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-brand-hover"
                       }
                     `}
                   >
@@ -309,9 +309,9 @@ const Sidebar = () => {
                 if (!items.length) return null;
                 return (
                   <div key={group}>
-                    {/* Group label - remove only the sales text with white mark */}
+                    {/* Group label */}
                     {group !== "SALES" && (
-                      <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted/60 select-none">
+                      <p className="px-3 mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 select-none">
                         {group}
                       </p>
                     )}
@@ -331,10 +331,10 @@ const Sidebar = () => {
                               className={`
                                 relative w-full flex items-center gap-3
                                 h-10 px-3 rounded-lg
-                                text-sm font-medium
+                                text-sm font-medium transition-colors
                                 ${active
                                   ? "font-semibold"
-                                  : "text-muted hover:text-main hover:bg-brand-bgbase"
+                                  : "text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-brand-hover"
                                 }
                               `}
                               style={active ? { backgroundColor: roleTheme.color + "15", color: roleTheme.color } : {}}
@@ -362,7 +362,7 @@ const Sidebar = () => {
                               {item.subItems && (
                                 <ChevronDown
                                   size={13}
-                                  className={`shrink-0 text-muted/50 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+                                  className={`shrink-0 text-slate-400 dark:text-slate-500 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
                                 />
                               )}
                             </Wrapper>
@@ -387,10 +387,10 @@ const Sidebar = () => {
                                           className={`
                                             flex items-center gap-2.5
                                             h-8 px-2 rounded-md
-                                            text-sm font-medium
+                                            text-sm font-medium transition-colors
                                             ${subActive
                                               ? "font-semibold"
-                                              : "text-muted hover:text-main hover:bg-brand-bgbase"
+                                              : "text-slate-600 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white hover:bg-brand-hover"
                                             }
                                           `}
                                           style={subActive ? { color: roleTheme.color, backgroundColor: roleTheme.color + "12" } : {}}
@@ -399,7 +399,7 @@ const Sidebar = () => {
                                             className="w-1.5 h-1.5 rounded-full shrink-0"
                                             style={{
                                               backgroundColor: subActive ? roleTheme.color : "currentColor",
-                                              opacity: subActive ? 1 : 0.3,
+                                              opacity: subActive ? 1 : 0.4,
                                             }}
                                           />
                                           {sub.title}
@@ -430,7 +430,7 @@ const Sidebar = () => {
                 text-sm font-medium transition-colors
                 ${pathname === "/settings"
                   ? "bg-brand-crimson/10 text-brand-crimson font-semibold"
-                  : "text-muted hover:text-main hover:bg-brand-bgbase"
+                  : "text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-brand-hover"
                 }
                 ${!isExpanded ? "justify-center" : ""}
               `}
@@ -466,8 +466,8 @@ const Sidebar = () => {
             {isExpanded && (
               <>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-main truncate leading-tight">{userName}</p>
-                  <p className="text-xs text-muted truncate">{roleName}</p>
+                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate leading-tight">{userName}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{roleName}</p>
                 </div>
               </>
             )}

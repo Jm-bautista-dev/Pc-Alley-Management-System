@@ -34,6 +34,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuthGuard } from "@/lib/useAuthGuard";
+import { useTheme } from "@/context/ThemeContext";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -68,9 +69,9 @@ const PesoSign = ({ size = "1.25rem" }) => (
 );
 
 const RELIABILITY_CONFIG = {
-  "High":     { color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/30", dot: "bg-emerald-400" },
-  "Moderate": { color: "text-amber-400",   bg: "bg-amber-500/10",   border: "border-amber-500/30",   dot: "bg-amber-400" },
-  "Low":      { color: "text-rose-400",    bg: "bg-rose-500/10",    border: "border-rose-500/30",    dot: "bg-rose-400" },
+  "High":     { color: "text-emerald-500 dark:text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/30", dot: "bg-emerald-500" },
+  "Moderate": { color: "text-amber-500 dark:text-amber-400",   bg: "bg-amber-500/10",   border: "border-amber-500/30",   dot: "bg-amber-500" },
+  "Low":      { color: "text-rose-500 dark:text-rose-400",    bg: "bg-rose-500/10",    border: "border-rose-500/30",    dot: "bg-rose-500" },
 };
 
 const MODEL_COLORS = {
@@ -78,7 +79,7 @@ const MODEL_COLORS = {
   moving_average: "#38BDF8",
   exponential_smoothing: "#F59E0B",
   holt_linear: "#A855F7",
-  linear_regression: "#00F2FF",
+  linear_regression: "#06B6D4",
   seasonal_naive: "#10B981",
 };
 
@@ -86,6 +87,8 @@ function BenchmarkContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, isChecking } = useAuthGuard();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
 
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
@@ -220,7 +223,7 @@ function BenchmarkContent() {
     setHistoryLoading(true);
     const token = localStorage.getItem("token");
     try {
-      const res = await fetch(apiUrl("/api/analytics/benchmark/history?limit=15"), {
+      const res = await fetch(apiUrl("/api/analytics/benchmark/history"), {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -228,25 +231,38 @@ function BenchmarkContent() {
         setHistoryRuns(json.runs || []);
       }
     } catch (err) {
-      console.warn("Failed to load benchmark history:", err.message);
+      console.error("Failed to load benchmark history:", err);
     } finally {
       setHistoryLoading(false);
     }
   };
 
+  // Trigger evaluation upon filter changes
   useEffect(() => {
-    fetchBenchmark();
-  }, [scopeType, selectedBranch, selectedCategory, selectedProduct, periodPreset, groupBy, metricTarget, customStart, customEnd]);
+    if (!isChecking && user?.role === "super_admin") {
+      fetchBenchmark();
+    }
+  }, [
+    scopeType,
+    selectedBranch,
+    selectedCategory,
+    selectedProduct,
+    periodPreset,
+    groupBy,
+    metricTarget,
+    isChecking,
+    user
+  ]);
 
-  // Export to Excel
+  // Handle Excel Export
   const handleExport = () => {
     if (!data || !data.hasSufficientData) {
-      showError("Export Failed", "No benchmark data available to export.");
+      showError("Export Unavailable", "No evaluated benchmark data to export.");
       return;
     }
 
     try {
-      const exportRows = (data.timeline || []).map(row => {
+      const exportRows = (data.timeline || []).map((row) => {
         const rowObj = {
           "Backtest Period": row.period,
           "Actual Recorded Demand": row.actual,
@@ -301,7 +317,7 @@ function BenchmarkContent() {
         label: "Actual Recorded Demand",
         data: data?.timeline?.map(d => d.actual) || [],
         borderColor: "#10B981",
-        backgroundColor: "rgba(16, 185, 129, 0.10)",
+        backgroundColor: "rgba(16, 185, 129, 0.12)",
         fill: true,
         tension: 0.25,
         pointBackgroundColor: "#10B981",
@@ -320,7 +336,7 @@ function BenchmarkContent() {
         })
         .map(m => {
           const isBest = m.rank === 1;
-          const color = MODEL_COLORS[m.modelId] || "#00F2FF";
+          const color = MODEL_COLORS[m.modelId] || "#06B6D4";
           return {
             label: `${m.modelName} ${isBest ? "(Best)" : ""}`,
             data: data?.timeline?.map(d => d.predictions?.[m.modelId] ?? null) || [],
@@ -350,11 +366,11 @@ function BenchmarkContent() {
         }) || [],
         backgroundColor: data?.timeline?.map(d => {
           const res = (d.predictions?.[bestModelId] ?? 0) - d.actual;
-          return res >= 0 ? "rgba(0, 242, 255, 0.65)" : "rgba(244, 63, 94, 0.65)";
+          return res >= 0 ? "rgba(6, 182, 212, 0.7)" : "rgba(244, 63, 94, 0.7)";
         }) || [],
         borderColor: data?.timeline?.map(d => {
           const res = (d.predictions?.[bestModelId] ?? 0) - d.actual;
-          return res >= 0 ? "#00F2FF" : "#F43F5E";
+          return res >= 0 ? "#06B6D4" : "#F43F5E";
         }) || [],
         borderWidth: 1.5,
         borderRadius: 4
@@ -369,17 +385,17 @@ function BenchmarkContent() {
       legend: {
         position: 'top',
         labels: {
-          color: '#94A3B8',
+          color: isDark ? '#94A3B8' : '#475569',
           font: { family: 'inherit', size: 11 },
           usePointStyle: true,
           boxWidth: 8
         }
       },
       tooltip: {
-        backgroundColor: '#0B132B',
-        titleColor: '#F8FAFC',
-        bodyColor: '#94A3B8',
-        borderColor: '#1E293B',
+        backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
+        titleColor: isDark ? '#F8FAFC' : '#0F172A',
+        bodyColor: isDark ? '#94A3B8' : '#475569',
+        borderColor: isDark ? '#334155' : '#E2E8F0',
         borderWidth: 1,
         padding: 12,
         callbacks: {
@@ -396,13 +412,13 @@ function BenchmarkContent() {
     },
     scales: {
       x: {
-        grid: { color: 'rgba(255, 255, 255, 0.04)' },
-        ticks: { color: '#64748B', font: { size: 11 } }
+        grid: { color: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)' },
+        ticks: { color: isDark ? '#94A3B8' : '#64748B', font: { size: 11 } }
       },
       y: {
-        grid: { color: 'rgba(255, 255, 255, 0.04)' },
+        grid: { color: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)' },
         ticks: {
-          color: '#64748B',
+          color: isDark ? '#94A3B8' : '#64748B',
           font: { size: 11 },
           callback: function (val) {
             const prefix = data?.metric === 'quantity' ? '' : '₱';
@@ -414,30 +430,30 @@ function BenchmarkContent() {
   };
 
   return (
-    <div className="flex h-screen bg-[#070b14] text-slate-100 overflow-hidden font-sans">
+    <div className="flex bg-brand-bgbase min-h-screen text-main font-dmsans transition-colors duration-300">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <TopBar title="MODEL BENCHMARKING" />
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6">
           {/* Top Title & Action Bar */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/60 p-5 rounded-2xl border border-slate-800/80 backdrop-blur-md shadow-xl">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-brand-surface p-5 rounded-2xl border border-border shadow-sm">
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-widest bg-brand-neonblue/10 text-brand-neonblue border border-brand-neonblue/30 uppercase">
                   Rolling-Origin Backtest
                 </span>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-widest bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 uppercase">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-widest bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 uppercase">
                   Zero Data Leakage
                 </span>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-widest bg-purple-500/10 text-purple-400 border border-purple-500/30 uppercase">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-widest bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/30 uppercase">
                   Super Admin Only
                 </span>
               </div>
-              <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white mt-1.5 flex items-center gap-2">
+              <h1 className="text-xl sm:text-2xl font-black tracking-tight text-main mt-1.5 flex items-center gap-2">
                 MODEL BENCHMARKING &amp; <span className="text-brand-neonblue">EVALUATION</span>
               </h1>
-              <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
+              <p className="text-xs sm:text-sm text-muted mt-0.5">
                 Scientific walk-forward backtesting across 6 candidate algorithms to identify PC Alley&apos;s most accurate forecasting model.
               </p>
             </div>
@@ -448,14 +464,14 @@ function BenchmarkContent() {
                   fetchHistory();
                   setIsHistoryOpen(true);
                 }}
-                className="flex items-center gap-2 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold border border-slate-700 transition"
+                className="flex items-center gap-2 px-3.5 py-2 bg-brand-bgbase hover:bg-brand-hover text-main rounded-xl text-xs font-semibold border border-border transition shadow-sm"
               >
-                <History className="w-4 h-4 text-purple-400" />
+                <History className="w-4 h-4 text-purple-500 dark:text-purple-400" />
                 Benchmark Runs
               </button>
               <button
                 onClick={() => setIsMethodologyOpen(true)}
-                className="flex items-center gap-2 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold border border-slate-700 transition"
+                className="flex items-center gap-2 px-3.5 py-2 bg-brand-bgbase hover:bg-brand-hover text-main rounded-xl text-xs font-semibold border border-border transition shadow-sm"
               >
                 <HelpCircle className="w-4 h-4 text-brand-neonblue" />
                 Methodology Guide
@@ -463,15 +479,15 @@ function BenchmarkContent() {
               <button
                 onClick={() => fetchBenchmark(true)}
                 disabled={loading}
-                className="flex items-center gap-2 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold border border-slate-700 transition"
+                className="flex items-center gap-2 px-3.5 py-2 bg-brand-bgbase hover:bg-brand-hover text-main rounded-xl text-xs font-semibold border border-border transition shadow-sm"
               >
-                <RefreshCw className={`w-4 h-4 text-slate-300 ${loading ? "animate-spin" : ""}`} />
+                <RefreshCw className={`w-4 h-4 text-slate-500 dark:text-slate-300 ${loading ? "animate-spin" : ""}`} />
                 Recalculate
               </button>
               <button
                 onClick={handleExport}
                 disabled={!data?.hasSufficientData}
-                className="flex items-center gap-2 px-4 py-2 bg-brand-neonblue hover:bg-brand-neonblue/90 text-slate-950 font-bold rounded-xl text-xs shadow-lg shadow-brand-neonblue/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-4 py-2 bg-brand-neonblue hover:bg-brand-neonblue/90 text-white font-bold rounded-xl text-xs shadow-md shadow-brand-neonblue/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <FileDown className="w-4 h-4" />
                 Export Benchmark (.xlsx)
@@ -480,16 +496,16 @@ function BenchmarkContent() {
           </div>
 
           {/* Filter Controls Toolbar */}
-          <div className="bg-slate-900/40 p-4 rounded-2xl border border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5 text-xs">
+          <div className="bg-brand-surface p-4 rounded-2xl border border-border grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5 text-xs shadow-sm">
             {/* Scope Level */}
             <div>
-              <label className="block text-[11px] font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">
+              <label className="block text-[11px] font-bold text-muted mb-1.5 uppercase tracking-wider">
                 Scope Level
               </label>
               <select
                 value={scopeType}
                 onChange={(e) => setScopeType(e.target.value)}
-                className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-brand-neonblue transition"
+                className="w-full bg-brand-bgbase border border-border rounded-xl px-3 py-2 text-main focus:outline-none focus:border-brand-neonblue transition"
               >
                 <option value="all">Business-Wide (Consolidated)</option>
                 <option value="branch">Branch Specific</option>
@@ -501,13 +517,13 @@ function BenchmarkContent() {
             {/* Dynamic Scope Target (Branch, Category, or Product) */}
             {scopeType === "branch" && (
               <div>
-                <label className="block text-[11px] font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">
+                <label className="block text-[11px] font-bold text-muted mb-1.5 uppercase tracking-wider">
                   Target Branch
                 </label>
                 <select
                   value={selectedBranch}
                   onChange={(e) => setSelectedBranch(e.target.value)}
-                  className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-brand-neonblue transition"
+                  className="w-full bg-brand-bgbase border border-border rounded-xl px-3 py-2 text-main focus:outline-none focus:border-brand-neonblue transition"
                 >
                   <option value="all">All Branches</option>
                   {(branches || []).map(b => (
@@ -519,13 +535,13 @@ function BenchmarkContent() {
 
             {scopeType === "category" && (
               <div>
-                <label className="block text-[11px] font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">
+                <label className="block text-[11px] font-bold text-muted mb-1.5 uppercase tracking-wider">
                   Target Category
                 </label>
                 <select
                   value={selectedCategory}
                   onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-brand-neonblue transition"
+                  className="w-full bg-brand-bgbase border border-border rounded-xl px-3 py-2 text-main focus:outline-none focus:border-brand-neonblue transition"
                 >
                   <option value="all">All Categories</option>
                   {(categories || []).map(c => (
@@ -537,13 +553,13 @@ function BenchmarkContent() {
 
             {scopeType === "product" && (
               <div>
-                <label className="block text-[11px] font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">
+                <label className="block text-[11px] font-bold text-muted mb-1.5 uppercase tracking-wider">
                   Target Product
                 </label>
                 <select
                   value={selectedProduct}
                   onChange={(e) => setSelectedProduct(e.target.value)}
-                  className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-brand-neonblue transition"
+                  className="w-full bg-brand-bgbase border border-border rounded-xl px-3 py-2 text-main focus:outline-none focus:border-brand-neonblue transition"
                 >
                   <option value="all">Select Product...</option>
                   {(products || []).map(p => (
@@ -555,13 +571,13 @@ function BenchmarkContent() {
 
             {/* Target Metric */}
             <div>
-              <label className="block text-[11px] font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">
+              <label className="block text-[11px] font-bold text-muted mb-1.5 uppercase tracking-wider">
                 Evaluation Metric
               </label>
               <select
                 value={metricTarget}
                 onChange={(e) => setMetricTarget(e.target.value)}
-                className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-brand-neonblue transition"
+                className="w-full bg-brand-bgbase border border-border rounded-xl px-3 py-2 text-main focus:outline-none focus:border-brand-neonblue transition"
               >
                 <option value="revenue">Sales Revenue (₱)</option>
                 <option value="quantity">Units Sold (Volume)</option>
@@ -570,13 +586,13 @@ function BenchmarkContent() {
 
             {/* Granularity */}
             <div>
-              <label className="block text-[11px] font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">
+              <label className="block text-[11px] font-bold text-muted mb-1.5 uppercase tracking-wider">
                 Granularity
               </label>
               <select
                 value={groupBy}
                 onChange={(e) => setGroupBy(e.target.value)}
-                className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-brand-neonblue transition"
+                className="w-full bg-brand-bgbase border border-border rounded-xl px-3 py-2 text-main focus:outline-none focus:border-brand-neonblue transition"
               >
                 <option value="monthly">Monthly (Standard)</option>
                 <option value="weekly">Weekly</option>
@@ -586,13 +602,13 @@ function BenchmarkContent() {
 
             {/* Period Window */}
             <div>
-              <label className="block text-[11px] font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">
+              <label className="block text-[11px] font-bold text-muted mb-1.5 uppercase tracking-wider">
                 Validation Window
               </label>
               <select
                 value={periodPreset}
                 onChange={(e) => setPeriodPreset(e.target.value)}
-                className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-brand-neonblue transition"
+                className="w-full bg-brand-bgbase border border-border rounded-xl px-3 py-2 text-main focus:outline-none focus:border-brand-neonblue transition"
               >
                 <option value="3m">Last 3 Months</option>
                 <option value="6m">Last 6 Months</option>
@@ -604,13 +620,13 @@ function BenchmarkContent() {
 
             {/* Model Focus Filter */}
             <div>
-              <label className="block text-[11px] font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">
+              <label className="block text-[11px] font-bold text-muted mb-1.5 uppercase tracking-wider">
                 Model Visual Focus
               </label>
               <select
                 value={selectedModelFilter}
                 onChange={(e) => setSelectedModelFilter(e.target.value)}
-                className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-brand-neonblue transition"
+                className="w-full bg-brand-bgbase border border-border rounded-xl px-3 py-2 text-main focus:outline-none focus:border-brand-neonblue transition"
               >
                 <option value="all">Key Models Comparison</option>
                 <option value="naive">Naive (Baseline)</option>
@@ -628,24 +644,24 @@ function BenchmarkContent() {
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
-              className="bg-slate-900/30 p-4 rounded-xl border border-slate-800 flex items-center gap-4 text-xs"
+              className="bg-brand-surface p-4 rounded-xl border border-border flex items-center gap-4 text-xs shadow-sm"
             >
               <div>
-                <label className="block text-[10px] text-slate-400 mb-1">Start Date</label>
+                <label className="block text-[10px] text-muted mb-1">Start Date</label>
                 <input
                   type="date"
                   value={customStart}
                   onChange={(e) => setCustomStart(e.target.value)}
-                  className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-slate-200 focus:outline-none focus:border-brand-neonblue"
+                  className="bg-brand-bgbase border border-border rounded-lg px-3 py-1.5 text-main focus:outline-none focus:border-brand-neonblue"
                 />
               </div>
               <div>
-                <label className="block text-[10px] text-slate-400 mb-1">End Date</label>
+                <label className="block text-[10px] text-muted mb-1">End Date</label>
                 <input
                   type="date"
                   value={customEnd}
                   onChange={(e) => setCustomEnd(e.target.value)}
-                  className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-slate-200 focus:outline-none focus:border-brand-neonblue"
+                  className="bg-brand-bgbase border border-border rounded-lg px-3 py-1.5 text-main focus:outline-none focus:border-brand-neonblue"
                 />
               </div>
             </motion.div>
@@ -654,17 +670,17 @@ function BenchmarkContent() {
           {/* Insufficient Data Guard Alert */}
           {data && !data.hasSufficientData && !loading && (
             <div className="bg-amber-500/10 border border-amber-500/30 p-6 rounded-2xl flex items-start gap-4">
-              <AlertTriangle className="w-6 h-6 text-amber-400 shrink-0 mt-0.5" />
+              <AlertTriangle className="w-6 h-6 text-amber-500 dark:text-amber-400 shrink-0 mt-0.5" />
               <div>
-                <h3 className="text-base font-bold text-amber-300">Data Sufficiency Advisory: Insufficient Validation Series</h3>
-                <p className="text-xs text-amber-200/80 mt-1 leading-relaxed">
+                <h3 className="text-base font-bold text-amber-600 dark:text-amber-300">Data Sufficiency Advisory: Insufficient Validation Series</h3>
+                <p className="text-xs text-amber-700/80 dark:text-amber-200/80 mt-1 leading-relaxed">
                   {data.message || "To guarantee statistical validity without data leakage, walk-forward rolling-origin backtesting requires at least 4 historical periods."}
                 </p>
-                <div className="mt-3 flex items-center gap-2">
-                  <span className="text-[11px] font-semibold text-slate-300 bg-slate-950/80 px-3 py-1 rounded-lg border border-slate-800">
+                <div className="mt-3 flex items-center gap-2 flex-wrap">
+                  <span className="text-[11px] font-semibold text-main bg-brand-bgbase px-3 py-1 rounded-lg border border-border">
                     Found Periods: {data.totalPoints || 0} / {data.minRequired || 4}
                   </span>
-                  <span className="text-[11px] text-slate-400">
+                  <span className="text-[11px] text-muted">
                     Switch granularity to <strong>Weekly</strong> or <strong>Daily</strong>, or select a broader date window.
                   </span>
                 </div>
@@ -674,7 +690,7 @@ function BenchmarkContent() {
 
           {/* Best Model Recommendation Highlight Banner */}
           {data?.hasSufficientData && data?.bestModel && (
-            <div className="bg-gradient-to-r from-brand-neonblue/15 via-purple-500/10 to-slate-900/80 border border-brand-neonblue/40 p-5 rounded-2xl backdrop-blur-md shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="bg-gradient-to-r from-brand-neonblue/10 via-brand-surface to-brand-surface border border-brand-neonblue/30 p-5 rounded-2xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-start gap-3.5">
                 <div className="w-10 h-10 rounded-xl bg-brand-neonblue/20 border border-brand-neonblue/40 flex items-center justify-center text-brand-neonblue shrink-0 mt-0.5">
                   <Award className="w-5 h-5" />
@@ -684,30 +700,30 @@ function BenchmarkContent() {
                     <span className="text-[10px] font-bold tracking-widest uppercase px-2 py-0.5 rounded bg-brand-neonblue/20 text-brand-neonblue">
                       Recommended Champion
                     </span>
-                    <span className="text-base font-black text-white">
+                    <span className="text-base font-black text-main">
                       {data.bestModel.modelName}
                     </span>
                     {data.bestModel.liftVsNaivePercent !== null && data.bestModel.liftVsNaivePercent > 0 && (
-                      <span className="text-[11px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">
+                      <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">
                         +{data.bestModel.liftVsNaivePercent}% accuracy lift vs baseline
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                  <p className="text-xs text-muted mt-1 leading-relaxed">
                     {data.bestModel.recommendationReason}
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 shrink-0 bg-slate-950/70 px-4 py-2.5 rounded-xl border border-slate-800">
+              <div className="flex items-center gap-3 shrink-0 bg-brand-bgbase px-4 py-2.5 rounded-xl border border-border">
                 <div className="text-right">
-                  <div className="text-[10px] uppercase font-bold text-slate-400">Primary Error (WAPE)</div>
+                  <div className="text-[10px] uppercase font-bold text-muted">Primary Error (WAPE)</div>
                   <div className="text-lg font-black text-brand-neonblue">{data.bestModel.wape}%</div>
                 </div>
-                <div className="h-7 w-px bg-slate-800" />
+                <div className="h-7 w-px bg-border" />
                 <div className="text-left">
-                  <div className="text-[10px] uppercase font-bold text-slate-400">Reliability Tier</div>
-                  <div className={`text-sm font-bold ${RELIABILITY_CONFIG[data.bestModel.reliability]?.color || 'text-slate-300'}`}>
+                  <div className="text-[10px] uppercase font-bold text-muted">Reliability Tier</div>
+                  <div className={`text-sm font-bold ${RELIABILITY_CONFIG[data.bestModel.reliability]?.color || 'text-main'}`}>
                     {data.bestModel.reliability}
                   </div>
                 </div>
@@ -719,81 +735,81 @@ function BenchmarkContent() {
           {data?.hasSufficientData && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
               {/* Primary WAPE Error */}
-              <div className="bg-slate-900/60 border border-slate-800/80 p-4 rounded-2xl relative overflow-hidden backdrop-blur-md">
+              <div className="bg-brand-surface border border-border p-4 rounded-2xl relative overflow-hidden shadow-sm">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Primary WAPE</span>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-muted">Primary WAPE</span>
                   <Percent className="w-4 h-4 text-brand-neonblue" />
                 </div>
                 <div className="text-2xl sm:text-3xl font-black text-brand-neonblue mt-2">
                   {data.bestModel?.wape ?? 0}%
                 </div>
-                <p className="text-[10px] text-slate-400 mt-1">Weighted Abs % Error (Zero-Safe)</p>
+                <p className="text-[10px] text-muted mt-1">Weighted Abs % Error (Zero-Safe)</p>
               </div>
 
               {/* MAE */}
-              <div className="bg-slate-900/60 border border-slate-800/80 p-4 rounded-2xl relative overflow-hidden backdrop-blur-md">
+              <div className="bg-brand-surface border border-border p-4 rounded-2xl relative overflow-hidden shadow-sm">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Mean Abs Error</span>
-                  <Target className="w-4 h-4 text-emerald-400" />
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-muted">Mean Abs Error</span>
+                  <Target className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
                 </div>
-                <div className="text-2xl sm:text-3xl font-black text-white mt-2 flex items-center gap-1">
+                <div className="text-2xl sm:text-3xl font-black text-main mt-2 flex items-center gap-1">
                   {data.metric === 'quantity' ? '' : <PesoSign size="1.25rem" />}
                   {data.bestModel?.mae?.toLocaleString() ?? 0}
                 </div>
-                <p className="text-[10px] text-slate-400 mt-1">Average step deviation</p>
+                <p className="text-[10px] text-muted mt-1">Average step deviation</p>
               </div>
 
               {/* RMSE */}
-              <div className="bg-slate-900/60 border border-slate-800/80 p-4 rounded-2xl relative overflow-hidden backdrop-blur-md">
+              <div className="bg-brand-surface border border-border p-4 rounded-2xl relative overflow-hidden shadow-sm">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Root Mean Sq Error</span>
-                  <Activity className="w-4 h-4 text-purple-400" />
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-muted">Root Mean Sq Error</span>
+                  <Activity className="w-4 h-4 text-purple-500 dark:text-purple-400" />
                 </div>
-                <div className="text-2xl sm:text-3xl font-black text-white mt-2 flex items-center gap-1">
+                <div className="text-2xl sm:text-3xl font-black text-main mt-2 flex items-center gap-1">
                   {data.metric === 'quantity' ? '' : <PesoSign size="1.25rem" />}
                   {data.bestModel?.rmse?.toLocaleString() ?? 0}
                 </div>
-                <p className="text-[10px] text-slate-400 mt-1">Penalizes extreme outliers</p>
+                <p className="text-[10px] text-muted mt-1">Penalizes extreme outliers</p>
               </div>
 
               {/* Directional Bias */}
-              <div className="bg-slate-900/60 border border-slate-800/80 p-4 rounded-2xl relative overflow-hidden backdrop-blur-md">
+              <div className="bg-brand-surface border border-border p-4 rounded-2xl relative overflow-hidden shadow-sm">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Directional Bias</span>
-                  <Gauge className="w-4 h-4 text-amber-400" />
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-muted">Directional Bias</span>
+                  <Gauge className="w-4 h-4 text-amber-500 dark:text-amber-400" />
                 </div>
-                <div className="text-xl sm:text-2xl font-black text-white mt-2">
+                <div className="text-xl sm:text-2xl font-black text-main mt-2">
                   {data.bestModel?.bias > 0 ? `+${data.bestModel.bias}` : (data.bestModel?.bias ?? 0)}
                 </div>
                 <div className="mt-1">
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${data.bestModel?.directionalBias === 'Over-forecasting' ? 'bg-cyan-500/10 text-cyan-400' : data.bestModel?.directionalBias === 'Under-forecasting' ? 'bg-rose-500/10 text-rose-400' : 'bg-slate-800 text-slate-300'}`}>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${data.bestModel?.directionalBias === 'Over-forecasting' ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400' : data.bestModel?.directionalBias === 'Under-forecasting' ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' : 'bg-brand-bgbase text-muted'}`}>
                     {data.bestModel?.directionalBias || 'Unbiased'}
                   </span>
                 </div>
               </div>
 
               {/* Validation Windows */}
-              <div className="bg-slate-900/60 border border-slate-800/80 p-4 rounded-2xl relative overflow-hidden backdrop-blur-md">
+              <div className="bg-brand-surface border border-border p-4 rounded-2xl relative overflow-hidden shadow-sm">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Backtest Windows</span>
-                  <Layers className="w-4 h-4 text-blue-400" />
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-muted">Backtest Windows</span>
+                  <Layers className="w-4 h-4 text-blue-500 dark:text-blue-400" />
                 </div>
-                <div className="text-2xl sm:text-3xl font-black text-white mt-2">
+                <div className="text-2xl sm:text-3xl font-black text-main mt-2">
                   {data.validationWindows || 0}
                 </div>
-                <p className="text-[10px] text-slate-400 mt-1">Rolling evaluation steps</p>
+                <p className="text-[10px] text-muted mt-1">Rolling evaluation steps</p>
               </div>
 
               {/* Reliability Tier */}
-              <div className="bg-slate-900/60 border border-slate-800/80 p-4 rounded-2xl relative overflow-hidden backdrop-blur-md">
+              <div className="bg-brand-surface border border-border p-4 rounded-2xl relative overflow-hidden shadow-sm">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Reliability</span>
-                  <Sparkles className="w-4 h-4 text-yellow-400" />
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-muted">Reliability</span>
+                  <Sparkles className="w-4 h-4 text-yellow-500 dark:text-yellow-400" />
                 </div>
-                <div className={`text-2xl sm:text-3xl font-black mt-2 ${RELIABILITY_CONFIG[data.bestModel?.reliability]?.color || 'text-slate-300'}`}>
+                <div className={`text-2xl sm:text-3xl font-black mt-2 ${RELIABILITY_CONFIG[data.bestModel?.reliability]?.color || 'text-main'}`}>
                   {data.bestModel?.reliability || 'Moderate'}
                 </div>
-                <p className="text-[10px] text-slate-400 mt-1">Based on error &amp; test size</p>
+                <p className="text-[10px] text-muted mt-1">Based on error &amp; test size</p>
               </div>
             </div>
           )}
@@ -802,18 +818,18 @@ function BenchmarkContent() {
           {data?.hasSufficientData && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Actual vs Candidate Models Line Chart */}
-              <div className="bg-slate-900/60 border border-slate-800 p-5 rounded-2xl shadow-xl">
+              <div className="bg-brand-surface border border-border p-5 rounded-2xl shadow-sm">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                    <h2 className="text-sm font-bold text-main uppercase tracking-wider flex items-center gap-2">
                       <BarChart3 className="w-4 h-4 text-brand-neonblue" />
                       Historical Walk-Forward Backtesting Trajectory
                     </h2>
-                    <p className="text-xs text-slate-400 mt-0.5">
+                    <p className="text-xs text-muted mt-0.5">
                       Ground truth actual sales vs candidate predictions at each rolling test window.
                     </p>
                   </div>
-                  <span className="text-[10px] font-bold bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 text-slate-300">
+                  <span className="text-[10px] font-bold bg-brand-bgbase px-2.5 py-1 rounded-lg border border-border text-muted">
                     {data.validationWindows} Cutoffs Evaluated
                   </span>
                 </div>
@@ -823,18 +839,18 @@ function BenchmarkContent() {
               </div>
 
               {/* Residuals / Directional Bias Bar Chart */}
-              <div className="bg-slate-900/60 border border-slate-800 p-5 rounded-2xl shadow-xl">
+              <div className="bg-brand-surface border border-border p-5 rounded-2xl shadow-sm">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                      <Activity className="w-4 h-4 text-amber-400" />
+                    <h2 className="text-sm font-bold text-main uppercase tracking-wider flex items-center gap-2">
+                      <Activity className="w-4 h-4 text-amber-500 dark:text-amber-400" />
                       Prediction Error &amp; Residual Diagnostic
                     </h2>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Residual values (<span className="text-cyan-400">Cyan = Over-forecast</span>, <span className="text-rose-400">Rose = Under-forecast</span>).
+                    <p className="text-xs text-muted mt-0.5">
+                      Residual values (<span className="text-cyan-600 dark:text-cyan-400 font-semibold">Cyan = Over-forecast</span>, <span className="text-rose-600 dark:text-rose-400 font-semibold">Rose = Under-forecast</span>).
                     </p>
                   </div>
-                  <span className="text-[10px] font-bold bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 text-slate-300">
+                  <span className="text-[10px] font-bold bg-brand-bgbase px-2.5 py-1 rounded-lg border border-border text-muted">
                     Zero Baseline Ideal
                   </span>
                 </div>
@@ -847,25 +863,25 @@ function BenchmarkContent() {
 
           {/* Model Comparison Leaderboard Table */}
           {data?.hasSufficientData && (
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
-              <div className="p-5 border-b border-slate-800/80 flex items-center justify-between">
+            <div className="bg-brand-surface border border-border rounded-2xl shadow-sm overflow-hidden">
+              <div className="p-5 border-b border-border flex items-center justify-between">
                 <div>
-                  <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                  <h2 className="text-sm font-bold text-main uppercase tracking-wider flex items-center gap-2">
                     <Sliders className="w-4 h-4 text-brand-neonblue" />
                     Forecasting Model Benchmark Leaderboard
                   </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <p className="text-xs text-muted mt-0.5">
                     Rigorous ranking ordered by lowest WAPE error across {data.validationWindows} rolling backtest intervals.
                   </p>
                 </div>
-                <span className="text-xs text-slate-400 font-semibold">
+                <span className="text-xs text-muted font-semibold">
                   {data.models?.length || 0} Algorithms Evaluated
                 </span>
               </div>
 
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-950/70 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
+                  <thead className="bg-brand-bgbase text-muted uppercase text-[10px] tracking-wider border-b border-border">
                     <tr>
                       <th className="px-5 py-3">Rank</th>
                       <th className="px-5 py-3">Forecasting Algorithm</th>
@@ -878,48 +894,48 @@ function BenchmarkContent() {
                       <th className="px-5 py-3 text-center">Recommendation</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/50">
+                  <tbody className="divide-y divide-border">
                     {(data?.models || []).map((m) => {
                       const isBest = m.rank === 1;
                       const rel = RELIABILITY_CONFIG[m.reliability] || RELIABILITY_CONFIG["Moderate"];
 
                       return (
-                        <tr key={m.modelId} className={`hover:bg-slate-800/30 transition ${isBest ? "bg-brand-neonblue/5 font-semibold" : ""}`}>
+                        <tr key={m.modelId} className={`hover:bg-brand-hover/50 transition ${isBest ? "bg-brand-neonblue/5 font-semibold" : ""}`}>
                           <td className="px-5 py-3.5">
                             {m.rank ? (
-                              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black ${isBest ? "bg-brand-neonblue text-slate-950" : "bg-slate-800 text-slate-300"}`}>
+                              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black ${isBest ? "bg-brand-neonblue text-white" : "bg-brand-bgbase text-main border border-border"}`}>
                                 #{m.rank}
                               </span>
                             ) : (
-                              <span className="text-slate-500">—</span>
+                              <span className="text-muted">—</span>
                             )}
                           </td>
                           <td className="px-5 py-3.5 flex items-center gap-2">
                             {isBest && <Award className="w-4 h-4 text-brand-neonblue shrink-0" />}
                             <div>
-                              <div className="text-white font-semibold">{m.modelName}</div>
+                              <div className="text-main font-semibold">{m.modelName}</div>
                               {m.modelId === "naive" && (
-                                <div className="text-[10px] text-slate-400">Baseline Benchmark</div>
+                                <div className="text-[10px] text-muted">Baseline Benchmark</div>
                               )}
                               {!m.applicable && (
-                                <div className="text-[10px] text-rose-400">{m.ineligibilityReason}</div>
+                                <div className="text-[10px] text-rose-500">{m.ineligibilityReason}</div>
                               )}
                             </div>
                           </td>
                           <td className="px-5 py-3.5 text-right font-mono font-bold text-brand-neonblue">
                             {m.wape !== null ? `${m.wape}%` : "N/A"}
                           </td>
-                          <td className="px-5 py-3.5 text-right font-mono text-slate-200">
+                          <td className="px-5 py-3.5 text-right font-mono text-main">
                             {m.mae !== null ? (data.metric === 'quantity' ? m.mae : `₱${m.mae.toLocaleString()}`) : "N/A"}
                           </td>
-                          <td className="px-5 py-3.5 text-right font-mono text-slate-200">
+                          <td className="px-5 py-3.5 text-right font-mono text-main">
                             {m.rmse !== null ? (data.metric === 'quantity' ? m.rmse : `₱${m.rmse.toLocaleString()}`) : "N/A"}
                           </td>
-                          <td className="px-5 py-3.5 text-right font-mono text-slate-200">
+                          <td className="px-5 py-3.5 text-right font-mono text-main">
                             {m.mape !== null ? `${m.mape}%` : "N/A"}
                           </td>
                           <td className="px-5 py-3.5 text-right font-mono">
-                            <span className={`px-2 py-0.5 rounded text-[10px] ${m.bias > 0 ? 'text-cyan-300 bg-cyan-500/10' : m.bias < 0 ? 'text-rose-300 bg-rose-500/10' : 'text-slate-400'}`}>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${m.bias > 0 ? 'text-cyan-600 dark:text-cyan-300 bg-cyan-500/10' : m.bias < 0 ? 'text-rose-600 dark:text-rose-300 bg-rose-500/10' : 'text-muted'}`}>
                               {m.bias !== null ? (m.bias > 0 ? `+${m.bias}` : m.bias) : "N/A"}
                             </span>
                           </td>
@@ -934,7 +950,7 @@ function BenchmarkContent() {
                                 Recommended Champion
                               </span>
                             ) : m.applicable ? (
-                              <span className="text-[11px] text-slate-500">Candidate</span>
+                              <span className="text-[11px] text-muted">Candidate</span>
                             ) : (
                               <span className="text-[11px] text-rose-500">Ineligible</span>
                             )}
@@ -950,33 +966,33 @@ function BenchmarkContent() {
 
           {/* Product-Level Model Benchmarking Breakdown */}
           {data?.hasSufficientData && data?.productBreakdown?.length > 0 && (
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
-              <div className="p-5 border-b border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="bg-brand-surface border border-border rounded-2xl shadow-sm overflow-hidden">
+              <div className="p-5 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                    <Layers className="w-4 h-4 text-emerald-400" />
+                  <h2 className="text-sm font-bold text-main uppercase tracking-wider flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
                     Product-Level Model Accuracy Breakdown
                   </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <p className="text-xs text-muted mt-0.5">
                     Granular backtesting evaluation for individual catalog products.
                   </p>
                 </div>
 
                 <div className="relative w-full sm:w-64">
-                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Search className="w-3.5 h-3.5 text-muted absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     placeholder="Search product or SKU..."
                     value={productSearch}
                     onChange={(e) => setProductSearch(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-brand-neonblue transition"
+                    className="w-full bg-brand-bgbase border border-border rounded-xl pl-9 pr-3 py-1.5 text-xs text-main placeholder-muted focus:outline-none focus:border-brand-neonblue transition"
                   />
                 </div>
               </div>
 
               <div className="overflow-x-auto max-h-80 overflow-y-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-950/70 text-slate-400 uppercase text-[10px] tracking-wider sticky top-0 border-b border-slate-800 z-10 backdrop-blur-md">
+                  <thead className="bg-brand-bgbase text-muted uppercase text-[10px] tracking-wider sticky top-0 border-b border-border z-10">
                     <tr>
                       <th className="px-5 py-3">Product Name</th>
                       <th className="px-5 py-3">SKU</th>
@@ -988,20 +1004,20 @@ function BenchmarkContent() {
                       <th className="px-5 py-3 text-center">Reliability</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/50">
+                  <tbody className="divide-y divide-border">
                     {filteredProductBreakdown.map(p => {
                       const rel = RELIABILITY_CONFIG[p.reliability] || RELIABILITY_CONFIG["Moderate"];
                       return (
-                        <tr key={p.productId} className="hover:bg-slate-800/30 transition">
-                          <td className="px-5 py-3 font-semibold text-white">{p.name}</td>
-                          <td className="px-5 py-3 font-mono text-slate-400 text-[11px]">{p.sku || "N/A"}</td>
-                          <td className="px-5 py-3 text-right font-mono text-slate-200">₱{p.totalRevenue?.toLocaleString()}</td>
-                          <td className="px-5 py-3 text-right font-mono text-slate-200">{p.totalUnits}</td>
+                        <tr key={p.productId} className="hover:bg-brand-hover/50 transition">
+                          <td className="px-5 py-3 font-semibold text-main">{p.name}</td>
+                          <td className="px-5 py-3 font-mono text-muted text-[11px]">{p.sku || "N/A"}</td>
+                          <td className="px-5 py-3 text-right font-mono text-main">₱{p.totalRevenue?.toLocaleString()}</td>
+                          <td className="px-5 py-3 text-right font-mono text-main">{p.totalUnits}</td>
                           <td className="px-5 py-3 font-semibold text-brand-neonblue">{p.bestModelName}</td>
-                          <td className="px-5 py-3 text-right font-mono font-bold text-emerald-400">
+                          <td className="px-5 py-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
                             {p.bestWape !== null ? `${p.bestWape}%` : 'N/A'}
                           </td>
-                          <td className="px-5 py-3 text-right font-mono text-slate-200">
+                          <td className="px-5 py-3 text-right font-mono text-main">
                             {p.mae !== null ? `₱${p.mae.toLocaleString()}` : 'N/A'}
                           </td>
                           <td className="px-5 py-3 text-center">
@@ -1020,25 +1036,25 @@ function BenchmarkContent() {
 
           {/* Detailed Period-by-Period Backtest Timeline Table */}
           {data?.hasSufficientData && (
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
-              <div className="p-5 border-b border-slate-800/80 flex items-center justify-between">
+            <div className="bg-brand-surface border border-border rounded-2xl shadow-sm overflow-hidden">
+              <div className="p-5 border-b border-border flex items-center justify-between">
                 <div>
-                  <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                  <h2 className="text-sm font-bold text-main uppercase tracking-wider flex items-center gap-2">
                     <Database className="w-4 h-4 text-brand-neonblue" />
                     Chronological Backtesting Validation Log
                   </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <p className="text-xs text-muted mt-0.5">
                     Step-by-step rolling validation log comparing actual sales against individual candidate predictions.
                   </p>
                 </div>
-                <span className="text-xs text-slate-400 font-semibold">
+                <span className="text-xs text-muted font-semibold">
                   {data.timeline?.length || 0} Test Windows
                 </span>
               </div>
 
               <div className="overflow-x-auto max-h-72 overflow-y-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-950/70 text-slate-400 uppercase text-[10px] tracking-wider sticky top-0 border-b border-slate-800 z-10 backdrop-blur-md">
+                  <thead className="bg-brand-bgbase text-muted uppercase text-[10px] tracking-wider sticky top-0 border-b border-border z-10">
                     <tr>
                       <th className="px-5 py-3">Period</th>
                       <th className="px-5 py-3 text-right">Actual Outcome</th>
@@ -1048,7 +1064,7 @@ function BenchmarkContent() {
                       <th className="px-5 py-3 text-center">Diagnostic</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/50">
+                  <tbody className="divide-y divide-border">
                     {(data?.timeline || []).map((row, idx) => {
                       const bestPred = row.predictions?.[bestModelId] ?? 0;
                       const naivePred = row.predictions?.['naive'] ?? 0;
@@ -1058,31 +1074,31 @@ function BenchmarkContent() {
                       const isExact = err === 0;
 
                       return (
-                        <tr key={idx} className="hover:bg-slate-800/30 transition">
-                          <td className="px-5 py-3 font-semibold text-slate-200">{row.period}</td>
-                          <td className="px-5 py-3 text-right font-mono text-emerald-400 font-semibold">
+                        <tr key={idx} className="hover:bg-brand-hover/50 transition">
+                          <td className="px-5 py-3 font-semibold text-main">{row.period}</td>
+                          <td className="px-5 py-3 text-right font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
                             {data.metric === 'quantity' ? '' : '₱'}{row.actual.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                           </td>
-                          <td className="px-5 py-3 text-right font-mono text-cyan-300 font-semibold">
+                          <td className="px-5 py-3 text-right font-mono text-cyan-600 dark:text-cyan-300 font-semibold">
                             {data.metric === 'quantity' ? '' : '₱'}{bestPred.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                           </td>
-                          <td className="px-5 py-3 text-right font-mono text-slate-400">
+                          <td className="px-5 py-3 text-right font-mono text-muted">
                             {data.metric === 'quantity' ? '' : '₱'}{naivePred.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                           </td>
-                          <td className="px-5 py-3 text-right font-mono text-slate-300">
+                          <td className="px-5 py-3 text-right font-mono text-main">
                             {data.metric === 'quantity' ? '' : '₱'}{absErr.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                           </td>
                           <td className="px-5 py-3 text-center">
                             {isExact ? (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
                                 Exact Match
                               </span>
                             ) : isOver ? (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30">
                                 +{absErr.toLocaleString()} (Over)
                               </span>
                             ) : (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/30">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30">
                                 -{absErr.toLocaleString()} (Under)
                               </span>
                             )}
@@ -1101,34 +1117,34 @@ function BenchmarkContent() {
       {/* Historical Benchmark Runs Drawer / Modal */}
       <AnimatePresence>
         {isHistoryOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-slate-900 border border-slate-800 rounded-3xl max-w-3xl w-full max-h-[85vh] overflow-y-auto p-6 shadow-2xl text-xs space-y-4"
+              className="bg-brand-surface border border-border rounded-3xl max-w-3xl w-full max-h-[85vh] overflow-y-auto p-6 shadow-2xl text-xs space-y-4 text-main"
             >
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <History className="w-5 h-5 text-purple-400" />
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <h3 className="text-base font-bold text-main flex items-center gap-2">
+                  <History className="w-5 h-5 text-purple-500 dark:text-purple-400" />
                   Saved Historical Benchmark Executions
                 </h3>
                 <button
                   onClick={() => setIsHistoryOpen(false)}
-                  className="text-slate-400 hover:text-white p-1 rounded-lg transition"
+                  className="text-muted hover:text-main p-1 rounded-lg transition"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
               {historyLoading ? (
-                <div className="py-12 text-center text-slate-400 text-xs">Loading execution history...</div>
+                <div className="py-12 text-center text-muted text-xs">Loading execution history...</div>
               ) : historyRuns.length === 0 ? (
-                <div className="py-12 text-center text-slate-400 text-xs">No saved benchmark runs found.</div>
+                <div className="py-12 text-center text-muted text-xs">No saved benchmark runs found.</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-950/70 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
+                    <thead className="bg-brand-bgbase text-muted uppercase text-[10px] tracking-wider border-b border-border">
                       <tr>
                         <th className="px-4 py-2.5">Date Executed</th>
                         <th className="px-4 py-2.5">Scope</th>
@@ -1139,29 +1155,29 @@ function BenchmarkContent() {
                         <th className="px-4 py-2.5 text-center">Status</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-800/50">
+                    <tbody className="divide-y divide-border">
                       {historyRuns.map((r) => (
-                        <tr key={r.id} className="hover:bg-slate-800/30 transition">
-                          <td className="px-4 py-2.5 text-slate-300 font-mono">
+                        <tr key={r.id} className="hover:bg-brand-hover/50 transition">
+                          <td className="px-4 py-2.5 text-main font-mono">
                             {new Date(r.createdAt).toLocaleString()}
                           </td>
-                          <td className="px-4 py-2.5 uppercase font-semibold text-slate-200">
+                          <td className="px-4 py-2.5 uppercase font-semibold text-main">
                             {r.scope_type}
                           </td>
-                          <td className="px-4 py-2.5 text-slate-400">
+                          <td className="px-4 py-2.5 text-muted">
                             {r.start_date} to {r.end_date}
                           </td>
-                          <td className="px-4 py-2.5 uppercase text-slate-300">
+                          <td className="px-4 py-2.5 uppercase text-main">
                             {r.frequency}
                           </td>
                           <td className="px-4 py-2.5 font-bold text-brand-neonblue">
                             {r.best_model || "N/A"}
                           </td>
-                          <td className="px-4 py-2.5 text-right font-mono text-emerald-400 font-bold">
+                          <td className="px-4 py-2.5 text-right font-mono text-emerald-600 dark:text-emerald-400 font-bold">
                             {r.best_wape !== null ? `${r.best_wape}%` : "—"}
                           </td>
                           <td className="px-4 py-2.5 text-center">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${r.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${r.status === 'completed' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'}`}>
                               {r.status}
                             </span>
                           </td>
@@ -1172,10 +1188,10 @@ function BenchmarkContent() {
                 </div>
               )}
 
-              <div className="pt-3 border-t border-slate-800 flex justify-end">
+              <div className="pt-3 border-t border-border flex justify-end">
                 <button
                   onClick={() => setIsHistoryOpen(false)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-semibold transition"
+                  className="px-4 py-2 bg-brand-bgbase hover:bg-brand-hover text-main border border-border rounded-xl font-semibold transition"
                 >
                   Close
                 </button>
@@ -1188,32 +1204,32 @@ function BenchmarkContent() {
       {/* Methodology Guide Modal */}
       <AnimatePresence>
         {isMethodologyOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-slate-900 border border-slate-800 rounded-3xl max-w-2xl w-full max-h-[85vh] overflow-y-auto p-6 shadow-2xl text-xs space-y-4"
+              className="bg-brand-surface border border-border rounded-3xl max-w-2xl w-full max-h-[85vh] overflow-y-auto p-6 shadow-2xl text-xs space-y-4 text-main"
             >
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <h3 className="text-base font-bold text-main flex items-center gap-2">
                   <HelpCircle className="w-5 h-5 text-brand-neonblue" />
                   Forecasting Model Benchmarking Methodology
                 </h3>
                 <button
                   onClick={() => setIsMethodologyOpen(false)}
-                  className="text-slate-400 hover:text-white p-1 rounded-lg transition"
+                  className="text-muted hover:text-main p-1 rounded-lg transition"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <div className="space-y-3.5 text-slate-300 leading-relaxed">
+              <div className="space-y-3.5 text-main leading-relaxed">
                 <div>
                   <h4 className="font-bold text-brand-neonblue uppercase tracking-wider text-[11px]">
                     1. Walk-Forward Rolling-Origin Validation (Zero Data Leakage)
                   </h4>
-                  <p className="mt-1">
+                  <p className="mt-1 text-muted">
                     Standard random cross-validation leaks future information into historical models. PC Alley uses strict <strong>walk-forward rolling-origin evaluation</strong>: to forecast period <em>T</em>, models are trained strictly on data from periods <em>0 to T-1</em>. Zero future information is accessible during each prediction step.
                   </p>
                 </div>
@@ -1222,13 +1238,13 @@ function BenchmarkContent() {
                   <h4 className="font-bold text-brand-neonblue uppercase tracking-wider text-[11px]">
                     2. Pluggable Candidate Algorithms
                   </h4>
-                  <ul className="mt-1.5 space-y-1 list-disc list-inside text-slate-400">
-                    <li><strong>Naive Baseline:</strong> Projects the most recent observed period into the future.</li>
-                    <li><strong>Moving Average (SMA):</strong> Averages the most recent <em>k</em> periods to dampen short-term volatility.</li>
-                    <li><strong>Simple Exponential Smoothing (SES):</strong> Exponentially weights recent sales without storing entire windows.</li>
-                    <li><strong>Holt&apos;s Linear Trend:</strong> Dual-parameter smoothing capturing ongoing trajectory and momentum.</li>
-                    <li><strong>Linear Regression:</strong> Ordinary Least Squares trend-line fitting across the training span.</li>
-                    <li><strong>Seasonal Naive:</strong> Copies the observation from the corresponding season of the previous cycle.</li>
+                  <ul className="mt-1.5 space-y-1 list-disc list-inside text-muted">
+                    <li><strong className="text-main">Naive Baseline:</strong> Projects the most recent observed period into the future.</li>
+                    <li><strong className="text-main">Moving Average (SMA):</strong> Averages the most recent <em>k</em> periods to dampen short-term volatility.</li>
+                    <li><strong className="text-main">Simple Exponential Smoothing (SES):</strong> Exponentially weights recent sales without storing entire windows.</li>
+                    <li><strong className="text-main">Holt&apos;s Linear Trend:</strong> Dual-parameter smoothing capturing ongoing trajectory and momentum.</li>
+                    <li><strong className="text-main">Linear Regression:</strong> Ordinary Least Squares trend-line fitting across the training span.</li>
+                    <li><strong className="text-main">Seasonal Naive:</strong> Copies the observation from the corresponding season of the previous cycle.</li>
                   </ul>
                 </div>
 
@@ -1236,13 +1252,13 @@ function BenchmarkContent() {
                   <h4 className="font-bold text-brand-neonblue uppercase tracking-wider text-[11px]">
                     3. WAPE vs. MAPE &amp; Metrics
                   </h4>
-                  <p className="mt-1">
+                  <p className="mt-1 text-muted">
                     In retail and inventory management, zero-sales periods cause MAPE (Mean Absolute % Error) to divide by zero and explode. PC Alley utilizes <strong>WAPE (Weighted Absolute % Error)</strong>:
                   </p>
-                  <div className="bg-slate-950 p-2.5 rounded-xl font-mono text-[11px] text-cyan-300 my-1.5 border border-slate-800">
+                  <div className="bg-brand-bgbase p-2.5 rounded-xl font-mono text-[11px] text-cyan-600 dark:text-cyan-300 my-1.5 border border-border">
                     WAPE = ( Σ |Actual - Predicted| / Σ Actual ) × 100%
                   </div>
-                  <p className="text-slate-400">
+                  <p className="text-muted">
                     WAPE is completely resilient to zero-sales periods and directly weights high-volume and low-volume items appropriately.
                   </p>
                 </div>
@@ -1251,16 +1267,16 @@ function BenchmarkContent() {
                   <h4 className="font-bold text-brand-neonblue uppercase tracking-wider text-[11px]">
                     4. Directional Bias Metric
                   </h4>
-                  <p className="mt-1 text-slate-400">
-                    Calculated as <code>Mean(Predicted - Actual)</code>. A positive bias indicates systematic over-forecasting (overstock risk), while a negative bias indicates systematic under-forecasting (stockout risk).
+                  <p className="mt-1 text-muted">
+                    Calculated as <code className="bg-brand-bgbase px-1.5 py-0.5 rounded border border-border">Mean(Predicted - Actual)</code>. A positive bias indicates systematic over-forecasting (overstock risk), while a negative bias indicates systematic under-forecasting (stockout risk).
                   </p>
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-slate-800 flex justify-end">
+              <div className="pt-3 border-t border-border flex justify-end">
                 <button
                   onClick={() => setIsMethodologyOpen(false)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-semibold transition"
+                  className="px-4 py-2 bg-brand-bgbase hover:bg-brand-hover text-main border border-border rounded-xl font-semibold transition"
                 >
                   Close Guide
                 </button>
@@ -1276,7 +1292,7 @@ function BenchmarkContent() {
 export default function BenchmarkPage() {
   return (
     <Suspense fallback={
-      <div className="flex h-screen w-screen items-center justify-center bg-[#070b14] text-brand-neonblue">
+      <div className="flex h-screen w-screen items-center justify-center bg-brand-bgbase text-brand-neonblue">
         <div className="text-xs font-black tracking-widest uppercase animate-pulse">Loading Predictive Benchmark Engine...</div>
       </div>
     }>

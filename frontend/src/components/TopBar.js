@@ -69,7 +69,7 @@ const TopBar = ({ title }) => {
         <button
           onClick={toggleTheme}
           title={`Switch to ${theme === "dark" ? "Light" : "Dark"} mode`}
-          className="w-9 h-9 flex items-center justify-center rounded-lg bg-brand-bgbase border border-border text-muted hover:text-main hover:bg-brand-hover"
+          className="w-9 h-9 flex items-center justify-center rounded-lg bg-brand-bgbase border border-border text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-brand-hover transition-colors"
         >
           <AnimatePresence mode="wait">
             <motion.span
@@ -78,7 +78,7 @@ const TopBar = ({ title }) => {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.75 }}
               transition={{ duration: 0.1 }}
-              className="flex items-center justify-center"
+              className="flex items-center justify-center text-slate-700 dark:text-slate-200"
             >
               {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
             </motion.span>
@@ -93,16 +93,16 @@ const TopBar = ({ title }) => {
           onClick={() => setIsNotificationsOpen(true)}
           title="Notifications"
           className={`
-            relative w-9 h-9 flex items-center justify-center rounded-lg border
+            relative w-9 h-9 flex items-center justify-center rounded-lg border transition-colors
             ${unreadCount > 0
-              ? "bg-rose-50 border-rose-200 text-rose-400 dark:bg-rose-400/10 dark:border-rose-400/20"
-              : "bg-brand-bgbase border-border text-muted hover:text-main hover:bg-brand-hover"
+              ? "bg-rose-50 border-rose-200 text-rose-500 dark:bg-rose-400/10 dark:border-rose-400/20"
+              : "bg-brand-bgbase border-border text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-brand-hover"
             }
           `}
         >
           <Bell size={15} />
           {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-rose-400 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+            <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-rose-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
               {unreadCount > 9 ? "9+" : unreadCount}
             </span>
           )}
@@ -115,7 +115,7 @@ const TopBar = ({ title }) => {
         <div className="relative" data-profile-dropdown>
           <button
             onClick={() => setIsProfileOpen((v) => !v)}
-            className="flex items-center gap-2 h-9 pl-2 pr-2.5 rounded-lg bg-brand-bgbase border border-border text-main hover:bg-brand-hover"
+            className="flex items-center gap-2 h-9 pl-2 pr-2.5 rounded-lg bg-brand-bgbase border border-border text-slate-800 dark:text-slate-100 hover:bg-brand-hover transition-colors"
           >
             {/* Avatar */}
             <span className="w-6 h-6 rounded-md bg-brand-neonblue/20 border border-brand-neonblue/30 flex items-center justify-center text-[10px] font-bold text-brand-neonblue shrink-0">
@@ -126,7 +126,7 @@ const TopBar = ({ title }) => {
             </span>
             <ChevronDown
               size={12}
-              className={`text-muted shrink-0 transition-transform duration-150 ${isProfileOpen ? "rotate-180" : ""}`}
+              className={`text-slate-400 dark:text-slate-500 shrink-0 transition-transform duration-150 ${isProfileOpen ? "rotate-180" : ""}`}
             />
           </button>
 

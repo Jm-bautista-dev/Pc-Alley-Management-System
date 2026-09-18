@@ -22,6 +22,8 @@ module.exports = {
           title: "rgba(var(--text-title-rgb), <alpha-value>)",
         },
         main: "rgba(var(--text-main-rgb), <alpha-value>)",
+        muted: "rgba(var(--text-muted-rgb), <alpha-value>)",
+        title: "rgba(var(--text-title-rgb), <alpha-value>)",
         border: "rgba(var(--brand-border-rgb), <alpha-value>)",
       },
       fontFamily: {
