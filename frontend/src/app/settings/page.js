@@ -62,11 +62,7 @@ export default function SettingsPage() {
   });
   const [isSavingPassword, setIsSavingPassword] = useState(false);
 
-  // Two-Factor Authentication (2FA) State
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
-  const [smsBackupEnabled, setSmsBackupEnabled] = useState(false);
-  const [showQrModal, setShowQrModal] = useState(false);
-  const [authCode, setAuthCode] = useState("");
+
 
   // Notification Preferences State
   const [notificationPrefs, setNotificationPrefs] = useState({
@@ -150,8 +146,7 @@ export default function SettingsPage() {
       const savedPrefs = localStorage.getItem("pcalley_system_prefs");
       if (savedPrefs) setSystemPrefs(JSON.parse(savedPrefs));
 
-      const saved2fa = localStorage.getItem("pcalley_2fa_status");
-      if (saved2fa !== null) setTwoFactorEnabled(saved2fa === "true");
+
     } catch (e) {
       console.warn("Could not read local preferences", e);
     }
@@ -323,29 +318,7 @@ export default function SettingsPage() {
     }
   };
 
-  // 3. Two-Factor Authentication Toggles
-  const handleToggle2FA = () => {
-    if (!twoFactorEnabled) {
-      setShowQrModal(true);
-    } else {
-      setTwoFactorEnabled(false);
-      localStorage.setItem("pcalley_2fa_status", "false");
-      showSuccess("Two-Factor Authentication disabled");
-    }
-  };
 
-  const handleVerify2FACode = (e) => {
-    e.preventDefault();
-    if (authCode.length < 6) {
-      showError("Please enter a valid 6-digit verification code");
-      return;
-    }
-    setTwoFactorEnabled(true);
-    localStorage.setItem("pcalley_2fa_status", "true");
-    setShowQrModal(false);
-    setAuthCode("");
-    showSuccess("Two-Factor Authentication successfully activated!");
-  };
 
   // 4. Notification Preferences Save
   const handleSaveNotifications = () => {
@@ -473,12 +446,7 @@ export default function SettingsPage() {
       icon: Lock,
       desc: "Access keys & session integrity"
     },
-    {
-      id: "2fa",
-      label: "Two-Factor Auth",
-      icon: Shield,
-      desc: "Multi-factor authentication (MFA)"
-    },
+
     {
       id: "notifications",
       label: "Notifications",
@@ -1105,123 +1073,7 @@ export default function SettingsPage() {
                   </motion.div>
                 )}
 
-                {/* 3. TWO-FACTOR AUTHENTICATION (2FA) TAB */}
-                {activeTab === "2fa" && (
-                  <motion.div
-                    key="tab-2fa"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.15 }}
-                    className="space-y-6"
-                  >
-                    <div className="bg-brand-surface border border-border rounded-2xl p-6 sm:p-8 shadow-sm">
-                      <div className="border-b border-border pb-4 mb-6">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Shield size={18} className="text-brand-neonblue" />
-                          <h3 className="text-base font-bold text-main">Two-Factor Authentication (MFA)</h3>
-                        </div>
-                        <p className="text-xs text-muted">
-                          Add an additional layer of security to your PC Alley account by requiring an authenticator code.
-                        </p>
-                      </div>
 
-                      {/* Status Banner */}
-                      <div
-                        className={`p-4 rounded-2xl border mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
-                          twoFactorEnabled
-                            ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
-                            : "bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400"
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                              twoFactorEnabled ? "bg-emerald-500/20" : "bg-amber-500/20"
-                            }`}
-                          >
-                            {twoFactorEnabled ? (
-                              <CheckCircle2 size={20} />
-                            ) : (
-                              <ShieldAlert size={20} />
-                            )}
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold uppercase tracking-wider">
-                              Status: {twoFactorEnabled ? "Active & Enforced" : "Currently Disabled"}
-                            </p>
-                            <p className="text-[11px] opacity-80 mt-0.5">
-                              {twoFactorEnabled
-                                ? "Your login credentials require an authenticator token verification code."
-                                : "We strongly recommend enabling 2FA for administrative and checkout roles."}
-                            </p>
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={handleToggle2FA}
-                          className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-sm ${
-                            twoFactorEnabled
-                              ? "bg-rose-500 hover:bg-rose-600 text-white"
-                              : "bg-brand-crimson hover:bg-brand-crimson/90 text-white shadow-brand-crimson/20"
-                          }`}
-                        >
-                          {twoFactorEnabled ? "Disable 2FA" : "Enable 2FA"}
-                        </button>
-                      </div>
-
-                      {/* Verification Methods List */}
-                      <div className="space-y-4">
-                        <div className="p-4 sm:p-5 rounded-xl bg-brand-bgbase border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                          <div className="flex items-start gap-3.5">
-                            <div className="w-10 h-10 rounded-xl bg-brand-neonblue/10 border border-brand-neonblue/20 flex items-center justify-center text-brand-neonblue shrink-0 mt-0.5">
-                              <Smartphone size={20} />
-                            </div>
-                            <div>
-                              <p className="text-xs font-bold text-main">Authenticator Application (TOTP)</p>
-                              <p className="text-[11px] text-muted mt-0.5">
-                                Google Authenticator, Authy, 1Password, or Microsoft Authenticator.
-                              </p>
-                            </div>
-                          </div>
-                          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-main/5 text-muted self-start sm:self-auto">
-                            {twoFactorEnabled ? "Connected" : "Not Configured"}
-                          </span>
-                        </div>
-
-                        <div className="p-4 sm:p-5 rounded-xl bg-brand-bgbase border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                          <div className="flex items-start gap-3.5">
-                            <div className="w-10 h-10 rounded-xl bg-brand-neonpurple/10 border border-brand-neonpurple/20 flex items-center justify-center text-brand-neonpurple shrink-0 mt-0.5">
-                              <Mail size={20} />
-                            </div>
-                            <div>
-                              <p className="text-xs font-bold text-main">Email One-Time Password (OTP)</p>
-                              <p className="text-[11px] text-muted mt-0.5">
-                                Receive instant fallback security codes to {profileData.email}.
-                              </p>
-                            </div>
-                          </div>
-                          <div
-                            onClick={() => {
-                              setSmsBackupEnabled(!smsBackupEnabled);
-                              showSuccess(`Email OTP fallback ${!smsBackupEnabled ? "enabled" : "disabled"}`);
-                            }}
-                            className={`w-11 h-6 rounded-full relative cursor-pointer transition-colors shrink-0 ${
-                              smsBackupEnabled ? "bg-brand-crimson" : "bg-main/10"
-                            }`}
-                          >
-                            <div
-                              className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all shadow-sm ${
-                                smsBackupEnabled ? "right-1" : "left-1"
-                              }`}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
 
                 {/* 4. NOTIFICATIONS TAB */}
                 {activeTab === "notifications" && (
@@ -1793,84 +1645,7 @@ export default function SettingsPage() {
         </div>
       </main>
 
-      {/* Two-Factor Authentication Setup Modal */}
-      <AnimatePresence>
-        {showQrModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-brand-surface border border-border rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-6"
-            >
-              <div className="text-center space-y-2">
-                <div className="w-12 h-12 rounded-2xl bg-brand-crimson/10 text-brand-crimson flex items-center justify-center mx-auto">
-                  <Shield size={24} />
-                </div>
-                <h3 className="text-lg font-bold text-main">Configure Authenticator App</h3>
-                <p className="text-xs text-muted">
-                  Scan this QR code with Google Authenticator or your TOTP mobile app.
-                </p>
-              </div>
 
-              {/* QR Representation */}
-              <div className="p-4 bg-white rounded-2xl flex flex-col items-center justify-center border border-slate-200">
-                <div className="w-44 h-44 bg-slate-900 rounded-xl p-3 flex items-center justify-center text-white">
-                  <div className="grid grid-cols-5 gap-1.5 w-full h-full p-2 bg-white rounded-lg">
-                    {Array.from({ length: 25 }).map((_, idx) => (
-                      <div
-                        key={idx}
-                        className={`rounded-sm ${
-                          idx % 2 === 0 || idx % 5 === 0 ? "bg-slate-950" : "bg-transparent"
-                        }`}
-                      />
-                    ))}
-                  </div>
-                </div>
-                <span className="text-[10px] font-mono text-slate-500 mt-2 font-bold tracking-widest uppercase">
-                  KEY: PCAL-AUTH-9921-X
-                </span>
-              </div>
-
-              <form onSubmit={handleVerify2FACode} className="space-y-4">
-                <div className="space-y-1.5 text-center">
-                  <label className="text-xs font-semibold text-main">
-                    Enter 6-Digit Verification Code
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={6}
-                    value={authCode}
-                    onChange={(e) => setAuthCode(e.target.value.replace(/\D/g, ""))}
-                    placeholder="000000"
-                    className="w-full h-12 text-center tracking-[8px] font-mono text-lg font-bold bg-brand-bgbase border border-border rounded-xl text-main focus:border-brand-neonblue outline-none"
-                    required
-                  />
-                </div>
-
-                <div className="flex items-center gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowQrModal(false);
-                      setAuthCode("");
-                    }}
-                    className="flex-1 h-11 rounded-xl border border-border text-xs font-semibold text-muted hover:text-main hover:bg-brand-hover transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 h-11 bg-brand-crimson hover:bg-brand-crimson/90 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-sm shadow-brand-crimson/20"
-                  >
-                    Verify & Activate
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
