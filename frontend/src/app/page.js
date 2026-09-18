@@ -214,7 +214,7 @@ export default function LoginPage() {
   const isDark = mounted ? theme === "dark" : true;
 
   return (
-    <div className="min-h-screen w-full relative flex flex-col items-center justify-center bg-[#F5F2FC] dark:bg-[#0D0F18] text-main overflow-x-hidden font-dmsans transition-colors duration-300 select-none p-4 sm:p-6">
+    <div className="min-h-screen w-full relative flex flex-col bg-[#F5F2FC] dark:bg-[#0D0F18] text-main overflow-x-hidden font-dmsans transition-colors duration-300 select-none">
       
       {/* ── Background Showroom Artwork Layer ── */}
       <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden flex items-center justify-center">
@@ -223,7 +223,7 @@ export default function LoginPage() {
         <img
           src="/images/login-bg-dark.png"
           alt="PC Alley Showroom Background"
-          className={`absolute h-full w-full object-cover object-center transition-opacity duration-700 ${
+          className={`absolute h-full w-full object-cover object-[55%_center] transition-opacity duration-700 ${
             isDark ? "opacity-100" : "opacity-0"
           }`}
         />
@@ -232,15 +232,15 @@ export default function LoginPage() {
         <img
           src="/images/login-bg-light.png"
           alt="PC Alley Showroom Background Light"
-          className={`absolute h-full w-full object-cover object-center transition-opacity duration-700 ${
+          className={`absolute h-full w-full object-cover object-[55%_center] transition-opacity duration-700 ${
             !isDark ? "opacity-100" : "opacity-0"
           }`}
         />
 
-        {/* Left side gradient — keeps left text crisp */}
-        <div className="absolute inset-y-0 left-0 w-full lg:w-[52%] bg-gradient-to-r from-[#F5F2FC] via-[#F5F2FC]/92 to-transparent dark:from-[#0D0F18] dark:via-[#0D0F18]/92 dark:to-transparent z-[1] transition-colors duration-300" />
-        {/* Right side gradient — gives card area depth */}
-        <div className="absolute inset-y-0 right-0 w-[48%] bg-gradient-to-l from-[#F5F2FC]/80 via-[#F5F2FC]/50 to-transparent dark:from-[#0D0F18]/80 dark:via-[#0D0F18]/50 dark:to-transparent z-[1] transition-colors duration-300" />
+        {/* Left gradient — strong, keeps hero text fully readable */}
+        <div className="absolute inset-y-0 left-0 w-[60%] bg-gradient-to-r from-[#F0ECF8] via-[#F0ECF8]/95 to-transparent dark:from-[#0A0C14] dark:via-[#0A0C14]/95 dark:to-transparent z-[1] transition-colors duration-300" />
+        {/* Right gradient — subtle depth for card column */}
+        <div className="absolute inset-y-0 right-0 w-[45%] bg-gradient-to-l from-[#F0ECF8]/70 via-[#F0ECF8]/30 to-transparent dark:from-[#0A0C14]/70 dark:via-[#0A0C14]/30 dark:to-transparent z-[1] transition-colors duration-300" />
       </div>
 
       {/* ── Top-Right Theme Toggle Button ── */}
@@ -258,7 +258,7 @@ export default function LoginPage() {
       {/* ══════════════════════════════════════════════════════════
           MAIN LAYOUT — Two Column (Left Hero | Right Card)
          ══════════════════════════════════════════════════════════ */}
-      <div className="relative z-10 w-full min-h-screen flex flex-col lg:flex-row">
+      <div className="relative z-10 w-full flex-1 flex flex-col lg:flex-row min-h-screen">
 
         {/* ── LEFT COLUMN: Brand / Hero (~57%) ── */}
         <div className="w-full lg:w-[57%] p-6 sm:p-10 lg:p-12 xl:p-14 flex flex-col justify-between min-h-[420px] lg:min-h-screen">
@@ -356,7 +356,7 @@ export default function LoginPage() {
         </div>
 
         {/* ── RIGHT COLUMN: Floating Glass Login Card (~43%) ── */}
-        <div className="w-full lg:w-[43%] shrink-0 flex flex-col justify-center items-center px-6 sm:px-10 lg:px-12 py-10 lg:py-0 min-h-[520px] lg:min-h-screen">
+        <div className="w-full lg:w-[43%] shrink-0 flex flex-col justify-center items-center px-6 sm:px-10 lg:px-10 xl:px-12 py-10 lg:py-0 min-h-[520px] lg:min-h-screen">
           <motion.div
             initial={{ opacity: 0, x: 20, scale: 0.98 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
