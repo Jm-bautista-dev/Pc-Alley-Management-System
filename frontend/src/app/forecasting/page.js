@@ -628,12 +628,9 @@ function ForecastingPageContent() {
             {/* Header info */}
             <div className="flex justify-between items-center mb-6 no-print">
               <div>
-                <h1 className="text-2xl font-rajdhani font-black uppercase mb-0">
+                <h1 className="text-2xl sm:text-3xl font-rajdhani font-black uppercase mb-0 tracking-wide text-main">
                   SALES <span className="text-brand-neonblue">FORECASTING</span>
                 </h1>
-                <p className="text-[10px] text-muted font-black tracking-[2px] uppercase mt-1">
-                  Linear regression forecast model &middot; {startDate && endDate ? `${startDate} to ${endDate}` : ""} ({groupBy} group)
-                </p>
               </div>
 
               {/* Action buttons */}
@@ -662,24 +659,24 @@ function ForecastingPageContent() {
             {/* Benchmark Recommendation Banner (when available) */}
             {data?.benchmarkRecommendation && (
               <div className="mb-5 flex flex-wrap items-center no-print">
-                <div className="inline-flex flex-wrap sm:flex-nowrap items-center gap-3 p-1.5 pl-2 pr-2.5 rounded-full bg-gradient-to-r from-brand-neonblue/15 via-purple-500/10 to-brand-surface border border-brand-neonblue/30 backdrop-blur-md shadow-sm max-w-full">
-                  <div className="w-7 h-7 rounded-full bg-brand-neonblue/20 flex items-center justify-center text-brand-neonblue shrink-0">
-                    <Sparkles size={14} />
+                <div className="inline-flex flex-wrap sm:flex-nowrap items-center gap-3.5 py-2 px-3 sm:px-4 rounded-full bg-gradient-to-r from-brand-neonblue/15 via-purple-500/10 to-brand-surface border border-brand-neonblue/30 backdrop-blur-md shadow-sm max-w-full">
+                  <div className="w-8 h-8 rounded-full bg-brand-neonblue/20 flex items-center justify-center text-brand-neonblue shrink-0">
+                    <Sparkles size={16} />
                   </div>
-                  <div className="flex items-center gap-2 flex-wrap text-xs">
+                  <div className="flex items-center gap-2.5 flex-wrap text-xs sm:text-sm">
                     <span className="font-bold text-main">Recommended Model by Backtesting:</span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-neonblue/20 text-brand-neonblue border border-brand-neonblue/40">
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-neonblue/20 text-brand-neonblue border border-brand-neonblue/40">
                       {data.benchmarkRecommendation.bestModel}
                     </span>
-                    <span className="text-[10px] text-muted font-semibold">
+                    <span className="text-xs text-muted font-semibold">
                       (WAPE: {data.benchmarkRecommendation.wape}%, {data.benchmarkRecommendation.reliability})
                     </span>
                   </div>
                   <button
                     onClick={() => router.push('/forecasting/benchmark')}
-                    className="shrink-0 flex items-center gap-1 px-3 py-1 bg-brand-neonblue text-slate-950 font-bold rounded-full text-xs hover:bg-brand-neonblue/90 transition shadow-sm ml-1"
+                    className="shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 bg-brand-neonblue text-slate-950 font-bold rounded-full text-xs hover:bg-brand-neonblue/90 transition shadow-sm ml-1"
                   >
-                    Benchmark Details <ArrowUpRight size={13} />
+                    Benchmark Details <ArrowUpRight size={14} />
                   </button>
                 </div>
               </div>
