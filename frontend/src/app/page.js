@@ -96,7 +96,6 @@ export default function LoginPage() {
               localStorage.setItem("user", JSON.stringify(sessionData.user));
             }
 
-            // Check if user was redirected from a specific page
             const params = new URLSearchParams(window.location.search);
             const redirectParam = params.get("redirect");
             if (redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//") && redirectParam !== "/") {
@@ -117,7 +116,6 @@ export default function LoginPage() {
         console.warn("[AUTH] Session verification offline/failed:", checkErr?.message);
       }
 
-      // If token is invalid or server rejected session, purge stale data so user sees clean login
       try {
         localStorage.removeItem("token");
         localStorage.removeItem("user");
@@ -148,7 +146,6 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // Clear old authentication state before establishing new session
       localStorage.removeItem("token");
       localStorage.removeItem("user");
 
@@ -181,7 +178,6 @@ export default function LoginPage() {
         localStorage.setItem("user", JSON.stringify(data.user));
         resetSessionExpiryLock();
         
-        // Direct seamless navigation to destination without disruptive modal popup
         const params = new URLSearchParams(window.location.search);
         const redirectParam = params.get("redirect");
         if (redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//") && redirectParam !== "/") {
@@ -218,16 +214,16 @@ export default function LoginPage() {
   const isDark = mounted ? theme === "dark" : true;
 
   return (
-    <div className="min-h-screen w-full relative flex flex-col lg:flex-row bg-[#F4F0FB] dark:bg-[#141221] text-main overflow-x-hidden font-dmsans transition-colors duration-300 select-none">
+    <div className="min-h-screen w-full relative flex flex-col lg:flex-row justify-between bg-[#F5F2FC] dark:bg-[#0D0F18] text-main overflow-x-hidden font-dmsans transition-colors duration-300 select-none">
       
-      {/* ── Dynamic High-Tech Showroom Background ── */}
-      <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
-        {/* Dark Mode Background Art */}
+      {/* ── Background Showroom Artwork Layer ── */}
+      <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden flex items-center justify-center">
+        {/* Dark Mode Background Art (Anchored center-right so monitor sits between left text and right card) */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/images/login-bg-dark.png"
           alt="PC Alley Showroom Background"
-          className={`absolute inset-0 w-full h-full object-cover object-center transition-opacity duration-700 ${
+          className={`absolute h-full w-full object-cover lg:object-contain object-center lg:object-[58%_center] transition-opacity duration-700 ${
             isDark ? "opacity-100" : "opacity-0"
           }`}
         />
@@ -236,155 +232,173 @@ export default function LoginPage() {
         <img
           src="/images/login-bg-light.png"
           alt="PC Alley Showroom Background Light"
-          className={`absolute inset-0 w-full h-full object-cover object-center transition-opacity duration-700 ${
+          className={`absolute h-full w-full object-cover lg:object-contain object-center lg:object-[58%_center] transition-opacity duration-700 ${
             !isDark ? "opacity-100" : "opacity-0"
           }`}
         />
 
-        {/* Soft Vignette / Gradient Overlays for High Legibility */}
-        <div className="absolute inset-0 bg-gradient-to-r from-[#F4F0FB]/90 via-[#F4F0FB]/40 to-[#F4F0FB]/80 dark:from-[#141221]/95 dark:via-[#141221]/40 dark:to-[#141221]/90 transition-colors duration-300" />
+        {/* Left Side Gradient Overlay (ensures left branding text is 100% crisp and readable) */}
+        <div className="absolute inset-y-0 left-0 w-full lg:w-[42%] bg-gradient-to-r from-[#F5F2FC] via-[#F5F2FC]/95 to-transparent dark:from-[#0D0F18] dark:via-[#0D0F18]/95 dark:to-transparent z-[1] transition-colors duration-300" />
+        
+        {/* Right Side Gradient Overlay (ensures right login card area has beautiful subtle depth) */}
+        <div className="absolute inset-y-0 right-0 w-full lg:w-[42%] bg-gradient-to-l from-[#F5F2FC] via-[#F5F2FC]/90 to-transparent dark:from-[#0D0F18] dark:via-[#0D0F18]/90 dark:to-transparent z-[1] transition-colors duration-300" />
       </div>
 
-      {/* ── Top-Right Theme Toggle ── */}
-      <div className="absolute top-6 right-6 lg:top-8 lg:right-10 z-30">
+      {/* ── Top-Right Theme Toggle Button ── */}
+      <div className="absolute top-6 right-6 lg:top-7 lg:right-10 z-30">
         <button
           onClick={toggleTheme}
           aria-label="Toggle Theme"
-          className="w-10 h-10 rounded-full border border-black/10 dark:border-white/15 bg-white/70 dark:bg-[#201D38]/70 backdrop-blur-md flex items-center justify-center text-muted hover:text-main hover:border-[#657BE6] dark:hover:border-[#9AAAF8] transition-all shadow-md active:scale-95"
+          className="w-10 h-10 rounded-full border border-black/10 dark:border-white/15 bg-white/70 dark:bg-[#1E2235]/70 backdrop-blur-md flex items-center justify-center text-muted hover:text-main hover:border-[#5B73E8] dark:hover:border-[#8FA5FF] transition-all shadow-md active:scale-95"
           type="button"
         >
-          {isDark ? <Moon size={17} className="text-[#A7B6FF]" /> : <Moon size={17} className="text-slate-700" />}
+          {isDark ? <Moon size={16} className="text-[#8FA5FF]" /> : <Sun size={16} className="text-amber-500" />}
         </button>
       </div>
 
       {/* ════════════════════════════════════════════════════════
-          LEFT SIDE: Branding, Hero Headline, Feature Badges & Slogan
+          1. LEFT COLUMN: Branding, Hero Text & Feature Pills
          ════════════════════════════════════════════════════════ */}
-      <div className="lg:w-[54%] w-full flex flex-col justify-between p-8 sm:p-12 lg:p-16 relative z-10 min-h-[500px] lg:min-h-screen">
+      <div className="w-full lg:w-[440px] xl:w-[480px] 2xl:w-[520px] shrink-0 p-8 sm:p-12 lg:p-14 flex flex-col justify-between relative z-20 min-h-[520px] lg:min-h-screen">
         
-        {/* 1. Header Logo */}
+        {/* Logo Top Left */}
         <div className="flex items-center gap-3.5">
           <LogoIcon className="w-11 h-11" />
           <div className="flex flex-col justify-center">
-            <span className="text-2xl lg:text-[26px] font-black tracking-tight text-main font-rajdhani leading-[0.9]">
+            <span className="text-2xl font-black tracking-tight text-main font-rajdhani leading-[0.9]">
               PC ALLEY
             </span>
-            <span className="text-[8px] lg:text-[9px] tracking-[0.3em] text-[#657BE6] dark:text-[#9AAAF8] font-bold uppercase leading-tight mt-1.5 opacity-90">
+            <span className="text-[8.5px] tracking-[0.28em] text-[#5B73E8] dark:text-[#8FA5FF] font-bold uppercase leading-tight mt-1.5 opacity-90">
               INTEGRATED SYSTEMS
             </span>
           </div>
         </div>
 
-        {/* 2. Hero Headline + Subtitle + Feature Badges */}
-        <div className="my-auto py-10 lg:py-4 max-w-xl">
+        {/* Hero Title + Tagline + Badges */}
+        <div className="my-auto py-8 max-w-sm">
           <motion.div
-            initial={{ opacity: 0, y: 12 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="space-y-0.5"
+            transition={{ duration: 0.4 }}
+            className="space-y-0"
           >
-            <h1 className="text-6xl sm:text-7xl lg:text-[88px] font-black uppercase font-rajdhani tracking-tighter leading-[0.88] text-main">
+            <h1 className="text-6xl sm:text-7xl lg:text-8xl font-black uppercase font-rajdhani tracking-tighter leading-[0.85] text-main">
               THE
             </h1>
-            <h1 className="text-6xl sm:text-7xl lg:text-[88px] font-black uppercase font-rajdhani tracking-tighter leading-[0.88] text-[#657BE6] dark:text-[#8397F8]">
+            <h1 className="text-6xl sm:text-7xl lg:text-8xl font-black uppercase font-rajdhani tracking-tighter leading-[0.85] text-[#5B73E8] dark:text-[#7C93F6]">
               TECH
             </h1>
-            <h1 className="text-6xl sm:text-7xl lg:text-[88px] font-black uppercase font-rajdhani tracking-tighter leading-[0.88] text-main">
+            <h1 className="text-6xl sm:text-7xl lg:text-8xl font-black uppercase font-rajdhani tracking-tighter leading-[0.85] text-main">
               CORE.
             </h1>
           </motion.div>
 
-          <p className="text-sm sm:text-base text-muted font-medium mt-4 tracking-normal">
+          <p className="text-xs sm:text-sm text-muted font-medium mt-3.5 tracking-normal">
             Smarter Systems. Stronger Business.
           </p>
 
-          {/* 3 Interactive Feature Badges */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-8">
-            {/* Feature 1: Sales Tracking */}
-            <div className="bg-white/60 dark:bg-[#1E1A33]/60 backdrop-blur-md border border-black/5 dark:border-white/10 rounded-2xl p-3 flex items-center gap-3 shadow-sm hover:border-[#657BE6]/50 transition-colors">
-              <div className="w-8 h-8 rounded-xl bg-[#657BE6]/10 dark:bg-[#8397F8]/15 text-[#657BE6] dark:text-[#9AAAF8] flex items-center justify-center shrink-0">
-                <BarChart3 size={16} />
+          {/* Small Accent Line */}
+          <div className="w-8 h-1 bg-[#5B73E8] dark:bg-[#7C93F6] rounded-full my-4" />
+
+          {/* 3 Horizontal Feature Pills */}
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 mt-2">
+            {/* 1: Sales Tracking */}
+            <div className="flex-1 bg-white/80 dark:bg-[#1A1D2E]/70 backdrop-blur-md border border-black/5 dark:border-white/10 rounded-2xl p-2.5 flex items-center gap-2.5 shadow-sm hover:border-[#5B73E8]/40 transition-all">
+              <div className="w-7 h-7 rounded-xl bg-[#5B73E8]/10 dark:bg-[#7C93F6]/15 text-[#5B73E8] dark:text-[#8FA5FF] flex items-center justify-center shrink-0">
+                <BarChart3 size={14} />
               </div>
               <div className="leading-tight">
-                <p className="text-xs font-bold text-main">Sales</p>
-                <p className="text-[11px] text-muted">Tracking</p>
+                <p className="text-[11px] font-bold text-main">Sales</p>
+                <p className="text-[10px] text-muted">Tracking</p>
               </div>
             </div>
 
-            {/* Feature 2: Inventory Management */}
-            <div className="bg-white/60 dark:bg-[#1E1A33]/60 backdrop-blur-md border border-black/5 dark:border-white/10 rounded-2xl p-3 flex items-center gap-3 shadow-sm hover:border-[#657BE6]/50 transition-colors">
-              <div className="w-8 h-8 rounded-xl bg-[#657BE6]/10 dark:bg-[#8397F8]/15 text-[#657BE6] dark:text-[#9AAAF8] flex items-center justify-center shrink-0">
-                <Package size={16} />
+            {/* 2: Inventory Management */}
+            <div className="flex-1 bg-white/80 dark:bg-[#1A1D2E]/70 backdrop-blur-md border border-black/5 dark:border-white/10 rounded-2xl p-2.5 flex items-center gap-2.5 shadow-sm hover:border-[#5B73E8]/40 transition-all">
+              <div className="w-7 h-7 rounded-xl bg-[#5B73E8]/10 dark:bg-[#7C93F6]/15 text-[#5B73E8] dark:text-[#8FA5FF] flex items-center justify-center shrink-0">
+                <Package size={14} />
               </div>
               <div className="leading-tight">
-                <p className="text-xs font-bold text-main">Inventory</p>
-                <p className="text-[11px] text-muted">Management</p>
+                <p className="text-[11px] font-bold text-main">Inventory</p>
+                <p className="text-[10px] text-muted">Management</p>
               </div>
             </div>
 
-            {/* Feature 3: Business Analytics */}
-            <div className="bg-white/60 dark:bg-[#1E1A33]/60 backdrop-blur-md border border-black/5 dark:border-white/10 rounded-2xl p-3 flex items-center gap-3 shadow-sm hover:border-[#657BE6]/50 transition-colors">
-              <div className="w-8 h-8 rounded-xl bg-[#657BE6]/10 dark:bg-[#8397F8]/15 text-[#657BE6] dark:text-[#9AAAF8] flex items-center justify-center shrink-0">
-                <PieChart size={16} />
+            {/* 3: Business Analytics */}
+            <div className="flex-1 bg-white/80 dark:bg-[#1A1D2E]/70 backdrop-blur-md border border-black/5 dark:border-white/10 rounded-2xl p-2.5 flex items-center gap-2.5 shadow-sm hover:border-[#5B73E8]/40 transition-all">
+              <div className="w-7 h-7 rounded-xl bg-[#5B73E8]/10 dark:bg-[#7C93F6]/15 text-[#5B73E8] dark:text-[#8FA5FF] flex items-center justify-center shrink-0">
+                <PieChart size={14} />
               </div>
               <div className="leading-tight">
-                <p className="text-xs font-bold text-main">Business</p>
-                <p className="text-[11px] text-muted">Analytics</p>
+                <p className="text-[11px] font-bold text-main">Business</p>
+                <p className="text-[10px] text-muted">Analytics</p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* 3. Cursive Slogan on Desk Foreground */}
-        <div className="my-2 lg:my-0">
-          <p className="font-caveat text-3xl sm:text-4xl text-[#657BE6] dark:text-[#9AAAF8] font-bold tracking-normal italic -rotate-6 transform origin-left select-none opacity-90 drop-shadow-sm">
-            Built<br />
-            <span className="ml-2">for a Smarter</span><br />
-            <span className="ml-8">Tomorrow.</span>
-          </p>
-        </div>
-
-        {/* 4. Left Bottom Footer */}
-        <div className="pt-8 border-t border-black/5 dark:border-white/10 mt-6 text-[9px] sm:text-[10px] text-muted/70 uppercase tracking-[0.25em] font-semibold space-y-1">
+        {/* Left Bottom Footer */}
+        <div className="pt-6 border-t border-black/5 dark:border-white/10 text-[9px] text-muted/70 uppercase tracking-[0.22em] font-semibold space-y-1">
           <p>PC ALLEY &nbsp;&nbsp;|&nbsp;&nbsp; INTEGRATED SYSTEMS</p>
           <p>PEOPLE &nbsp;•&nbsp; PRODUCTS &nbsp;•&nbsp; POSSIBILITIES</p>
         </div>
       </div>
 
       {/* ════════════════════════════════════════════════════════
-          RIGHT SIDE: Authentication Form & System Access Card
+          2. CENTER AREA: Cursive Script on Desk Foreground
          ════════════════════════════════════════════════════════ */}
-      <div className="lg:w-[46%] w-full flex flex-col justify-center items-center p-6 sm:p-12 lg:p-16 relative z-10 min-h-[500px] lg:min-h-screen">
+      <div className="hidden lg:flex flex-1 flex-col justify-end items-center pb-16 z-20 pointer-events-none">
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+          className="text-center transform -rotate-6 select-none"
+        >
+          <p className="font-caveat text-4xl xl:text-5xl text-[#5B73E8] dark:text-[#8FA5FF] font-bold italic drop-shadow-md leading-none">
+            Built<br />
+            <span className="text-3xl xl:text-4xl ml-2">for a Smarter</span><br />
+            <span className="text-4xl xl:text-5xl ml-6">Tomorrow.</span>
+          </p>
+        </motion.div>
+      </div>
+
+      {/* ════════════════════════════════════════════════════════
+          3. RIGHT COLUMN: Floating Glass Authentication Card
+         ════════════════════════════════════════════════════════ */}
+      <div className="w-full lg:w-[440px] xl:w-[480px] shrink-0 p-6 sm:p-10 lg:p-12 flex flex-col justify-between items-center z-20 min-h-[520px] lg:min-h-screen">
         
+        {/* Placeholder spacer for top alignment */}
+        <div className="hidden lg:block h-8" />
+
         {/* Floating Glass Authentication Container */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.96 }}
+          initial={{ opacity: 0, scale: 0.97 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.4 }}
-          className="w-full max-w-[440px] bg-white/80 dark:bg-[#1E1A33]/85 backdrop-blur-2xl border border-white/60 dark:border-[#7A8CE8]/25 rounded-[32px] p-8 sm:p-10 shadow-2xl dark:shadow-[0_0_60px_rgba(100,120,240,0.18)] flex flex-col relative"
+          className="w-full max-w-[410px] bg-white/85 dark:bg-[#131627]/85 backdrop-blur-2xl border border-white/80 dark:border-[#3B487A]/60 rounded-[28px] p-7 sm:p-9 shadow-2xl dark:shadow-[0_0_50px_rgba(40,60,140,0.25)] flex flex-col relative"
         >
           {/* Card Header */}
-          <div className="mb-6">
-            <p className="text-[10px] sm:text-[11px] font-extrabold tracking-[0.22em] text-[#657BE6] dark:text-[#9AAAF8] uppercase mb-1">
+          <div className="mb-5">
+            <p className="text-[9.5px] font-black tracking-[0.2em] text-[#5B73E8] dark:text-[#8FA5FF] uppercase mb-1">
               PERSONNEL CLEARANCE
             </p>
-            <h2 className="text-2xl sm:text-3xl font-black font-rajdhani uppercase tracking-wide text-main">
+            <h2 className="text-2xl sm:text-3xl font-black font-rajdhani uppercase tracking-wider text-main leading-none">
               SYSTEM ACCESS
             </h2>
-            <p className="text-xs sm:text-[13px] text-muted mt-1 font-normal">
+            <p className="text-xs text-muted mt-1.5 font-normal">
               Sign in to continue to PC Alley Integrated Systems.
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-3.5">
             {/* Session Expiration / Queued Auth Notice Banner */}
             {authNotice && (
               <motion.div
                 initial={{ opacity: 0, y: -6 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-left flex items-start gap-3"
+                className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-left flex items-start gap-2.5"
               >
-                <Clock size={16} className="text-amber-500 shrink-0 mt-0.5" />
+                <Clock size={15} className="text-amber-500 shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <p className="text-xs font-semibold text-amber-500 leading-snug">
                     {authNotice}
@@ -398,9 +412,9 @@ export default function LoginPage() {
               <motion.div
                 initial={{ opacity: 0, y: -6 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-xl text-left flex items-start gap-3"
+                className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-left flex items-start gap-2.5"
               >
-                <ShieldAlert size={16} className="text-rose-500 shrink-0 mt-0.5" />
+                <ShieldAlert size={15} className="text-rose-500 shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <p className="text-xs font-semibold text-rose-500 leading-snug">
                     {errorMessage}
@@ -411,15 +425,15 @@ export default function LoginPage() {
 
             {/* Lockout Notification Banner */}
             {lockoutTimer > 0 && (
-              <div className="p-3.5 bg-rose-500/15 border border-rose-500/40 rounded-xl text-left">
+              <div className="p-3 bg-rose-500/15 border border-rose-500/40 rounded-xl text-left">
                 <div className="flex items-center gap-2 text-rose-500 font-bold text-xs">
-                  <ShieldAlert size={16} />
+                  <ShieldAlert size={15} />
                   <span>ACCOUNT LOCKED</span>
                 </div>
                 <p className="text-[11px] text-main mt-1 leading-snug">
                   {lockoutMessage || "Too many failed attempts."}
                 </p>
-                <p className="text-[10px] font-mono text-rose-500 font-bold mt-1.5">
+                <p className="text-[10px] font-mono text-rose-500 font-bold mt-1">
                   Retry available in: {Math.floor(lockoutTimer / 60)}m {lockoutTimer % 60}s
                 </p>
               </div>
@@ -427,7 +441,7 @@ export default function LoginPage() {
 
             {/* Attempts Remaining Warning */}
             {attemptsWarning && lockoutTimer === 0 && (
-              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-left">
+              <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-left">
                 <p className="text-[11px] text-amber-500 font-semibold leading-snug">
                   {attemptsWarning}
                 </p>
@@ -436,8 +450,8 @@ export default function LoginPage() {
 
             {/* Username / Email Input */}
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-muted">
-                <User size={16} />
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-muted">
+                <User size={15} />
               </div>
               <input
                 id="username"
@@ -446,14 +460,14 @@ export default function LoginPage() {
                 value={formData.username}
                 onChange={handleChange}
                 placeholder="admin@pcalley.com"
-                className="w-full bg-[#EBF0F7] dark:bg-[#141224] text-main placeholder-muted/60 pl-11 pr-4 py-3.5 rounded-2xl border border-black/5 dark:border-white/10 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#657BE6]/50 focus:border-[#657BE6] transition-all"
+                className="w-full bg-[#E8EEF8]/80 dark:bg-[#1A1E31]/80 text-main placeholder-muted/60 pl-10 pr-3.5 py-3 rounded-xl border border-black/5 dark:border-white/10 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#5B73E8]/50 focus:border-[#5B73E8] transition-all"
               />
             </div>
 
             {/* Password Input */}
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-muted">
-                <Lock size={16} />
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-muted">
+                <Lock size={15} />
               </div>
               <input
                 id="password"
@@ -462,32 +476,32 @@ export default function LoginPage() {
                 value={formData.password}
                 onChange={handleChange}
                 placeholder="••••••••"
-                className="w-full bg-[#EBF0F7] dark:bg-[#141224] text-main placeholder-muted/60 pl-11 pr-11 py-3.5 rounded-2xl border border-black/5 dark:border-white/10 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#657BE6]/50 focus:border-[#657BE6] transition-all font-mono"
+                className="w-full bg-[#E8EEF8]/80 dark:bg-[#1A1E31]/80 text-main placeholder-muted/60 pl-10 pr-10 py-3 rounded-xl border border-black/5 dark:border-white/10 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#5B73E8]/50 focus:border-[#5B73E8] transition-all font-mono"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute inset-y-0 right-0 pr-4 flex items-center text-muted hover:text-main transition-colors"
+                className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-muted hover:text-main transition-colors"
                 aria-label="Toggle Password Visibility"
               >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
               </button>
             </div>
 
             {/* Checkbox and Forgot Password Row */}
-            <div className="flex items-center justify-between text-xs pt-1 pb-1 text-muted">
+            <div className="flex items-center justify-between text-xs pt-0.5 pb-0.5 text-muted">
               <label className="flex items-center gap-2 cursor-pointer select-none hover:text-main transition-colors">
                 <input
                   type="checkbox"
                   checked={showPassword}
                   onChange={() => setShowPassword(!showPassword)}
-                  className="rounded bg-black/5 dark:bg-white/10 border-black/10 dark:border-white/20 text-[#657BE6] focus:ring-0 focus:ring-offset-0 cursor-pointer w-4 h-4"
+                  className="rounded bg-black/5 dark:bg-white/10 border-black/10 dark:border-white/20 text-[#5B73E8] focus:ring-0 focus:ring-offset-0 cursor-pointer w-3.5 h-3.5"
                 />
-                <span className="text-xs font-medium">Show Password</span>
+                <span className="text-[11px] font-medium">Show Password</span>
               </label>
               <Link 
                 href="/forgot-password" 
-                className="text-xs font-semibold text-[#657BE6] dark:text-[#9AAAF8] hover:underline transition-colors"
+                className="text-[11px] font-semibold text-[#5B73E8] dark:text-[#8FA5FF] hover:underline transition-colors"
               >
                 Forgot Password?
               </Link>
@@ -495,17 +509,17 @@ export default function LoginPage() {
 
             {/* CAPTCHA Challenge (if repeated failures) */}
             {requiresCaptcha && (
-              <div className="p-3 bg-[#657BE6]/10 border border-[#657BE6]/30 rounded-2xl flex items-center justify-between">
-                <label className="flex items-center gap-2.5 cursor-pointer select-none text-xs text-main">
+              <div className="p-2.5 bg-[#5B73E8]/10 border border-[#5B73E8]/30 rounded-xl flex items-center justify-between">
+                <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-main">
                   <input
                     type="checkbox"
                     checked={captchaVerified}
                     onChange={(e) => setCaptchaVerified(e.target.checked)}
-                    className="w-4 h-4 rounded bg-black/5 dark:bg-white/10 border-black/10 dark:border-white/20 text-[#657BE6] focus:ring-0 cursor-pointer"
+                    className="w-3.5 h-3.5 rounded bg-black/5 dark:bg-white/10 border-black/10 dark:border-white/20 text-[#5B73E8] focus:ring-0 cursor-pointer"
                   />
-                  <span>I am not a robot (Security Verification)</span>
+                  <span className="text-[11px]">Security Verification</span>
                 </label>
-                <div className="w-2 h-2 rounded-full bg-[#657BE6] animate-pulse" />
+                <div className="w-2 h-2 rounded-full bg-[#5B73E8] animate-pulse" />
               </div>
             )}
 
@@ -513,34 +527,34 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading || lockoutTimer > 0}
-              className="w-full py-3.5 sm:py-4 px-6 rounded-2xl bg-[#657BE6] hover:bg-[#5269DA] text-white font-bold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2 shadow-lg shadow-[#657BE6]/30 hover:shadow-xl hover:shadow-[#657BE6]/40 active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-wait mt-2"
+              className="w-full py-3.5 px-6 rounded-xl bg-[#5B73E8] hover:bg-[#4E66DA] text-white font-bold text-xs tracking-wider uppercase flex items-center justify-center gap-2 shadow-lg shadow-[#5B73E8]/25 hover:shadow-xl hover:shadow-[#5B73E8]/35 active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-wait mt-1"
             >
               {loading ? (
-                <Loader2 className="animate-spin" size={16} />
+                <Loader2 className="animate-spin" size={15} />
               ) : lockoutTimer > 0 ? (
                 `LOCKED (${lockoutTimer}s)`
               ) : (
-                <>LOGIN <ArrowRight size={16} /></>
+                <>LOGIN <ArrowRight size={15} /></>
               )}
             </button>
           </form>
 
           {/* Subtle OR Divider */}
-          <div className="flex items-center gap-3 my-6">
+          <div className="flex items-center gap-3 my-4">
             <div className="h-px flex-1 bg-black/10 dark:bg-white/10" />
-            <span className="text-[10px] font-bold text-muted/60 uppercase tracking-widest">OR</span>
+            <span className="text-[9px] font-bold text-muted/60 uppercase tracking-widest">OR</span>
             <div className="h-px flex-1 bg-black/10 dark:bg-white/10" />
           </div>
 
           {/* Authorized Personnel Only Badge */}
-          <div className="w-full py-3 px-4 rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] flex items-center justify-center gap-2 text-xs font-medium text-muted select-none">
-            <ShieldCheck size={15} className="text-[#657BE6] dark:text-[#9AAAF8]" />
+          <div className="w-full py-2.5 px-4 rounded-xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] flex items-center justify-center gap-2 text-[11px] font-medium text-muted select-none">
+            <ShieldCheck size={14} className="text-[#5B73E8] dark:text-[#8FA5FF]" />
             <span>Authorized Personnel Only</span>
           </div>
         </motion.div>
 
         {/* Right Bottom Footer Tag */}
-        <p className="mt-8 text-[9px] sm:text-[10px] uppercase tracking-[0.25em] text-muted/70 font-semibold text-center select-none">
+        <p className="mt-6 text-[9px] uppercase tracking-[0.22em] text-muted/70 font-semibold text-center select-none">
           SECURE &nbsp;•&nbsp; RELIABLE &nbsp;•&nbsp; ALWAYS ON
         </p>
       </div>
