@@ -214,16 +214,16 @@ export default function LoginPage() {
   const isDark = mounted ? theme === "dark" : true;
 
   return (
-    <div className="min-h-screen w-full relative flex flex-col lg:flex-row justify-between bg-[#F5F2FC] dark:bg-[#0D0F18] text-main overflow-x-hidden font-dmsans transition-colors duration-300 select-none">
+    <div className="min-h-screen w-full relative flex flex-col items-center justify-center bg-[#F5F2FC] dark:bg-[#0D0F18] text-main overflow-x-hidden font-dmsans transition-colors duration-300 select-none p-4 sm:p-6">
       
       {/* ── Background Showroom Artwork Layer ── */}
       <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden flex items-center justify-center">
-        {/* Dark Mode Background Art (Anchored center-right so monitor sits between left text and right card) */}
+        {/* Dark Mode Background Art */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/images/login-bg-dark.png"
           alt="PC Alley Showroom Background"
-          className={`absolute h-full w-full object-cover lg:object-contain object-center lg:object-[58%_center] transition-opacity duration-700 ${
+          className={`absolute h-full w-full object-cover object-center transition-opacity duration-700 ${
             isDark ? "opacity-100" : "opacity-0"
           }`}
         />
@@ -232,20 +232,30 @@ export default function LoginPage() {
         <img
           src="/images/login-bg-light.png"
           alt="PC Alley Showroom Background Light"
-          className={`absolute h-full w-full object-cover lg:object-contain object-center lg:object-[58%_center] transition-opacity duration-700 ${
+          className={`absolute h-full w-full object-cover object-center transition-opacity duration-700 ${
             !isDark ? "opacity-100" : "opacity-0"
           }`}
         />
 
-        {/* Left Side Gradient Overlay (ensures left branding text is 100% crisp and readable) */}
-        <div className="absolute inset-y-0 left-0 w-full lg:w-[45%] bg-gradient-to-r from-[#F5F2FC] via-[#F5F2FC]/95 to-transparent dark:from-[#0D0F18] dark:via-[#0D0F18]/95 dark:to-transparent z-[1] transition-colors duration-300" />
-        
-        {/* Right Side Gradient Overlay (ensures right login card area has beautiful subtle depth) */}
-        <div className="absolute inset-y-0 right-0 w-full lg:w-[45%] bg-gradient-to-l from-[#F5F2FC] via-[#F5F2FC]/90 to-transparent dark:from-[#0D0F18] dark:via-[#0D0F18]/90 dark:to-transparent z-[1] transition-colors duration-300" />
+        {/* Ambient Dark/Light Vignette Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#F5F2FC]/80 via-transparent to-[#F5F2FC]/70 dark:from-[#0D0F18]/90 dark:via-[#0D0F18]/40 dark:to-[#0D0F18]/80 z-[1] transition-colors duration-300" />
+      </div>
+
+      {/* ── Top-Left Logo & Branding ── */}
+      <div className="absolute top-6 left-6 lg:top-8 lg:left-10 z-30 flex items-center gap-3">
+        <LogoIcon className="w-10 h-10" />
+        <div className="flex flex-col justify-center">
+          <span className="text-xl font-black tracking-tight text-main font-rajdhani leading-[0.9]">
+            PC ALLEY
+          </span>
+          <span className="text-[8px] tracking-[0.28em] text-[#5B73E8] dark:text-[#8FA5FF] font-bold uppercase leading-tight mt-1 opacity-90">
+            INTEGRATED SYSTEMS
+          </span>
+        </div>
       </div>
 
       {/* ── Top-Right Theme Toggle Button ── */}
-      <div className="absolute top-6 right-6 lg:top-7 lg:right-10 z-30">
+      <div className="absolute top-6 right-6 lg:top-8 lg:right-10 z-30">
         <button
           onClick={toggleTheme}
           aria-label="Toggle Theme"
@@ -256,123 +266,13 @@ export default function LoginPage() {
         </button>
       </div>
 
-      {/* ════════════════════════════════════════════════════════
-          1. LEFT COLUMN: Brand / Hero Section (~57%)
-         ════════════════════════════════════════════════════════ */}
-      <div className="w-full lg:w-[57%] p-6 sm:p-10 lg:p-12 xl:p-14 flex flex-col justify-between relative z-20 min-h-[500px] lg:min-h-screen">
-        
-        {/* Logo Top Left */}
-        <div className="flex items-center gap-3.5">
-          <LogoIcon className="w-11 h-11" />
-          <div className="flex flex-col justify-center">
-            <span className="text-2xl font-black tracking-tight text-main font-rajdhani leading-[0.9]">
-              PC ALLEY
-            </span>
-            <span className="text-[8.5px] tracking-[0.28em] text-[#5B73E8] dark:text-[#8FA5FF] font-bold uppercase leading-tight mt-1.5 opacity-90">
-              INTEGRATED SYSTEMS
-            </span>
-          </div>
-        </div>
-
-        {/* Hero Title + Tagline + Badges */}
-        <div className="my-auto py-8 max-w-sm">
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-            className="space-y-0"
-          >
-            <h1 className="text-6xl sm:text-7xl lg:text-8xl font-black uppercase font-rajdhani tracking-tighter leading-[0.85] text-main">
-              THE
-            </h1>
-            <h1 className="text-6xl sm:text-7xl lg:text-8xl font-black uppercase font-rajdhani tracking-tighter leading-[0.85] text-[#5B73E8] dark:text-[#7C93F6]">
-              TECH
-            </h1>
-            <h1 className="text-6xl sm:text-7xl lg:text-8xl font-black uppercase font-rajdhani tracking-tighter leading-[0.85] text-main">
-              CORE.
-            </h1>
-          </motion.div>
-
-          <p className="text-xs sm:text-sm text-muted font-medium mt-3.5 tracking-normal">
-            Smarter Systems. Stronger Business.
-          </p>
-
-          {/* Small Accent Line */}
-          <div className="w-8 h-1 bg-[#5B73E8] dark:bg-[#7C93F6] rounded-full my-4" />
-
-          {/* 3 Horizontal Feature Pills */}
-          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 mt-2">
-            {/* 1: Sales Tracking */}
-            <div className="flex-1 bg-white/80 dark:bg-[#1A1D2E]/70 backdrop-blur-md border border-black/5 dark:border-white/10 rounded-2xl p-2.5 flex items-center gap-2.5 shadow-sm hover:border-[#5B73E8]/40 transition-all">
-              <div className="w-7 h-7 rounded-xl bg-[#5B73E8]/10 dark:bg-[#7C93F6]/15 text-[#5B73E8] dark:text-[#8FA5FF] flex items-center justify-center shrink-0">
-                <BarChart3 size={14} />
-              </div>
-              <div className="leading-tight">
-                <p className="text-[11px] font-bold text-main">Sales</p>
-                <p className="text-[10px] text-muted">Tracking</p>
-              </div>
-            </div>
-
-            {/* 2: Inventory Management */}
-            <div className="flex-1 bg-white/80 dark:bg-[#1A1D2E]/70 backdrop-blur-md border border-black/5 dark:border-white/10 rounded-2xl p-2.5 flex items-center gap-2.5 shadow-sm hover:border-[#5B73E8]/40 transition-all">
-              <div className="w-7 h-7 rounded-xl bg-[#5B73E8]/10 dark:bg-[#7C93F6]/15 text-[#5B73E8] dark:text-[#8FA5FF] flex items-center justify-center shrink-0">
-                <Package size={14} />
-              </div>
-              <div className="leading-tight">
-                <p className="text-[11px] font-bold text-main">Inventory</p>
-                <p className="text-[10px] text-muted">Management</p>
-              </div>
-            </div>
-
-            {/* 3: Business Analytics */}
-            <div className="flex-1 bg-white/80 dark:bg-[#1A1D2E]/70 backdrop-blur-md border border-black/5 dark:border-white/10 rounded-2xl p-2.5 flex items-center gap-2.5 shadow-sm hover:border-[#5B73E8]/40 transition-all">
-              <div className="w-7 h-7 rounded-xl bg-[#5B73E8]/10 dark:bg-[#7C93F6]/15 text-[#5B73E8] dark:text-[#8FA5FF] flex items-center justify-center shrink-0">
-                <PieChart size={14} />
-              </div>
-              <div className="leading-tight">
-                <p className="text-[11px] font-bold text-main">Business</p>
-                <p className="text-[10px] text-muted">Analytics</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Left Bottom Footer */}
-        <div className="pt-6 border-t border-black/5 dark:border-white/10 text-[9px] text-muted/70 uppercase tracking-[0.22em] font-semibold space-y-1">
-          <p>PC ALLEY &nbsp;&nbsp;|&nbsp;&nbsp; INTEGRATED SYSTEMS</p>
-          <p>PEOPLE &nbsp;•&nbsp; PRODUCTS &nbsp;•&nbsp; POSSIBILITIES</p>
-        </div>
-      </div>
-
-      {/* ════════════════════════════════════════════════════════
-          2. CENTER AREA: Cursive Script on Desk Foreground
-         ════════════════════════════════════════════════════════ */}
-      <div className="hidden lg:flex flex-1 flex-col justify-end items-center pb-16 z-20 pointer-events-none">
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
-          className="text-center transform -rotate-6 select-none"
-        >
-          <p className="font-caveat text-4xl xl:text-5xl text-[#5B73E8] dark:text-[#8FA5FF] font-bold italic drop-shadow-md leading-none">
-            Built<br />
-            <span className="text-3xl xl:text-4xl ml-2">for a Smarter</span><br />
-            <span className="text-4xl xl:text-5xl ml-6">Tomorrow.</span>
-          </p>
-        </motion.div>
-      </div>
-
-      {/* ════════════════════════════════════════════════════════
-          3. RIGHT COLUMN: Floating Glass Authentication Card
-         ════════════════════════════════════════════════════════ */}
-      <div className="w-full lg:w-[440px] xl:w-[480px] shrink-0 p-6 sm:p-10 lg:p-12 flex flex-col justify-center items-center z-20 min-h-[520px] lg:min-h-screen">
-
-        {/* Floating Glass Authentication Container */}
+      {/* ── CENTER: Floating Glass Authentication Card ── */}
+      <div className="w-full max-w-[420px] z-20 my-auto py-12 flex flex-col items-center">
         <motion.div
           initial={{ opacity: 0, scale: 0.97 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.4 }}
-          className="w-full max-w-[410px] bg-white/85 dark:bg-[#131627]/85 backdrop-blur-2xl border border-white/80 dark:border-[#3B487A]/60 rounded-[28px] p-7 sm:p-9 shadow-2xl dark:shadow-[0_0_50px_rgba(40,60,140,0.25)] flex flex-col relative"
+          className="w-full bg-white/85 dark:bg-[#131627]/85 backdrop-blur-2xl border border-white/80 dark:border-[#3B487A]/60 rounded-[28px] p-7 sm:p-9 shadow-2xl dark:shadow-[0_0_60px_rgba(40,60,140,0.3)] flex flex-col relative"
         >
           {/* Card Header */}
           <div className="mb-5 text-center">
@@ -550,10 +450,11 @@ export default function LoginPage() {
           </div>
         </motion.div>
 
-        {/* Right Bottom Footer Tag */}
-        <p className="mt-6 text-[9px] uppercase tracking-[0.22em] text-muted/70 font-semibold text-center select-none">
-          SECURE &nbsp;•&nbsp; RELIABLE &nbsp;•&nbsp; ALWAYS ON
-        </p>
+        {/* Bottom Footer Tag */}
+        <div className="mt-6 text-center text-[9px] uppercase tracking-[0.22em] text-muted/70 font-semibold space-y-1 select-none">
+          <p>SECURE &nbsp;•&nbsp; RELIABLE &nbsp;•&nbsp; ALWAYS ON</p>
+          <p className="opacity-75">PC ALLEY &nbsp;|&nbsp; INTEGRATED SYSTEMS</p>
+        </div>
       </div>
 
     </div>
