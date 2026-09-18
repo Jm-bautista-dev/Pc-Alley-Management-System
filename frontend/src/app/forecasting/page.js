@@ -730,6 +730,31 @@ function ForecastingPageContent() {
                   </div>
                 ) : (
                   <>
+                    {/* ── TOP: Forecast Insights ──────────────────────── */}
+                    {data?.insights?.length > 0 && (
+                      <div className="bg-brand-surface border border-border rounded-[24px] p-5 sm:p-6 mb-6 shadow-sm print-card">
+                        <div className="flex items-center gap-3 mb-4 shrink-0">
+                          <div className="w-9 h-9 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-500 shrink-0">
+                            <Lightbulb size={18} />
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-rajdhani font-black uppercase text-main tracking-widest mb-0">
+                              FORECAST INSIGHTS
+                            </h3>
+                            <p className="text-[10px] text-muted font-bold uppercase mt-0.5">Automated Summaries</p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {data.insights.map((insight, index) => (
+                            <div key={index} className="p-4 bg-brand-bgbase/40 border border-border/60 rounded-2xl flex gap-3 items-start print-card">
+                              <div className="w-2 h-2 rounded-full bg-brand-neonblue mt-1.5 shrink-0 animate-pulse" />
+                              <p className="text-xs text-muted leading-relaxed font-semibold">{insight}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {/* ── ROW 1: Forecast KPI Cards ───────────────────── */}
                     <div className="responsive-grid mb-6">
                       <StatCard 
@@ -852,11 +877,11 @@ function ForecastingPageContent() {
 
                     </div>
 
-                    {/* ── ROW 4: Insights & Forecast Table ────────────── */}
-                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-10">
+                    {/* ── ROW 4: Forecast Ledger Table ────────────────── */}
+                    <div className="mb-10">
                       
                       {/* Forecast ledger list */}
-                      <div className="xl:col-span-2 bg-brand-surface border border-border rounded-[24px] p-6 flex flex-col h-[340px] print-card">
+                      <div className="bg-brand-surface border border-border rounded-[24px] p-6 flex flex-col h-[360px] print-card">
                         <div className="flex items-center gap-3 mb-6 shrink-0">
                           <div className="w-1.5 h-5 bg-brand-neonblue rounded-full" />
                           <h3 className="text-sm font-rajdhani font-black uppercase text-main tracking-widest">
@@ -893,33 +918,6 @@ function ForecastingPageContent() {
                             </table>
                           ) : (
                             <div className="text-center py-16 text-muted">No forecast data points generated.</div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Automated insights box */}
-                      <div className="bg-brand-surface border border-border rounded-[24px] p-6 flex flex-col h-[340px] print-card">
-                        <div className="flex items-center gap-3 mb-6 shrink-0">
-                          <div className="w-9 h-9 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-500">
-                            <Lightbulb size={18} />
-                          </div>
-                          <div>
-                            <h3 className="text-sm font-rajdhani font-black uppercase text-main tracking-widest mb-0">
-                              FORECAST INSIGHTS
-                            </h3>
-                            <p className="text-[10px] text-muted font-bold uppercase mt-0.5">Automated Summaries</p>
-                          </div>
-                        </div>
-                        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4">
-                          {data?.insights?.length > 0 ? (
-                            data.insights.map((insight, index) => (
-                              <div key={index} className="p-4 bg-brand-bgbase/40 border border-border/60 rounded-2xl flex gap-3 items-start print-card">
-                                <div className="w-2 h-2 rounded-full bg-brand-neonblue mt-1.5 shrink-0 animate-pulse" />
-                                <p className="text-xs text-muted leading-relaxed font-semibold">{insight}</p>
-                              </div>
-                            ))
-                          ) : (
-                            <div className="text-center py-16 text-muted text-xs">No insights detected.</div>
                           )}
                         </div>
                       </div>
