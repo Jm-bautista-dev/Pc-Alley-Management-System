@@ -223,7 +223,7 @@ export default function LoginPage() {
         <img
           src="/images/login-bg-dark.png"
           alt="PC Alley Showroom Background"
-          className={`absolute h-full w-full object-cover object-[55%_center] transition-opacity duration-700 ${
+          className={`absolute h-full w-full object-cover object-right transition-opacity duration-700 ${
             isDark ? "opacity-100" : "opacity-0"
           }`}
         />
@@ -232,15 +232,15 @@ export default function LoginPage() {
         <img
           src="/images/login-bg-light.png"
           alt="PC Alley Showroom Background Light"
-          className={`absolute h-full w-full object-cover object-[55%_center] transition-opacity duration-700 ${
+          className={`absolute h-full w-full object-cover object-right transition-opacity duration-700 ${
             !isDark ? "opacity-100" : "opacity-0"
           }`}
         />
 
         {/* Left gradient — strong, keeps hero text fully readable */}
-        <div className="absolute inset-y-0 left-0 w-[60%] bg-gradient-to-r from-[#F0ECF8] via-[#F0ECF8]/95 to-transparent dark:from-[#0A0C14] dark:via-[#0A0C14]/95 dark:to-transparent z-[1] transition-colors duration-300" />
-        {/* Right gradient — subtle depth for card column */}
-        <div className="absolute inset-y-0 right-0 w-[45%] bg-gradient-to-l from-[#F0ECF8]/70 via-[#F0ECF8]/30 to-transparent dark:from-[#0A0C14]/70 dark:via-[#0A0C14]/30 dark:to-transparent z-[1] transition-colors duration-300" />
+        <div className="absolute inset-y-0 left-0 w-[55%] bg-gradient-to-r from-[#F0ECF8] via-[#F0ECF8]/98 to-transparent dark:from-[#0A0C14] dark:via-[#0A0C14]/98 dark:to-transparent z-[1] transition-colors duration-300" />
+        {/* Right gradient — subtle depth, bg still peeks through */}
+        <div className="absolute inset-y-0 right-0 w-[50%] bg-gradient-to-l from-[#F0ECF8]/40 via-transparent to-transparent dark:from-[#0A0C14]/40 dark:via-transparent dark:to-transparent z-[1] transition-colors duration-300" />
       </div>
 
       {/* ── Top-Right Theme Toggle Button ── */}
@@ -356,12 +356,12 @@ export default function LoginPage() {
         </div>
 
         {/* ── RIGHT COLUMN: Floating Glass Login Card (~43%) ── */}
-        <div className="w-full lg:w-[43%] shrink-0 flex flex-col justify-center items-center px-6 sm:px-10 lg:px-10 xl:px-12 py-10 lg:py-0 min-h-[520px] lg:min-h-screen">
+        <div className="w-full lg:w-[43%] shrink-0 flex flex-col justify-center items-center px-8 sm:px-10 lg:px-10 xl:px-12 py-10 lg:py-0 min-h-[520px] lg:min-h-screen bg-white/50 dark:bg-[#0A0C14]/60 backdrop-blur-sm border-l border-black/5 dark:border-white/5">
           <motion.div
             initial={{ opacity: 0, x: 20, scale: 0.98 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
             transition={{ duration: 0.45 }}
-            className="w-full max-w-[400px] bg-white/85 dark:bg-[#131627]/85 backdrop-blur-2xl border border-white/80 dark:border-[#3B487A]/60 rounded-[24px] p-7 sm:p-8 shadow-2xl dark:shadow-[0_0_50px_rgba(40,60,140,0.25)] flex flex-col"
+            className="w-full max-w-[400px] bg-white/95 dark:bg-[#12152A]/95 backdrop-blur-xl border border-black/8 dark:border-[#2A3560]/80 rounded-[20px] p-7 sm:p-8 shadow-xl dark:shadow-[0_8px_40px_rgba(10,20,80,0.4)] flex flex-col"
           >
             {/* Card Header */}
             <div className="mb-5">
