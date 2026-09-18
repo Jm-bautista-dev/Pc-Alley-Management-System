@@ -22,8 +22,7 @@ import {
   Smartphone,
   ShieldAlert,
   Mail,
-  BadgeCheck,
-  Server
+  BadgeCheck
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { showSuccess, showError, showInfo } from "@/context/ModalContext";
@@ -584,26 +583,6 @@ export default function SettingsPage() {
                     </button>
                   );
                 })}
-
-                {/* System Diagnostics Box in Nav */}
-                <div className="pt-4 mt-3 border-t border-border px-3 pb-1">
-                  <div className="bg-main/5 rounded-xl p-3 border border-border/60">
-                    <div className="flex items-center gap-2 text-muted mb-1.5">
-                      <Server size={14} className="text-brand-neonblue" />
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted">
-                        Node Synchronizer
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs font-semibold text-main">
-                      <span>Server Engine</span>
-                      <span className="text-emerald-500 font-mono text-[11px]">Ready (200 OK)</span>
-                    </div>
-                    <div className="flex items-center justify-between text-[10px] text-muted mt-1">
-                      <span>Latency: ~24ms</span>
-                      <span>TLS 1.3 Active</span>
-                    </div>
-                  </div>
-                </div>
               </div>
             </aside>
 
