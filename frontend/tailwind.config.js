@@ -29,6 +29,7 @@ module.exports = {
         dmsans: ['var(--font-dm-sans)', 'sans-serif'],
         rajdhani: ['var(--font-rajdhani)', 'sans-serif'],
         bebas: ['Bebas Neue', 'sans-serif'],
+        caveat: ['var(--font-caveat)', 'cursive'],
       },
     },
   },

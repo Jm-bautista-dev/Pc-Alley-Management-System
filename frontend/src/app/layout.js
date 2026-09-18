@@ -1,5 +1,5 @@
 import './globals.css';
-import { Inter, DM_Sans, Rajdhani, Bebas_Neue } from 'next/font/google';
+import { Inter, DM_Sans, Rajdhani, Bebas_Neue, Caveat } from 'next/font/google';
 import { LayoutProvider } from '../context/LayoutContext';
 import { NotificationProvider } from '../context/NotificationContext';
 import { ModalProvider } from '../context/ModalContext';
@@ -19,6 +19,12 @@ const bebasNeue = Bebas_Neue({
   weight: "400", 
   subsets: ["latin"],
   variable: '--font-bebas',
+});
+
+const caveat = Caveat({
+  subsets: ['latin'],
+  weight: ['400', '600', '700'],
+  variable: '--font-caveat',
 });
 
 export const metadata = {
@@ -65,7 +71,7 @@ export default function RootLayout({ children }) {
         />
       </head>
 
-      <body className={`${dmSans.variable} ${rajdhani.variable} ${bebasNeue.variable} font-sans antialiased transition-colors duration-300`}>
+      <body className={`${dmSans.variable} ${rajdhani.variable} ${bebasNeue.variable} ${caveat.variable} font-sans antialiased transition-colors duration-300`}>
         <ThemeProvider>
           <NotificationProvider>
             <ModalProvider>
