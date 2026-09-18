@@ -496,14 +496,6 @@ export default function SettingsPage() {
                   Manage your personal account, security configuration, system behaviors, and operational preferences.
                 </p>
               </div>
-
-              {/* Status / Environment pill */}
-              <div className="flex items-center gap-2 self-start sm:self-auto">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-main/5 border border-border text-xs font-semibold text-muted">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  Live Environment · v4.1.0
-                </span>
-              </div>
             </div>
           </div>
 
