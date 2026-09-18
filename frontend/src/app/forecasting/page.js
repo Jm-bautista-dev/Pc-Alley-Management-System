@@ -690,16 +690,15 @@ function ForecastingPageContent() {
               </div>
             )}
 
-            {/* ── STICKY COMPACT FILTER BAR (no-print) ──────────────── */}
-            <div className="sticky top-0 z-[100] bg-brand-surface/90 backdrop-blur-md border border-border/80 rounded-2xl p-3 mb-6 flex flex-wrap items-center gap-3 shadow-md filter-bar no-print">
-              
-              <div className="flex flex-wrap items-center gap-2.5">
+            {/* ── STICKY COMPACT FILTER PILL (no-print) ──────────────── */}
+            <div className="mb-6 flex items-center no-print">
+              <div className="inline-flex items-center gap-2 p-1.5 rounded-full bg-brand-surface/90 backdrop-blur-md border border-border/80 shadow-sm filter-bar">
                 
                 {/* Branch dropdown */}
                 <select
                   value={branch}
                   onChange={(e) => handleBranchChange(e.target.value)}
-                  className="bg-brand-bgbase border border-border rounded-xl text-xs font-semibold px-3.5 h-9 text-main focus:outline-none focus:border-brand-neonblue/50 transition-all cursor-pointer"
+                  className="bg-brand-bgbase border border-border/60 rounded-full text-xs font-semibold px-3.5 h-8 text-main focus:outline-none focus:border-brand-neonblue/50 transition-all cursor-pointer"
                 >
                   <option value="all" className="bg-brand-surface text-main">All Branches</option>
                   {branches.map(b => (
@@ -711,7 +710,7 @@ function ForecastingPageContent() {
                 <select
                   value={dateRange}
                   onChange={(e) => handleDateRangeChange(e.target.value)}
-                  className="bg-brand-bgbase border border-border rounded-xl text-xs font-semibold px-3.5 h-9 text-main focus:outline-none focus:border-brand-neonblue/50 transition-all cursor-pointer"
+                  className="bg-brand-bgbase border border-border/60 rounded-full text-xs font-semibold px-3.5 h-8 text-main focus:outline-none focus:border-brand-neonblue/50 transition-all cursor-pointer"
                 >
                   <option value="today" className="bg-brand-surface text-main">Today</option>
                   <option value="1day" className="bg-brand-surface text-main">1 Day</option>
@@ -721,7 +720,6 @@ function ForecastingPageContent() {
                 </select>
 
               </div>
-
             </div>
 
             {/* ── MAIN DASHBOARD VIEW ───────────────────────────────── */}
