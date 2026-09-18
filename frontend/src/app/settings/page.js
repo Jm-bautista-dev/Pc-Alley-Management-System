@@ -9,7 +9,6 @@ import {
   Lock,
   Bell,
   Palette,
-  Sliders,
   Building2,
   Eye,
   EyeOff,
@@ -79,16 +78,6 @@ export default function SettingsPage() {
   const [displayDensity, setDisplayDensity] = useState("comfortable"); // comfortable | compact
   const [enableAnimations, setEnableAnimations] = useState(true);
 
-  // System Preferences State
-  const [systemPrefs, setSystemPrefs] = useState({
-    currency: "PHP",
-    dateFormat: "DD/MM/YYYY",
-    timezone: "Asia/Manila (GMT+8)",
-    autoLogout: "30",
-    printReceiptOnCheckout: true
-  });
-  const [isSavingPreferences, setIsSavingPreferences] = useState(false);
-
   // Branch / Business Settings State (Role-gated)
   const [branches, setBranches] = useState([]);
   const [selectedBranchId, setSelectedBranchId] = useState("");
@@ -142,9 +131,6 @@ export default function SettingsPage() {
 
       const savedAnim = localStorage.getItem("pcalley_animations_enabled");
       if (savedAnim !== null) setEnableAnimations(savedAnim === "true");
-
-      const savedPrefs = localStorage.getItem("pcalley_system_prefs");
-      if (savedPrefs) setSystemPrefs(JSON.parse(savedPrefs));
 
 
     } catch (e) {
@@ -347,18 +333,7 @@ export default function SettingsPage() {
     showSuccess(`UI animations ${nextVal ? "enabled" : "reduced"}`);
   };
 
-  // 6. System Preferences Save
-  const handleSavePreferences = (e) => {
-    e.preventDefault();
-    setIsSavingPreferences(true);
-    localStorage.setItem("pcalley_system_prefs", JSON.stringify(systemPrefs));
-    setTimeout(() => {
-      setIsSavingPreferences(false);
-      showSuccess("System configuration saved successfully");
-    }, 400);
-  };
-
-  // 7. Branch & Business Settings Save
+  // 6. Branch & Business Settings Save
   const handleSaveBranch = async (e) => {
     e.preventDefault();
     if (!branchData.name.trim()) {
@@ -458,12 +433,6 @@ export default function SettingsPage() {
       label: "Appearance",
       icon: Palette,
       desc: "Theme, density & visual aesthetics"
-    },
-    {
-      id: "preferences",
-      label: "System Preferences",
-      icon: Sliders,
-      desc: "Currencies, regional formats & POS"
     },
     ...(canAccessBranchSettings
       ? [
@@ -1338,153 +1307,7 @@ export default function SettingsPage() {
                   </motion.div>
                 )}
 
-                {/* 6. SYSTEM PREFERENCES TAB */}
-                {activeTab === "preferences" && (
-                  <motion.div
-                    key="tab-preferences"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.15 }}
-                    className="space-y-6"
-                  >
-                    <div className="bg-brand-surface border border-border rounded-2xl p-6 sm:p-8 shadow-sm">
-                      <div className="border-b border-border pb-4 mb-6">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Sliders size={18} className="text-brand-neonblue" />
-                          <h3 className="text-base font-bold text-main">System & Regional Preferences</h3>
-                        </div>
-                        <p className="text-xs text-muted">
-                          Configure currency symbols, date & time standards, and POS checkout behaviors.
-                        </p>
-                      </div>
-
-                      <form onSubmit={handleSavePreferences} className="space-y-6">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                          {/* Currency */}
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-main">Active Currency Symbol</label>
-                            <select
-                              value={systemPrefs.currency}
-                              onChange={(e) =>
-                                setSystemPrefs({ ...systemPrefs, currency: e.target.value })
-                              }
-                              className="w-full h-11 px-3.5 bg-brand-bgbase border border-border rounded-xl text-main text-sm focus:border-brand-neonblue outline-none"
-                            >
-                              <option value="PHP">PHP (₱) - Philippine Peso</option>
-                              <option value="USD">USD ($) - US Dollar</option>
-                              <option value="EUR">EUR (€) - Euro</option>
-                            </select>
-                            <p className="text-[11px] text-muted">Used for sales, receipts, and inventory valuation.</p>
-                          </div>
-
-                          {/* Date Format */}
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-main">Date Display Standard</label>
-                            <select
-                              value={systemPrefs.dateFormat}
-                              onChange={(e) =>
-                                setSystemPrefs({ ...systemPrefs, dateFormat: e.target.value })
-                              }
-                              className="w-full h-11 px-3.5 bg-brand-bgbase border border-border rounded-xl text-main text-sm focus:border-brand-neonblue outline-none"
-                            >
-                              <option value="DD/MM/YYYY">DD/MM/YYYY (e.g. 08/09/2026)</option>
-                              <option value="MM/DD/YYYY">MM/DD/YYYY (e.g. 09/08/2026)</option>
-                              <option value="YYYY-MM-DD">YYYY-MM-DD (ISO Standard)</option>
-                            </select>
-                            <p className="text-[11px] text-muted">Formatting applied across reports and transaction logs.</p>
-                          </div>
-
-                          {/* Timezone */}
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-main">Store Timezone</label>
-                            <select
-                              value={systemPrefs.timezone}
-                              onChange={(e) =>
-                                setSystemPrefs({ ...systemPrefs, timezone: e.target.value })
-                              }
-                              className="w-full h-11 px-3.5 bg-brand-bgbase border border-border rounded-xl text-main text-sm focus:border-brand-neonblue outline-none"
-                            >
-                              <option value="Asia/Manila (GMT+8)">Asia/Manila (GMT+8) · Philippine Time</option>
-                              <option value="UTC">UTC Universal Time</option>
-                              <option value="Asia/Singapore (GMT+8)">Asia/Singapore (GMT+8)</option>
-                            </select>
-                            <p className="text-[11px] text-muted">Synchronizes order timestamps and sales cutoff cycles.</p>
-                          </div>
-
-                          {/* Auto-logout Timeout */}
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-main">Terminal Inactivity Lock</label>
-                            <select
-                              value={systemPrefs.autoLogout}
-                              onChange={(e) =>
-                                setSystemPrefs({ ...systemPrefs, autoLogout: e.target.value })
-                              }
-                              className="w-full h-11 px-3.5 bg-brand-bgbase border border-border rounded-xl text-main text-sm focus:border-brand-neonblue outline-none"
-                            >
-                              <option value="15">15 minutes of inactivity</option>
-                              <option value="30">30 minutes of inactivity</option>
-                              <option value="60">1 hour of inactivity</option>
-                              <option value="0">Never (Always keep terminal open)</option>
-                            </select>
-                            <p className="text-[11px] text-muted">Prevents unauthorized staff access on unattended registers.</p>
-                          </div>
-                        </div>
-
-                        {/* Receipt Print Toggle */}
-                        <div className="p-4 sm:p-5 rounded-xl bg-brand-bgbase border border-border flex items-center justify-between gap-4">
-                          <div className="space-y-0.5">
-                            <p className="text-xs font-bold text-main">Auto-Trigger Print Dialog After Checkout</p>
-                            <p className="text-[11px] text-muted">
-                              Automatically prompt thermal receipt or invoice printout immediately after a transaction.
-                            </p>
-                          </div>
-                          <div
-                            onClick={() =>
-                              setSystemPrefs({
-                                ...systemPrefs,
-                                printReceiptOnCheckout: !systemPrefs.printReceiptOnCheckout
-                              })
-                            }
-                            className={`w-11 h-6 rounded-full relative cursor-pointer transition-colors shrink-0 ${
-                              systemPrefs.printReceiptOnCheckout
-                                ? "bg-brand-crimson"
-                                : "bg-main/10"
-                            }`}
-                          >
-                            <div
-                              className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all shadow-sm ${
-                                systemPrefs.printReceiptOnCheckout ? "right-1" : "left-1"
-                              }`}
-                            />
-                          </div>
-                        </div>
-
-                        <div className="pt-4 border-t border-border flex items-center justify-end">
-                          <button
-                            type="submit"
-                            disabled={isSavingPreferences}
-                            className="flex items-center gap-2 px-6 py-2.5 bg-brand-crimson hover:bg-brand-crimson/90 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-sm shadow-brand-crimson/20 disabled:opacity-60"
-                          >
-                            {isSavingPreferences ? (
-                              <>
-                                <RefreshCw size={14} className="animate-spin" />
-                                Saving...
-                              </>
-                            ) : (
-                              <>
-                                <Save size={14} />
-                                Save System Settings
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      </form>
-                    </div>
-                  </motion.div>
-                )}
-
-                {/* 7. BRANCH & BUSINESS SETTINGS TAB (Role-Gated) */}
+                {/* 6. BRANCH & BUSINESS SETTINGS TAB (Role-Gated) */}
                 {activeTab === "branch" && canAccessBranchSettings && (
                   <motion.div
                     key="tab-branch"
