@@ -375,7 +375,7 @@ export default function LoginPage() {
           className="w-full max-w-[410px] bg-white/85 dark:bg-[#131627]/85 backdrop-blur-2xl border border-white/80 dark:border-[#3B487A]/60 rounded-[28px] p-7 sm:p-9 shadow-2xl dark:shadow-[0_0_50px_rgba(40,60,140,0.25)] flex flex-col relative"
         >
           {/* Card Header */}
-          <div className="mb-5">
+          <div className="mb-5 text-center">
             <p className="text-[9.5px] font-black tracking-[0.2em] text-[#5B73E8] dark:text-[#8FA5FF] uppercase mb-1">
               PERSONNEL CLEARANCE
             </p>
