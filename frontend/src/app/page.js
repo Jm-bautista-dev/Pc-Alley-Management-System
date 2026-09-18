@@ -238,10 +238,10 @@ export default function LoginPage() {
         />
 
         {/* Left Side Gradient Overlay (ensures left branding text is 100% crisp and readable) */}
-        <div className="absolute inset-y-0 left-0 w-full lg:w-[42%] bg-gradient-to-r from-[#F5F2FC] via-[#F5F2FC]/95 to-transparent dark:from-[#0D0F18] dark:via-[#0D0F18]/95 dark:to-transparent z-[1] transition-colors duration-300" />
+        <div className="absolute inset-y-0 left-0 w-full lg:w-[45%] bg-gradient-to-r from-[#F5F2FC] via-[#F5F2FC]/95 to-transparent dark:from-[#0D0F18] dark:via-[#0D0F18]/95 dark:to-transparent z-[1] transition-colors duration-300" />
         
         {/* Right Side Gradient Overlay (ensures right login card area has beautiful subtle depth) */}
-        <div className="absolute inset-y-0 right-0 w-full lg:w-[42%] bg-gradient-to-l from-[#F5F2FC] via-[#F5F2FC]/90 to-transparent dark:from-[#0D0F18] dark:via-[#0D0F18]/90 dark:to-transparent z-[1] transition-colors duration-300" />
+        <div className="absolute inset-y-0 right-0 w-full lg:w-[45%] bg-gradient-to-l from-[#F5F2FC] via-[#F5F2FC]/90 to-transparent dark:from-[#0D0F18] dark:via-[#0D0F18]/90 dark:to-transparent z-[1] transition-colors duration-300" />
       </div>
 
       {/* ── Top-Right Theme Toggle Button ── */}
@@ -257,9 +257,9 @@ export default function LoginPage() {
       </div>
 
       {/* ════════════════════════════════════════════════════════
-          1. LEFT COLUMN: Branding, Hero Text & Feature Pills
+          1. LEFT COLUMN: Brand / Hero Section (~57%)
          ════════════════════════════════════════════════════════ */}
-      <div className="w-full lg:w-[440px] xl:w-[480px] 2xl:w-[520px] shrink-0 p-8 sm:p-12 lg:p-14 flex flex-col justify-between relative z-20 min-h-[520px] lg:min-h-screen">
+      <div className="w-full lg:w-[57%] p-6 sm:p-10 lg:p-12 xl:p-14 flex flex-col justify-between relative z-20 min-h-[500px] lg:min-h-screen">
         
         {/* Logo Top Left */}
         <div className="flex items-center gap-3.5">
