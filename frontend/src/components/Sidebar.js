@@ -105,7 +105,6 @@ const Sidebar = () => {
         ] },
         { title: "Analytics",       icon: Activity,        path: "#analytics",        group: "SYSTEM", subItems: [
           { title: "Sales Forecasting", path: "/forecasting" },
-          { title: "Model Benchmarking", path: "/forecasting/benchmark" },
           { title: "Prescriptive Analytics", path: "/prescriptive-analytics" }
         ] },
         { title: "Personnel",       icon: Users,           path: "/personnel",        group: "SYSTEM" },
