@@ -243,17 +243,6 @@ export default function LoginPage() {
         <div className="absolute inset-y-0 right-0 w-[50%] bg-gradient-to-l from-[#F0ECF8]/40 via-transparent to-transparent dark:from-[#0A0C14]/40 dark:via-transparent dark:to-transparent z-[1] transition-colors duration-300" />
       </div>
 
-      {/* ── Top-Right Theme Toggle Button ── */}
-      <div className="absolute top-5 right-6 lg:top-6 lg:right-8 z-30">
-        <button
-          onClick={toggleTheme}
-          aria-label="Toggle Theme"
-          className="w-9 h-9 rounded-full border border-black/10 dark:border-white/15 bg-white/70 dark:bg-[#1E2235]/70 backdrop-blur-md flex items-center justify-center text-muted hover:text-main hover:border-[#5B73E8] dark:hover:border-[#8FA5FF] transition-all shadow-md active:scale-95"
-          type="button"
-        >
-          {isDark ? <Moon size={15} className="text-[#8FA5FF]" /> : <Sun size={15} className="text-amber-500" />}
-        </button>
-      </div>
 
       {/* ══════════════════════════════════════════════════════════
           MAIN LAYOUT — Two Column (Left Hero | Right Card)
@@ -356,7 +345,19 @@ export default function LoginPage() {
         </div>
 
         {/* ── RIGHT COLUMN: Floating Glass Login Card (~43%) ── */}
-        <div className="w-full lg:w-[43%] shrink-0 flex flex-col justify-center items-center px-8 sm:px-10 lg:px-10 xl:px-12 py-10 lg:py-0 min-h-[520px] lg:min-h-screen bg-white/50 dark:bg-[#0A0C14]/60 backdrop-blur-sm border-l border-black/5 dark:border-white/5">
+        <div className="w-full lg:w-[43%] shrink-0 flex flex-col justify-center items-center px-8 sm:px-10 lg:px-10 xl:px-12 py-10 lg:py-0 min-h-[520px] lg:min-h-screen bg-white/50 dark:bg-[#0A0C14]/60 backdrop-blur-sm border-l border-black/5 dark:border-white/5 relative">
+
+          {/* Theme Toggle — top-right of the right panel */}
+          <div className="absolute top-5 right-5 z-30">
+            <button
+              onClick={toggleTheme}
+              aria-label="Toggle Theme"
+              className="w-9 h-9 rounded-full border border-black/10 dark:border-white/15 bg-white/70 dark:bg-[#1E2235]/70 backdrop-blur-md flex items-center justify-center text-muted hover:text-main hover:border-[#5B73E8] dark:hover:border-[#8FA5FF] transition-all shadow-md active:scale-95"
+              type="button"
+            >
+              {isDark ? <Moon size={15} className="text-[#8FA5FF]" /> : <Sun size={15} className="text-amber-500" />}
+            </button>
+          </div>
           <motion.div
             initial={{ opacity: 0, x: 20, scale: 0.98 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
