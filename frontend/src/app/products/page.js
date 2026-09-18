@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import { motion, AnimatePresence } from "framer-motion";
@@ -17,6 +17,7 @@ import {
   HardDrive,
   Database,
   Hash,
+  ChevronLeft,
   ChevronRight,
   Zap,
   Trash2,
@@ -60,6 +61,15 @@ export default function ProductsPage() {
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [sortBy, setSortBy] = useState("name-asc");
+
+  // Category Bar Horizontal Scroll & Drag Support
+  const categoryScrollRef = useRef(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeftState, setScrollLeftState] = useState(0);
+  const [hasDragged, setHasDragged] = useState(false);
 
   // Debounce search to avoid firing on every keystroke
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -283,6 +293,86 @@ export default function ProductsPage() {
     }
   };
 
+  // Check category scroll capability
+  const checkCategoryScroll = useCallback(() => {
+    if (categoryScrollRef.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = categoryScrollRef.current;
+      setCanScrollLeft(scrollLeft > 4);
+      setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 4);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkCategoryScroll();
+    window.addEventListener("resize", checkCategoryScroll);
+    return () => window.removeEventListener("resize", checkCategoryScroll);
+  }, [categories, checkCategoryScroll]);
+
+  // Native wheel event with passive: false for smooth horizontal scrolling via mouse wheel
+  useEffect(() => {
+    const el = categoryScrollRef.current;
+    if (!el) return;
+
+    const handleWheel = (e) => {
+      if (e.deltaY !== 0 && el.scrollWidth > el.clientWidth) {
+        e.preventDefault();
+        el.scrollLeft += e.deltaY;
+        checkCategoryScroll();
+      }
+    };
+
+    el.addEventListener("wheel", handleWheel, { passive: false });
+    return () => el.removeEventListener("wheel", handleWheel);
+  }, [checkCategoryScroll]);
+
+  const scrollCategory = (direction) => {
+    if (categoryScrollRef.current) {
+      const scrollAmount = Math.min(categoryScrollRef.current.clientWidth * 0.7, 360);
+      categoryScrollRef.current.scrollBy({
+        left: direction === "left" ? -scrollAmount : scrollAmount,
+        behavior: "smooth",
+      });
+      setTimeout(checkCategoryScroll, 350);
+    }
+  };
+
+  const handleCategoryMouseDown = (e) => {
+    if (!categoryScrollRef.current) return;
+    setIsDragging(true);
+    setHasDragged(false);
+    setStartX(e.pageX - categoryScrollRef.current.offsetLeft);
+    setScrollLeftState(categoryScrollRef.current.scrollLeft);
+  };
+
+  const handleCategoryMouseMove = (e) => {
+    if (!isDragging || !categoryScrollRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - categoryScrollRef.current.offsetLeft;
+    const walk = (x - startX) * 1.5;
+    if (Math.abs(walk) > 4) {
+      setHasDragged(true);
+    }
+    categoryScrollRef.current.scrollLeft = scrollLeftState - walk;
+    checkCategoryScroll();
+  };
+
+  const handleCategoryMouseUpOrLeave = () => {
+    setIsDragging(false);
+    checkCategoryScroll();
+  };
+
+  const handleSelectCategory = (cat, e) => {
+    if (hasDragged) return; // Ignore click if dragging
+    setActiveCategory(cat);
+    if (e?.currentTarget) {
+      e.currentTarget.scrollIntoView({
+        behavior: "smooth",
+        inline: "center",
+        block: "nearest"
+      });
+    }
+  };
+
   const getCategoryColor = (catName) => {
     switch(catName?.toUpperCase()) {
       case 'GPU': return 'text-brand-crimson border-brand-crimson/20 bg-brand-crimson/10';
@@ -496,24 +586,79 @@ export default function ProductsPage() {
               )}
             </AnimatePresence>
 
-            {/* Category Tabs */}
-            <div className="flex gap-3 mb-10 overflow-x-auto no-scrollbar pb-2">
-              {categories.map((cat) => (
-                <motion.button
-                  key={cat}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => setActiveCategory(cat)}
-                  className={`h-10 px-6 rounded-full text-[10px] font-black uppercase tracking-[2px] transition-all flex items-center gap-2 border flex-shrink-0 ${
-                    activeCategory === cat 
-                    ? "bg-brand-neonblue/10 border-brand-neonblue/40 text-brand-neonblue" 
-                    : "bg-brand-surface border-border text-main/40 hover:text-main"
-                  }`}
-                >
-                  {cat !== "All" && getCategoryIcon(cat)}
-                  {cat}
-                </motion.button>
-              ))}
+            {/* Category Tabs with Left/Right Buttons, Wheel Scroll, and Drag Support */}
+            <div className="relative mb-8 group/cats">
+              {/* Left Scroll Button & Fade Overlay */}
+              <AnimatePresence>
+                {canScrollLeft && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.85 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.85 }}
+                    className="absolute left-0 top-0 bottom-2 z-20 flex items-center pr-6 bg-gradient-to-r from-brand-bgbase via-brand-bgbase/90 to-transparent pointer-events-none"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => scrollCategory("left")}
+                      className="w-8 h-8 rounded-full bg-brand-surface border border-border/80 shadow-md backdrop-blur-md flex items-center justify-center text-main hover:text-brand-neonblue hover:border-brand-neonblue/50 pointer-events-auto transition-all transform hover:scale-110 active:scale-95"
+                      title="Scroll categories left"
+                      aria-label="Scroll left"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Horizontally Scrollable Category Pills */}
+              <div
+                ref={categoryScrollRef}
+                onScroll={checkCategoryScroll}
+                onMouseDown={handleCategoryMouseDown}
+                onMouseMove={handleCategoryMouseMove}
+                onMouseUp={handleCategoryMouseUpOrLeave}
+                onMouseLeave={handleCategoryMouseUpOrLeave}
+                className="flex gap-2.5 overflow-x-auto custom-scrollbar pb-2 select-none cursor-grab active:cursor-grabbing scroll-smooth"
+              >
+                {categories.map((cat) => (
+                  <motion.button
+                    key={cat}
+                    whileHover={{ scale: 1.04 }}
+                    whileTap={{ scale: 0.96 }}
+                    onClick={(e) => handleSelectCategory(cat, e)}
+                    className={`h-9 px-5 rounded-full text-[10px] font-black uppercase tracking-[1.5px] transition-all flex items-center gap-2 border flex-shrink-0 whitespace-nowrap ${
+                      activeCategory === cat 
+                      ? "bg-brand-neonblue/15 border-brand-neonblue/60 text-brand-neonblue shadow-sm shadow-brand-neonblue/20 font-black" 
+                      : "bg-brand-surface border-border text-main/50 hover:text-main hover:border-border/80 hover:bg-brand-hover"
+                    }`}
+                  >
+                    {cat !== "All" && getCategoryIcon(cat)}
+                    <span>{cat}</span>
+                  </motion.button>
+                ))}
+              </div>
+
+              {/* Right Scroll Button & Fade Overlay */}
+              <AnimatePresence>
+                {canScrollRight && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.85 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.85 }}
+                    className="absolute right-0 top-0 bottom-2 z-20 flex items-center pl-6 bg-gradient-to-l from-brand-bgbase via-brand-bgbase/90 to-transparent pointer-events-none"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => scrollCategory("right")}
+                      className="w-8 h-8 rounded-full bg-brand-surface border border-border/80 shadow-md backdrop-blur-md flex items-center justify-center text-main hover:text-brand-neonblue hover:border-brand-neonblue/50 pointer-events-auto transition-all transform hover:scale-110 active:scale-95"
+                      title="Scroll categories right"
+                      aria-label="Scroll right"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             {/* Skeleton Loading */}
