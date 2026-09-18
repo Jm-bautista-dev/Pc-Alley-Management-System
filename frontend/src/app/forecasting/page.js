@@ -71,22 +71,74 @@ function ForecastingPageContent() {
   const [data, setData] = useState(null);
   const [branches, setBranches] = useState([]);
   
-  // ── FILTER STATES ──────────────────────────────────────────────────────────
+  // ── FILTER STATES (Branches + Date Filter only) ───────────────────────────
   const [branch, setBranch] = useState("all");
-  const [forecastType, setForecastType] = useState("sales");
+  const [dateRange, setDateRange] = useState("1month");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [groupBy, setGroupBy] = useState("monthly");
+  const [groupBy, setGroupBy] = useState("daily");
   const [horizon, setHorizon] = useState("3m");
-  
-  // Custom Date Picker Dropdown State
-  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-  const [calMonth, setCalMonth] = useState(new Date().getMonth());
-  const [calYear, setCalYear] = useState(new Date().getFullYear());
-  const calendarRef = useRef(null);
+  const [forecastType, setForecastType] = useState("sales");
 
-  // Validation Error state
-  const [dateError, setDateError] = useState("");
+  // Helper to calculate start/end/grouping based on selected date preset
+  const calculateDateRange = (rangeKey) => {
+    const today = new Date();
+    let start = new Date();
+    let end = new Date();
+    let nextGroup = "daily";
+    let nextHorizon = "30d";
+
+    switch (rangeKey) {
+      case "today":
+        start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        end = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        nextGroup = "daily";
+        nextHorizon = "7d";
+        break;
+      case "1day":
+        start = new Date(today);
+        start.setDate(today.getDate() - 1);
+        end = new Date(today);
+        nextGroup = "daily";
+        nextHorizon = "7d";
+        break;
+      case "1week":
+        start = new Date(today);
+        start.setDate(today.getDate() - 7);
+        end = new Date(today);
+        nextGroup = "daily";
+        nextHorizon = "30d";
+        break;
+      case "1month":
+        start = new Date(today);
+        start.setDate(today.getDate() - 30);
+        end = new Date(today);
+        nextGroup = "daily";
+        nextHorizon = "3m";
+        break;
+      case "1year":
+        start = new Date(today);
+        start.setFullYear(today.getFullYear() - 1);
+        end = new Date(today);
+        nextGroup = "monthly";
+        nextHorizon = "6m";
+        break;
+      default:
+        start = new Date(today);
+        start.setDate(today.getDate() - 30);
+        end = new Date(today);
+        nextGroup = "daily";
+        nextHorizon = "3m";
+        break;
+    }
+
+    return {
+      startDate: formatDateStr(start),
+      endDate: formatDateStr(end),
+      groupBy: nextGroup,
+      horizon: nextHorizon
+    };
+  };
 
   // RBAC Access Verification
   useEffect(() => {
@@ -103,76 +155,43 @@ function ForecastingPageContent() {
       fetchBranches();
       
       const queryBranch = searchParams.get("branch");
-      const queryType = searchParams.get("forecastType");
-      const queryStart = searchParams.get("startDate");
-      const queryEnd = searchParams.get("endDate");
-      const queryGroup = searchParams.get("groupBy");
-      const queryHorizon = searchParams.get("horizon");
+      const queryRange = searchParams.get("dateRange");
 
       let finalBranch = "all";
-      let finalType = "sales";
-      let finalStart = "";
-      let finalEnd = "";
-      let finalGroup = "monthly";
-      let finalHorizon = "3m";
+      let finalRange = "1month";
 
       const cached = localStorage.getItem("forecasting_filters");
       if (cached) {
         try {
           const parsed = JSON.parse(cached);
-          finalBranch = parsed.branch || "all";
-          finalType = parsed.forecastType || "sales";
-          finalStart = parsed.startDate || "";
-          finalEnd = parsed.endDate || "";
-          finalGroup = parsed.groupBy || "monthly";
-          finalHorizon = parsed.horizon || "3m";
+          if (parsed.branch) finalBranch = parsed.branch;
+          if (parsed.dateRange) finalRange = parsed.dateRange;
         } catch (e) {}
       }
 
       if (queryBranch) finalBranch = queryBranch;
-      if (queryType) finalType = queryType;
-      if (queryStart) finalStart = queryStart;
-      if (queryEnd) finalEnd = queryEnd;
-      if (queryGroup) finalGroup = queryGroup;
-      if (queryHorizon) finalHorizon = queryHorizon;
+      if (queryRange) finalRange = queryRange;
 
-      // If dates are not set, default to last 6 months
-      if (!finalStart || !finalEnd) {
-        const end = new Date();
-        const start = new Date();
-        start.setMonth(start.getMonth() - 6);
-        finalStart = formatDateStr(start);
-        finalEnd = formatDateStr(end);
-      }
+      const calculated = calculateDateRange(finalRange);
 
       setBranch(finalBranch);
-      setForecastType(finalType);
-      setStartDate(finalStart);
-      setEndDate(finalEnd);
-      setGroupBy(finalGroup);
-      setHorizon(finalHorizon);
+      setDateRange(finalRange);
+      setStartDate(calculated.startDate);
+      setEndDate(calculated.endDate);
+      setGroupBy(calculated.groupBy);
+      setHorizon(calculated.horizon);
+      setForecastType("sales");
 
       fetchForecastData({
         branch: finalBranch,
-        forecastType: finalType,
-        startDate: finalStart,
-        endDate: finalEnd,
-        groupBy: finalGroup,
-        horizon: finalHorizon
+        forecastType: "sales",
+        startDate: calculated.startDate,
+        endDate: calculated.endDate,
+        groupBy: calculated.groupBy,
+        horizon: calculated.horizon
       });
     }
   }, [user]);
-
-  // Handle outside click to close calendar popup
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (calendarRef.current && !calendarRef.current.contains(event.target)) {
-        setIsCalendarOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   const fetchBranches = async () => {
     const token = localStorage.getItem("token");
@@ -224,167 +243,58 @@ function ForecastingPageContent() {
 
   // ── FILTER ACTIONS ──────────────────────────────────────────────────────────
   const applyFilters = () => {
-    // Validate range
-    if (new Date(startDate) > new Date(endDate)) {
-      setDateError("Start Date cannot exceed End Date.");
-      return;
-    }
-    const todayStr = formatDateStr(new Date());
-    if (startDate > todayStr || endDate > todayStr) {
-      setDateError("Cannot select future dates.");
-      return;
-    }
-    setDateError("");
-    setIsCalendarOpen(false);
+    const calculated = calculateDateRange(dateRange);
+    setStartDate(calculated.startDate);
+    setEndDate(calculated.endDate);
+    setGroupBy(calculated.groupBy);
+    setHorizon(calculated.horizon);
 
-    // Save and push URL
-    const updated = { branch, forecastType, startDate, endDate, groupBy, horizon };
+    const updated = {
+      branch,
+      forecastType: "sales",
+      startDate: calculated.startDate,
+      endDate: calculated.endDate,
+      groupBy: calculated.groupBy,
+      horizon: calculated.horizon,
+      dateRange
+    };
     localStorage.setItem("forecasting_filters", JSON.stringify(updated));
 
-    const params = new URLSearchParams(updated);
+    const params = new URLSearchParams({
+      branch,
+      dateRange,
+      startDate: calculated.startDate,
+      endDate: calculated.endDate
+    });
     window.history.pushState(null, "", `?${params.toString()}`);
 
     fetchForecastData(updated);
   };
 
   const resetFilters = () => {
-    const end = new Date();
-    const start = new Date();
-    start.setMonth(start.getMonth() - 6);
+    const calculated = calculateDateRange("1month");
+    setDateRange("1month");
+    setBranch("all");
+    setForecastType("sales");
+    setStartDate(calculated.startDate);
+    setEndDate(calculated.endDate);
+    setGroupBy(calculated.groupBy);
+    setHorizon(calculated.horizon);
 
     const defaults = {
       branch: "all",
       forecastType: "sales",
-      startDate: formatDateStr(start),
-      endDate: formatDateStr(end),
-      groupBy: "monthly",
-      horizon: "3m"
+      startDate: calculated.startDate,
+      endDate: calculated.endDate,
+      groupBy: calculated.groupBy,
+      horizon: calculated.horizon,
+      dateRange: "1month"
     };
 
-    setBranch(defaults.branch);
-    setForecastType(defaults.forecastType);
-    setStartDate(defaults.startDate);
-    setEndDate(defaults.endDate);
-    setGroupBy(defaults.groupBy);
-    setHorizon(defaults.horizon);
-    setDateError("");
-    setIsCalendarOpen(false);
-
     localStorage.setItem("forecasting_filters", JSON.stringify(defaults));
-    window.history.pushState(null, "", `?branch=all&forecastType=sales&startDate=${defaults.startDate}&endDate=${defaults.endDate}&groupBy=monthly&horizon=3m`);
+    window.history.pushState(null, "", `?branch=all&dateRange=1month`);
 
     fetchForecastData(defaults);
-  };
-
-  const handlePresetClick = (preset) => {
-    const today = new Date();
-    let start = new Date();
-    let end = new Date();
-
-    switch (preset) {
-      case "Today":
-        break;
-      case "Last 7 Days":
-        start.setDate(today.getDate() - 7);
-        break;
-      case "Last 30 Days":
-        start.setDate(today.getDate() - 30);
-        break;
-      case "This Month":
-        start = new Date(today.getFullYear(), today.getMonth(), 1);
-        break;
-      case "Last Month":
-        start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-        end = new Date(today.getFullYear(), today.getMonth(), 0);
-        break;
-      case "Last 3 Months":
-        start.setMonth(today.getMonth() - 3);
-        break;
-      case "Last 6 Months":
-        start.setMonth(today.getMonth() - 6);
-        break;
-      case "This Year":
-        start = new Date(today.getFullYear(), 0, 1);
-        break;
-      default:
-        break;
-    }
-
-    const startStr = formatDateStr(start);
-    const endStr = formatDateStr(end);
-
-    setStartDate(startStr);
-    setEndDate(endStr);
-
-    // Apply default Group By rule: <= 30 days -> Daily, else -> Monthly
-    const diffTime = Math.abs(end - start);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    let nextGroup = "monthly";
-    if (diffDays <= 30) {
-      nextGroup = "daily";
-    }
-    setGroupBy(nextGroup);
-
-    // Dynamic state update directly
-    setDateError("");
-    setIsCalendarOpen(false);
-
-    const updated = { branch, forecastType, startDate: startStr, endDate: endStr, groupBy: nextGroup, horizon };
-    localStorage.setItem("forecasting_filters", JSON.stringify(updated));
-
-    const params = new URLSearchParams(updated);
-    window.history.pushState(null, "", `?${params.toString()}`);
-
-    fetchForecastData(updated);
-  };
-
-  // ── CUSTOM CALENDAR MATH ──────────────────────────────────────────────────
-  const daysInMonth = (month, year) => new Date(year, month + 1, 0).getDate();
-  const startDayOfMonth = (month, year) => new Date(year, month, 1).getDay();
-
-  const handleDayClick = (dayNum) => {
-    const selectedDate = new Date(calYear, calMonth, dayNum);
-    const selectedDateStr = formatDateStr(selectedDate);
-    const todayStr = formatDateStr(new Date());
-
-    if (selectedDateStr > todayStr) return; // Clamped to today
-
-    if (!startDate || (startDate && endDate)) {
-      setStartDate(selectedDateStr);
-      setEndDate("");
-    } else if (startDate && !endDate) {
-      if (selectedDateStr < startDate) {
-        setStartDate(selectedDateStr);
-      } else {
-        setEndDate(selectedDateStr);
-        // Automatically check group by rule
-        const diffTime = Math.abs(selectedDate - new Date(startDate));
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        if (diffDays <= 30) {
-          setGroupBy("daily");
-        } else {
-          setGroupBy("monthly");
-        }
-      }
-    }
-  };
-
-  const nextCalMonth = () => {
-    if (calMonth === 11) {
-      setCalMonth(0);
-      setCalYear(prev => prev + 1);
-    } else {
-      setCalMonth(prev => prev + 1);
-    }
-  };
-
-  const prevCalMonth = () => {
-    if (calMonth === 0) {
-      setCalMonth(11);
-      setCalYear(prev => prev - 1);
-    } else {
-      setCalMonth(prev => prev - 1);
-    }
   };
 
   // ── CSV EXPORT ────────────────────────────────────────────────────────────
@@ -618,10 +528,6 @@ function ForecastingPageContent() {
     }
   };
 
-  // Date range picker visual helper
-  const datePlaceholderText = startDate && endDate 
-    ? `${new Date(startDate).toLocaleDateString('default', { month: 'short', day: 'numeric', year: 'numeric' })} → ${new Date(endDate).toLocaleDateString('default', { month: 'short', day: 'numeric', year: 'numeric' })}`
-    : "Select Date Range 📅";
 
   return (
     <div className="flex bg-brand-bgbase min-h-screen text-main font-dmsans transition-colors duration-300">
@@ -732,13 +638,13 @@ function ForecastingPageContent() {
             {/* ── STICKY COMPACT FILTER BAR (no-print) ──────────────── */}
             <div className="sticky top-0 z-[100] bg-brand-surface/90 backdrop-blur-md border border-border/80 rounded-2xl p-3 mb-6 flex flex-wrap items-center justify-between gap-3 shadow-md filter-bar no-print">
               
-              <div className="flex flex-wrap items-center gap-2 flex-1">
+              <div className="flex flex-wrap items-center gap-2.5 flex-1">
                 
                 {/* Branch dropdown */}
                 <select
                   value={branch}
                   onChange={(e) => setBranch(e.target.value)}
-                  className="bg-brand-bgbase border border-border rounded-xl text-xs font-semibold px-3 h-9 text-main focus:outline-none"
+                  className="bg-brand-bgbase border border-border rounded-xl text-xs font-semibold px-3.5 h-9 text-main focus:outline-none focus:border-brand-neonblue/50 transition-all cursor-pointer"
                 >
                   <option value="all">All Branches</option>
                   {branches.map(b => (
@@ -746,139 +652,25 @@ function ForecastingPageContent() {
                   ))}
                 </select>
 
-                {/* Forecast Type dropdown */}
+                {/* Date Filter dropdown */}
                 <select
-                  value={forecastType}
-                  onChange={(e) => setForecastType(e.target.value)}
-                  className="bg-brand-bgbase border border-border rounded-xl text-xs font-semibold px-3 h-9 text-main focus:outline-none"
+                  value={dateRange}
+                  onChange={(e) => {
+                    const newRange = e.target.value;
+                    setDateRange(newRange);
+                    const calculated = calculateDateRange(newRange);
+                    setStartDate(calculated.startDate);
+                    setEndDate(calculated.endDate);
+                    setGroupBy(calculated.groupBy);
+                    setHorizon(calculated.horizon);
+                  }}
+                  className="bg-brand-bgbase border border-border rounded-xl text-xs font-semibold px-3.5 h-9 text-main focus:outline-none focus:border-brand-neonblue/50 transition-all cursor-pointer"
                 >
-                  <option value="sales">Sales Forecast</option>
-                  <option value="inventory">Inventory Forecast</option>
-                  <option value="demand">Demand Forecast</option>
-                </select>
-
-                {/* Date range picker dropdown trigger */}
-                <div className="relative" ref={calendarRef}>
-                  <button
-                    onClick={() => setIsCalendarOpen(!isCalendarOpen)}
-                    className="bg-brand-bgbase border border-border rounded-xl text-xs font-semibold px-3 h-9 text-main flex items-center gap-2 hover:bg-brand-hover/40 transition-all"
-                  >
-                    <CalendarDays size={14} className="text-brand-neonblue" />
-                    <span>{datePlaceholderText}</span>
-                  </button>
-
-                  {/* Calendar Popup card */}
-                  <AnimatePresence>
-                    {isCalendarOpen && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 10 }}
-                        transition={{ duration: 0.15 }}
-                        className="absolute left-0 mt-2 bg-brand-surface border border-border rounded-2xl p-4 shadow-xl z-[200] w-[460px] flex gap-4"
-                      >
-                        {/* Quick Presets left panel */}
-                        <div className="w-[130px] border-r border-border/60 pr-3 flex flex-col gap-1.5 shrink-0">
-                          <p className="text-[9px] text-muted font-black tracking-wider uppercase mb-1">Quick Presets</p>
-                          {["Today", "Last 7 Days", "Last 30 Days", "This Month", "Last Month", "Last 3 Months", "Last 6 Months", "This Year"].map(preset => (
-                            <button
-                              key={preset}
-                              onClick={() => handlePresetClick(preset)}
-                              className="text-left text-[10px] font-bold text-muted hover:text-brand-neonblue px-2 py-1.5 rounded-lg hover:bg-brand-bgbase/40 transition-colors"
-                            >
-                              {preset}
-                            </button>
-                          ))}
-                        </div>
-
-                        {/* Visual Month calendar grid right panel */}
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between mb-2">
-                            <button onClick={prevCalMonth} className="text-muted hover:text-main p-1"><ChevronLeft size={14} /></button>
-                            <span className="text-[11px] font-black uppercase text-main">
-                              {new Date(calYear, calMonth).toLocaleString("default", { month: "long", year: "numeric" })}
-                            </span>
-                            <button onClick={nextCalMonth} className="text-muted hover:text-main p-1"><ChevronRight size={14} /></button>
-                          </div>
-
-                          {/* Grid days layout */}
-                          <div className="grid grid-cols-7 gap-1 text-center text-[9px] font-bold text-muted mb-1">
-                            {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map(d => <span key={d}>{d}</span>)}
-                          </div>
-
-                          <div className="grid grid-cols-7 gap-1">
-                            {/* Empty space pads */}
-                            {Array.from({ length: startDayOfMonth(calMonth, calYear) - 1 }).map((_, idx) => (
-                              <span key={`pad-${idx}`} />
-                            ))}
-                            {/* Monthly day days list */}
-                            {Array.from({ length: daysInMonth(calMonth, calYear) }).map((_, idx) => {
-                              const dayNum = idx + 1;
-                              const currentSelected = new Date(calYear, calMonth, dayNum);
-                              const currentSelectedStr = formatDateStr(currentSelected);
-                              const isStart = startDate === currentSelectedStr;
-                              const isEnd = endDate === currentSelectedStr;
-                              const inRange = startDate && endDate && currentSelectedStr >= startDate && currentSelectedStr <= endDate;
-                              const todayStr = formatDateStr(new Date());
-                              const isFuture = currentSelectedStr > todayStr;
-
-                              return (
-                                <button
-                                  key={dayNum}
-                                  onClick={() => handleDayClick(dayNum)}
-                                  disabled={isFuture}
-                                  className={`h-6 rounded-md flex items-center justify-center font-semibold text-[10px] transition-all 
-                                    ${isFuture ? "text-border cursor-not-allowed" : "text-main hover:bg-brand-neonblue/20"}
-                                    ${isStart ? "bg-brand-neonblue text-black font-black" : ""}
-                                    ${isEnd ? "bg-brand-purple text-white font-black" : ""}
-                                    ${inRange && !isStart && !isEnd ? "bg-brand-neonblue/10" : ""}
-                                  `}
-                                >
-                                  {dayNum}
-                                </button>
-                              );
-                            })}
-                          </div>
-
-                          {/* Range values info status */}
-                          <div className="mt-3 border-t border-border/40 pt-2 flex flex-col gap-1 text-[10px]">
-                            <div className="flex justify-between">
-                              <span className="text-muted">Start: {startDate || "—"}</span>
-                              <span className="text-muted">End: {endDate || "—"}</span>
-                            </div>
-                            {dateError && <span className="text-rose-500 font-bold mt-1 text-[9px]">{dateError}</span>}
-                          </div>
-                        </div>
-
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* Group By selector */}
-                <select
-                  value={groupBy}
-                  onChange={(e) => setGroupBy(e.target.value)}
-                  className="bg-brand-bgbase border border-border rounded-xl text-xs font-semibold px-3 h-9 text-main focus:outline-none"
-                >
-                  <option value="daily">Daily Grouping</option>
-                  <option value="weekly">Weekly Grouping</option>
-                  <option value="monthly">Monthly Grouping</option>
-                  <option value="quarterly">Quarterly Grouping</option>
-                  <option value="yearly">Yearly Grouping</option>
-                </select>
-
-                {/* Horizon Prediction selector */}
-                <select
-                  value={horizon}
-                  onChange={(e) => setHorizon(e.target.value)}
-                  className="bg-brand-bgbase border border-border rounded-xl text-xs font-semibold px-3 h-9 text-main focus:outline-none"
-                >
-                  <option value="7d">Next 7 Days</option>
-                  <option value="30d">Next 30 Days</option>
-                  <option value="3m">Next 3 Months</option>
-                  <option value="6m">Next 6 Months</option>
-                  <option value="1y">Next Year</option>
+                  <option value="today">Today</option>
+                  <option value="1day">1 Day</option>
+                  <option value="1week">1 Week</option>
+                  <option value="1month">1 Month</option>
+                  <option value="1year">1 Year</option>
                 </select>
 
               </div>
@@ -887,13 +679,13 @@ function ForecastingPageContent() {
               <div className="flex gap-2">
                 <button
                   onClick={applyFilters}
-                  className="bg-brand-neonblue text-black font-black uppercase text-[10px] tracking-widest px-4 h-9 rounded-xl hover:bg-opacity-80 transition-all"
+                  className="bg-brand-neonblue text-black font-black uppercase text-[10px] tracking-widest px-4 h-9 rounded-xl hover:bg-opacity-80 transition-all shadow-sm"
                 >
                   Apply
                 </button>
                 <button
                   onClick={resetFilters}
-                  className="bg-brand-bgbase border border-border text-muted font-black uppercase text-[10px] tracking-widest px-3 h-9 rounded-xl hover:bg-brand-hover/40 transition-all"
+                  className="bg-brand-bgbase border border-border text-muted font-black uppercase text-[10px] tracking-widest px-3.5 h-9 rounded-xl hover:bg-brand-hover hover:text-main transition-all"
                 >
                   Reset
                 </button>
