@@ -365,10 +365,7 @@ export default function LoginPage() {
       {/* ════════════════════════════════════════════════════════
           3. RIGHT COLUMN: Floating Glass Authentication Card
          ════════════════════════════════════════════════════════ */}
-      <div className="w-full lg:w-[440px] xl:w-[480px] shrink-0 p-6 sm:p-10 lg:p-12 flex flex-col justify-between items-center z-20 min-h-[520px] lg:min-h-screen">
-        
-        {/* Placeholder spacer for top alignment */}
-        <div className="hidden lg:block h-8" />
+      <div className="w-full lg:w-[440px] xl:w-[480px] shrink-0 p-6 sm:p-10 lg:p-12 flex flex-col justify-center items-center z-20 min-h-[520px] lg:min-h-screen">
 
         {/* Floating Glass Authentication Container */}
         <motion.div
@@ -459,7 +456,7 @@ export default function LoginPage() {
                 required
                 value={formData.username}
                 onChange={handleChange}
-                placeholder="admin@pcalley.com"
+                placeholder="Username or email"
                 className="w-full bg-[#E8EEF8]/80 dark:bg-[#1A1E31]/80 text-main placeholder-muted/60 pl-10 pr-3.5 py-3 rounded-xl border border-black/5 dark:border-white/10 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#5B73E8]/50 focus:border-[#5B73E8] transition-all"
               />
             </div>
@@ -475,7 +472,7 @@ export default function LoginPage() {
                 required
                 value={formData.password}
                 onChange={handleChange}
-                placeholder="••••••••"
+                placeholder="Password"
                 className="w-full bg-[#E8EEF8]/80 dark:bg-[#1A1E31]/80 text-main placeholder-muted/60 pl-10 pr-10 py-3 rounded-xl border border-black/5 dark:border-white/10 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#5B73E8]/50 focus:border-[#5B73E8] transition-all font-mono"
               />
               <button
