@@ -92,6 +92,17 @@ body {
   @apply font-dmsans overflow-x-hidden antialiased;
 }
 
+/* Universal Select & Option Theme Styling */
+select {
+  background-color: var(--brand-surface);
+  color: var(--text-main);
+}
+select option {
+  background-color: var(--brand-surface);
+  color: var(--text-main);
+}
+
+
 /* ── Universal Theme Sync ── */
 /* ── Only color transitions globally, keep it fast ── */
 *,

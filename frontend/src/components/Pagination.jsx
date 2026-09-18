@@ -28,20 +28,20 @@ export default function Pagination({
   return (
     <div className="flex items-center gap-4">
       {/* Rows‑per‑page selector */}
-      <div className="flex items-center gap-1 text-sm text-muted">
-        <span>Show</span>
+      <div className="flex items-center gap-1.5 text-sm text-muted">
+        <span className="text-main font-medium">Show</span>
         <select
           value={limit}
           onChange={e => onLimitChange(Number(e.target.value))}
-          className="border border-border rounded px-2 py-1 text-sm bg-transparent"
+          className="border border-border rounded-lg px-2 py-1 text-sm bg-brand-surface text-main font-semibold outline-none focus:border-brand-neonblue cursor-pointer transition-colors"
         >
           {limits.map(l => (
-            <option key={l} value={l}>
+            <option key={l} value={l} className="bg-brand-surface text-main">
               {l}
             </option>
           ))}
         </select>
-        <span>entries</span>
+        <span className="text-main font-medium">entries</span>
       </div>
 
       {/* Pagination controls */}

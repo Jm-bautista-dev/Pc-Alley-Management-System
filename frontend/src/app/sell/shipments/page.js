@@ -154,14 +154,18 @@ export default function ShipmentsPage() {
             </button>
             {/* Rows per page selector */}
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium">Show</span>
-              <select value={limit} onChange={e => { setLimit(Number(e.target.value)); }} className="border border-border rounded px-2 py-1 text-sm">
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
+              <span className="text-sm font-medium text-main">Show</span>
+              <select
+                value={limit}
+                onChange={e => { setLimit(Number(e.target.value)); }}
+                className="border border-border rounded-lg px-2.5 py-1 text-sm bg-brand-surface text-main font-semibold outline-none focus:border-brand-neonblue cursor-pointer transition-colors"
+              >
+                <option value={10} className="bg-brand-surface text-main">10</option>
+                <option value={25} className="bg-brand-surface text-main">25</option>
+                <option value={50} className="bg-brand-surface text-main">50</option>
+                <option value={100} className="bg-brand-surface text-main">100</option>
               </select>
-              <span className="text-sm font-medium">entries</span>
+              <span className="text-sm font-medium text-main">entries</span>
             </div>
           </div>
 
