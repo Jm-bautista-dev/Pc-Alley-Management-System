@@ -241,7 +241,62 @@ function ForecastingPageContent() {
     }
   };
 
-  // ── FILTER ACTIONS ──────────────────────────────────────────────────────────
+  // ── AUTO-APPLY FILTER ACTIONS ──────────────────────────────────────────────
+  const handleBranchChange = (newBranch) => {
+    setBranch(newBranch);
+    const calculated = calculateDateRange(dateRange);
+    const updated = {
+      branch: newBranch,
+      forecastType: "sales",
+      startDate: calculated.startDate,
+      endDate: calculated.endDate,
+      groupBy: calculated.groupBy,
+      horizon: calculated.horizon,
+      dateRange
+    };
+    localStorage.setItem("forecasting_filters", JSON.stringify(updated));
+
+    const params = new URLSearchParams({
+      branch: newBranch,
+      dateRange,
+      startDate: calculated.startDate,
+      endDate: calculated.endDate
+    });
+    window.history.pushState(null, "", `?${params.toString()}`);
+
+    fetchForecastData(updated);
+  };
+
+  const handleDateRangeChange = (newRange) => {
+    setDateRange(newRange);
+    const calculated = calculateDateRange(newRange);
+    setStartDate(calculated.startDate);
+    setEndDate(calculated.endDate);
+    setGroupBy(calculated.groupBy);
+    setHorizon(calculated.horizon);
+
+    const updated = {
+      branch,
+      forecastType: "sales",
+      startDate: calculated.startDate,
+      endDate: calculated.endDate,
+      groupBy: calculated.groupBy,
+      horizon: calculated.horizon,
+      dateRange: newRange
+    };
+    localStorage.setItem("forecasting_filters", JSON.stringify(updated));
+
+    const params = new URLSearchParams({
+      branch,
+      dateRange: newRange,
+      startDate: calculated.startDate,
+      endDate: calculated.endDate
+    });
+    window.history.pushState(null, "", `?${params.toString()}`);
+
+    fetchForecastData(updated);
+  };
+
   const applyFilters = () => {
     const calculated = calculateDateRange(dateRange);
     setStartDate(calculated.startDate);
@@ -636,59 +691,35 @@ function ForecastingPageContent() {
             )}
 
             {/* ── STICKY COMPACT FILTER BAR (no-print) ──────────────── */}
-            <div className="sticky top-0 z-[100] bg-brand-surface/90 backdrop-blur-md border border-border/80 rounded-2xl p-3 mb-6 flex flex-wrap items-center justify-between gap-3 shadow-md filter-bar no-print">
+            <div className="sticky top-0 z-[100] bg-brand-surface/90 backdrop-blur-md border border-border/80 rounded-2xl p-3 mb-6 flex flex-wrap items-center gap-3 shadow-md filter-bar no-print">
               
-              <div className="flex flex-wrap items-center gap-2.5 flex-1">
+              <div className="flex flex-wrap items-center gap-2.5">
                 
                 {/* Branch dropdown */}
                 <select
                   value={branch}
-                  onChange={(e) => setBranch(e.target.value)}
+                  onChange={(e) => handleBranchChange(e.target.value)}
                   className="bg-brand-bgbase border border-border rounded-xl text-xs font-semibold px-3.5 h-9 text-main focus:outline-none focus:border-brand-neonblue/50 transition-all cursor-pointer"
                 >
-                  <option value="all">All Branches</option>
+                  <option value="all" className="bg-brand-surface text-main">All Branches</option>
                   {branches.map(b => (
-                    <option key={b.id} value={b.id}>{b.name}</option>
+                    <option key={b.id} value={b.id} className="bg-brand-surface text-main">{b.name}</option>
                   ))}
                 </select>
 
                 {/* Date Filter dropdown */}
                 <select
                   value={dateRange}
-                  onChange={(e) => {
-                    const newRange = e.target.value;
-                    setDateRange(newRange);
-                    const calculated = calculateDateRange(newRange);
-                    setStartDate(calculated.startDate);
-                    setEndDate(calculated.endDate);
-                    setGroupBy(calculated.groupBy);
-                    setHorizon(calculated.horizon);
-                  }}
+                  onChange={(e) => handleDateRangeChange(e.target.value)}
                   className="bg-brand-bgbase border border-border rounded-xl text-xs font-semibold px-3.5 h-9 text-main focus:outline-none focus:border-brand-neonblue/50 transition-all cursor-pointer"
                 >
-                  <option value="today">Today</option>
-                  <option value="1day">1 Day</option>
-                  <option value="1week">1 Week</option>
-                  <option value="1month">1 Month</option>
-                  <option value="1year">1 Year</option>
+                  <option value="today" className="bg-brand-surface text-main">Today</option>
+                  <option value="1day" className="bg-brand-surface text-main">1 Day</option>
+                  <option value="1week" className="bg-brand-surface text-main">1 Week</option>
+                  <option value="1month" className="bg-brand-surface text-main">1 Month</option>
+                  <option value="1year" className="bg-brand-surface text-main">1 Year</option>
                 </select>
 
-              </div>
-
-              {/* Apply/Reset Actions */}
-              <div className="flex gap-2">
-                <button
-                  onClick={applyFilters}
-                  className="bg-brand-neonblue text-black font-black uppercase text-[10px] tracking-widest px-4 h-9 rounded-xl hover:bg-opacity-80 transition-all shadow-sm"
-                >
-                  Apply
-                </button>
-                <button
-                  onClick={resetFilters}
-                  className="bg-brand-bgbase border border-border text-muted font-black uppercase text-[10px] tracking-widest px-3.5 h-9 rounded-xl hover:bg-brand-hover hover:text-main transition-all"
-                >
-                  Reset
-                </button>
               </div>
 
             </div>
