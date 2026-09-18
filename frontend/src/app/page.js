@@ -259,25 +259,11 @@ export default function LoginPage() {
   const iconCls = isDark
     ? "text-white/22 group-focus-within:text-[#8FA5FF]"
     : "text-black/22 group-focus-within:text-[#5B73E8]";
-  const bgLeft = isDark
-    ? "linear-gradient(to right,#080B14 42%,rgba(8,11,20,0.82) 65%,transparent)"
-    : "linear-gradient(to right,#F3F3F7 42%,rgba(243,243,247,0.82) 65%,transparent)";
-
   return (
     <div className="min-h-screen w-full relative flex overflow-hidden font-dmsans select-none"
       style={{ background: isDark ? "#080B14" : "#F3F3F7" }}>
 
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full z-[2] pointer-events-none" />
-
-      <div className="absolute inset-0 z-[1] pointer-events-none">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/images/login-bg-dark.png" alt="" aria-hidden="true"
-          className={"absolute inset-0 w-full h-full object-cover object-right transition-opacity duration-700 " + (isDark ? "opacity-100" : "opacity-0")} />
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/images/login-bg-light.png" alt="" aria-hidden="true"
-          className={"absolute inset-0 w-full h-full object-cover object-right transition-opacity duration-700 " + (!isDark ? "opacity-100" : "opacity-0")} />
-        <div className="absolute inset-y-0 left-0 w-[62%]" style={{ background: bgLeft }} />
-      </div>
 
       <div className="absolute inset-0 z-[3] pointer-events-none overflow-hidden">
         <motion.div className="absolute rounded-full"
