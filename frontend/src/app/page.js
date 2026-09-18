@@ -226,27 +226,6 @@ export default function LoginPage() {
           <h1 className="text-5xl md:text-7xl lg:text-8xl font-black uppercase font-rajdhani tracking-tighter leading-none text-main">
             CORE.
           </h1>
-          <p className="text-[10px] md:text-[11px] text-muted uppercase tracking-[0.25em] font-semibold max-w-sm mt-6 leading-relaxed">
-            PROPELLING HARDWARE INVENTORY MANAGEMENT INTO THE NEXT GENERATION.
-          </p>
-        </div>
-
-        {/* Footer Stats/Metrics */}
-        <div className="flex items-center justify-between lg:justify-start lg:gap-16 pt-8 border-t border-border mt-auto relative z-10">
-          <div>
-            <p className="text-2xl md:text-3xl font-rajdhani font-black text-main">3.2k</p>
-            <p className="text-[9px] text-muted uppercase tracking-[0.15em] font-bold mt-1">AUTHORIZED HUBS</p>
-          </div>
-          <div>
-            <p className="text-2xl md:text-3xl font-rajdhani font-black text-main">1.5M</p>
-            <p className="text-[9px] text-muted uppercase tracking-[0.15em] font-bold mt-1">MATRIX ASSETS</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded-full border border-border flex items-center justify-center text-muted">
-              <ShieldAlert size={12} />
-            </div>
-            <p className="text-[9px] text-muted uppercase tracking-[0.15em] font-bold">SECURE LINK</p>
-          </div>
         </div>
       </div>
 
@@ -421,18 +400,7 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Divider */}
-          <div className="w-full h-px bg-border my-8" />
 
-          {/* Legal Protocol */}
-          <div className="text-center">
-            <p className="text-[8px] text-muted/60 font-black uppercase tracking-[0.2em] mb-1">
-              LEGAL PROTOCOL
-            </p>
-            <p className="text-[9px] text-muted/40 font-black uppercase tracking-[0.25em]">
-              © 2024 PC ALLEY • LOGIC CORE V4.2
-            </p>
-          </div>
         </motion.div>
       </div>
     </div>
