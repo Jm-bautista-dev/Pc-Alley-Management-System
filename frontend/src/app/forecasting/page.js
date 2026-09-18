@@ -661,32 +661,27 @@ function ForecastingPageContent() {
 
             {/* Benchmark Recommendation Banner (when available) */}
             {data?.benchmarkRecommendation && (
-              <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-brand-neonblue/10 via-purple-500/10 to-brand-surface border border-brand-neonblue/30 backdrop-blur-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 no-print shadow-lg">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-brand-neonblue/20 flex items-center justify-center text-brand-neonblue shrink-0">
-                    <Sparkles size={18} />
+              <div className="mb-5 flex flex-wrap items-center no-print">
+                <div className="inline-flex flex-wrap sm:flex-nowrap items-center gap-3 p-1.5 pl-2 pr-2.5 rounded-full bg-gradient-to-r from-brand-neonblue/15 via-purple-500/10 to-brand-surface border border-brand-neonblue/30 backdrop-blur-md shadow-sm max-w-full">
+                  <div className="w-7 h-7 rounded-full bg-brand-neonblue/20 flex items-center justify-center text-brand-neonblue shrink-0">
+                    <Sparkles size={14} />
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-bold text-main">Recommended Model by Backtesting:</span>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-neonblue/20 text-brand-neonblue border border-brand-neonblue/40">
-                        {data.benchmarkRecommendation.bestModel}
-                      </span>
-                      <span className="text-[10px] text-muted font-semibold">
-                        (WAPE: {data.benchmarkRecommendation.wape}%, {data.benchmarkRecommendation.reliability} Reliability)
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-muted mt-0.5">
-                      {data.benchmarkRecommendation.recommendationNotes}
-                    </p>
+                  <div className="flex items-center gap-2 flex-wrap text-xs">
+                    <span className="font-bold text-main">Recommended Model by Backtesting:</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-neonblue/20 text-brand-neonblue border border-brand-neonblue/40">
+                      {data.benchmarkRecommendation.bestModel}
+                    </span>
+                    <span className="text-[10px] text-muted font-semibold">
+                      (WAPE: {data.benchmarkRecommendation.wape}%, {data.benchmarkRecommendation.reliability})
+                    </span>
                   </div>
+                  <button
+                    onClick={() => router.push('/forecasting/benchmark')}
+                    className="shrink-0 flex items-center gap-1 px-3 py-1 bg-brand-neonblue text-slate-950 font-bold rounded-full text-xs hover:bg-brand-neonblue/90 transition shadow-sm ml-1"
+                  >
+                    Benchmark Details <ArrowUpRight size={13} />
+                  </button>
                 </div>
-                <button
-                  onClick={() => router.push('/forecasting/benchmark')}
-                  className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-brand-neonblue text-slate-950 font-bold rounded-xl text-xs hover:bg-brand-neonblue/90 transition shadow-sm"
-                >
-                  Benchmark Details <ArrowUpRight size={14} />
-                </button>
               </div>
             )}
 
