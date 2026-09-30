@@ -97,7 +97,7 @@ const getProducts = async (req, res) => {
 
 const createProduct = async (req, res) => {
   try {
-    const { name, sku: bodySku, description, price, category_id, supplier_id, branch_id, initial_stock, brand_id, barcode, specifications, status } = req.body;
+    const { name, sku: bodySku, description, price, last_purchase_price, unit_price, category_id, supplier_id, branch_id, initial_stock, brand_id, barcode, specifications, status } = req.body;
     let image_url = null;
 
     if (req.file) {
@@ -130,11 +130,16 @@ const createProduct = async (req, res) => {
           ? validateAndSanitizeSpecifications(specifications).sanitizedData
           : null;
 
+        const parsedCost = last_purchase_price !== undefined && last_purchase_price !== '' && last_purchase_price !== null
+          ? parseFloat(last_purchase_price)
+          : (unit_price !== undefined && unit_price !== '' && unit_price !== null ? parseFloat(unit_price) : null);
+
         product = await Product.create({
           name,
           sku,
           description,
           price,
+          last_purchase_price: parsedCost,
           category_id: (category_id && category_id !== '') ? parseInt(category_id) : null,
           brand_id: (brand_id && brand_id !== '') ? parseInt(brand_id) : null,
           barcode: barcode || null,
@@ -239,7 +244,7 @@ const createBundle = async (req, res) => {
 const updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, sku, price, category_id, description, remove_image, brand_id, barcode, specifications, status } = req.body;
+    const { name, sku, price, last_purchase_price, unit_price, category_id, description, remove_image, brand_id, barcode, specifications, status } = req.body;
     
     const product = await Product.findByPk(id);
     if (!product) return res.status(404).json({ message: 'Product not found' });
@@ -252,6 +257,11 @@ const updateProduct = async (req, res) => {
     if (name) product.name = name;
     if (sku) product.sku = sku;
     if (price !== undefined) product.price = price;
+    if (last_purchase_price !== undefined) {
+      product.last_purchase_price = (last_purchase_price === '' || last_purchase_price === null) ? null : parseFloat(last_purchase_price);
+    } else if (unit_price !== undefined) {
+      product.last_purchase_price = (unit_price === '' || unit_price === null) ? null : parseFloat(unit_price);
+    }
     if (category_id !== undefined) product.category_id = (category_id === '' || category_id === null) ? null : parseInt(category_id);
     if (brand_id !== undefined) product.brand_id = (brand_id === '' || brand_id === null) ? null : parseInt(brand_id);
     if (barcode !== undefined) product.barcode = barcode ? barcode.trim() : null;

@@ -27,6 +27,7 @@ export default function AddPage() {
     sku: "",
     description: "",
     price: "",
+    last_purchase_price: "",
     category_id: "",
     brand_id: "",
     barcode: "",
@@ -102,6 +103,14 @@ export default function AddPage() {
       return;
     }
 
+    if (formData.last_purchase_price !== undefined && formData.last_purchase_price !== "") {
+      const costNum = parseFloat(formData.last_purchase_price);
+      if (isNaN(costNum) || costNum < 0 || costNum > 99999999.99) {
+        showError("Unit price must be a valid number between ₱0.00 and ₱99,999,999.99.");
+        return;
+      }
+    }
+
     if (formData.initial_stock !== undefined && formData.initial_stock !== "") {
       const stockNum = parseInt(formData.initial_stock, 10);
       if (isNaN(stockNum) || stockNum < 0 || stockNum > 1000000) {
@@ -116,6 +125,9 @@ export default function AddPage() {
     submitData.append("name", formData.name.trim());
     submitData.append("description", formData.description ? formData.description.trim() : "");
     submitData.append("price", formData.price);
+    if (formData.last_purchase_price !== undefined && formData.last_purchase_price !== "") {
+      submitData.append("last_purchase_price", formData.last_purchase_price);
+    }
     if (formData.category_id) submitData.append("category_id", formData.category_id);
     if (formData.brand_id) submitData.append("brand_id", formData.brand_id);
     if (formData.barcode) submitData.append("barcode", formData.barcode.trim());
@@ -211,20 +223,37 @@ export default function AddPage() {
                     />
                   </div>
                   
-                  <div>
-                    <label className="block text-[10px] font-black text-muted uppercase tracking-[2px] mb-2">Selling Price (₱) *</label>
-                    <input 
-                      type="number" 
-                      name="price"
-                      value={formData.price}
-                      onChange={handleChange}
-                      placeholder="0.00" 
-                      step="0.01"
-                      min="0.01"
-                      max="99999999.99"
-                      className="w-full bg-brand-bgbase border border-border/50 rounded-xl px-4 py-3 text-sm text-main font-bold outline-none focus:border-brand-neonblue transition-colors"
-                      required
-                    />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-black text-muted uppercase tracking-[2px] mb-2">Unit Price / Cost (₱)</label>
+                      <input 
+                        type="number" 
+                        name="last_purchase_price"
+                        value={formData.last_purchase_price}
+                        onChange={handleChange}
+                        placeholder="0.00" 
+                        step="0.01"
+                        min="0"
+                        max="99999999.99"
+                        className="w-full bg-brand-bgbase border border-border/50 rounded-xl px-4 py-3 text-sm text-main font-bold outline-none focus:border-brand-neonblue transition-colors"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-black text-muted uppercase tracking-[2px] mb-2">Selling Price (₱) *</label>
+                      <input 
+                        type="number" 
+                        name="price"
+                        value={formData.price}
+                        onChange={handleChange}
+                        placeholder="0.00" 
+                        step="0.01"
+                        min="0.01"
+                        max="99999999.99"
+                        className="w-full bg-brand-bgbase border border-border/50 rounded-xl px-4 py-3 text-sm text-main font-bold outline-none focus:border-brand-neonblue transition-colors"
+                        required
+                      />
+                    </div>
                   </div>
 
                   <div>

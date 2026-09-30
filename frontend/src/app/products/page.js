@@ -788,8 +788,16 @@ export default function ProductsPage() {
                         </div>
                       </div>
 
-                      {/* Stock + Price */}
+                      {/* Pricing & Stock */}
                       <div className="text-right flex-shrink-0 flex items-center gap-6">
+                        <div>
+                          <p className="text-[9px] text-main/30 font-black uppercase tracking-[2px] mb-0.5">Unit Price</p>
+                          <p className="text-sm font-rajdhani font-black text-main/70">₱{Number(product.last_purchase_price || 0).toLocaleString()}</p>
+                        </div>
+                        <div>
+                          <p className="text-[9px] text-main/30 font-black uppercase tracking-[2px] mb-0.5">Selling Price</p>
+                          <p className="text-sm font-rajdhani font-black text-brand-crimson">₱{Number(product.price || 0).toLocaleString()}</p>
+                        </div>
                         <div>
                           <p className="text-[9px] text-main/30 font-black uppercase tracking-[2px] mb-0.5">
                             {selectedBranch ? "Branch Stock" : "Total Stock"}
@@ -799,10 +807,6 @@ export default function ProductsPage() {
                           }`}>
                             {product.stockSummary.totalStock.toLocaleString()}
                           </p>
-                        </div>
-                        <div>
-                          <p className="text-[9px] text-main/30 font-black uppercase tracking-[2px] mb-0.5">Price</p>
-                          <p className="text-sm font-rajdhani font-black text-brand-crimson">₱{Number(product.price).toLocaleString()}</p>
                         </div>
                         {user?.role === 'super_admin' && (
                           <button 
