@@ -90,8 +90,7 @@ const Sidebar = () => {
           { title: "Saved Drafts", path: "/sell/drafts" },
           { title: "Returns", path: "/sell/returns" },
           { title: "Shipments", path: "/sell/shipments" },
-          { title: "Discounts", path: "/sell/discounts" },
-          { title: "Import Sales", path: "/sell/import" }
+          { title: "Discounts", path: "/sell/discounts" }
         ] },
         { title: "Procurement",     icon: Download,        path: "#purchases",        group: "SALES", subItems: [
           { title: "Stock Purchases", path: "/purchases" },
@@ -137,8 +136,7 @@ const Sidebar = () => {
         { title: "Returns", path: "/sell/returns" },
         { title: "Saved Drafts", path: "/sell/drafts" },
         { title: "Shipments", path: "/sell/shipments" },
-        { title: "Discounts", path: "/sell/discounts" },
-        { title: "Import Sales", path: "/sell/import" }
+        { title: "Discounts", path: "/sell/discounts" }
       ] },
       { title: "Procurement",     icon: Download,        path: "#purchases",        group: "SALES", subItems: [
         { title: "Stock Purchases", path: "/purchases" },
