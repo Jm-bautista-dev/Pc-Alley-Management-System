@@ -885,7 +885,7 @@ export default function SalesPage() {
       if (promotionalSavings > 0) {
         finalPrice = Math.max(0, currentRetailSum - promotionalSavings);
       } else {
-        finalPrice = currentRetailSum;
+        finalPrice = currentRetailSum > 0 ? currentRetailSum : baseBundlePrice;
       }
     } else {
       finalPrice = baseBundlePrice > 0 ? baseBundlePrice : currentRetailSum;
@@ -913,19 +913,32 @@ export default function SalesPage() {
 
     const updatedCart = [...cart];
     let runningApportionedTotal = 0;
+    const totalBundleQuantity = bundleCustomItems.reduce((sum, bi) => sum + (bi.quantity || 1), 0);
 
     bundleCustomItems.forEach((bundleItem, idx) => {
       const invItem = inventory.find(i => i.product_id === bundleItem.id || i.Product?.id === bundleItem.id);
       const stock = invItem ? (invItem.quantity ?? invItem.stock ?? 9999) : 9999;
 
       let effectiveUnitPrice = bundleItem.price;
-      if (currentRetailSum > 0 && finalPrice !== currentRetailSum) {
-        if (idx === bundleCustomItems.length - 1) {
-          const remaining = Math.max(0, finalPrice - runningApportionedTotal);
-          effectiveUnitPrice = Math.round((remaining / bundleItem.quantity) * 100) / 100;
+      if (finalPrice > 0) {
+        if (currentRetailSum > 0) {
+          // Apportion proportionately based on each product's retail price
+          if (idx === bundleCustomItems.length - 1) {
+            const remaining = Math.max(0, finalPrice - runningApportionedTotal);
+            effectiveUnitPrice = Math.round((remaining / bundleItem.quantity) * 100) / 100;
+          } else {
+            effectiveUnitPrice = Math.round((bundleItem.price * (finalPrice / currentRetailSum)) * 100) / 100;
+            runningApportionedTotal += (effectiveUnitPrice * bundleItem.quantity);
+          }
         } else {
-          effectiveUnitPrice = Math.round((bundleItem.price * (finalPrice / currentRetailSum)) * 100) / 100;
-          runningApportionedTotal += (effectiveUnitPrice * bundleItem.quantity);
+          // Fallback when products have 0 retail price in catalog: apportion the package price evenly by quantity
+          if (idx === bundleCustomItems.length - 1) {
+            const remaining = Math.max(0, finalPrice - runningApportionedTotal);
+            effectiveUnitPrice = Math.round((remaining / bundleItem.quantity) * 100) / 100;
+          } else {
+            effectiveUnitPrice = Math.round((finalPrice / totalBundleQuantity) * 100) / 100;
+            runningApportionedTotal += (effectiveUnitPrice * bundleItem.quantity);
+          }
         }
       }
 
@@ -3280,7 +3293,9 @@ export default function SalesPage() {
                       Included Products ({bundleCustomItems.length})
                     </span>
                     <span className="text-[10px] font-mono font-bold text-brand-neonpurple">
-                      Items Retail Sum: ₱{bundleCalculatedPricing.currentRetailSum.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      {bundleCalculatedPricing.currentRetailSum > 0
+                        ? `Items Retail Sum: ₱${bundleCalculatedPricing.currentRetailSum.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                        : `Package Base Total: ₱${bundleCalculatedPricing.finalPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
                     </span>
                   </div>
 
@@ -3292,6 +3307,8 @@ export default function SalesPage() {
                     <div className="space-y-2.5">
                       {bundleCustomItems.map((item) => {
                         const isBeingReplaced = replacingBundleItemId === item.id;
+                        const totalBundleItemsCount = bundleCustomItems.reduce((s, i) => s + (i.quantity || 1), 0) || 1;
+                        const apportionedUnitPrice = Math.round((bundleCalculatedPricing.finalPrice / totalBundleItemsCount) * 100) / 100;
                         return (
                           <div
                             key={item.id}
@@ -3311,8 +3328,21 @@ export default function SalesPage() {
                                 )}
                               </div>
                               <p className="text-[10px] text-brand-muted font-mono mt-0.5">
-                                ₱{item.price.toLocaleString()} each • Total:{" "}
-                                <span className="text-main font-bold">₱{(item.price * item.quantity).toLocaleString()}</span>
+                                {item.price > 0 ? (
+                                  <>
+                                    ₱{item.price.toLocaleString()} each • Total:{" "}
+                                    <span className="text-main font-bold">₱{(item.price * item.quantity).toLocaleString()}</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span className="text-brand-neonpurple font-bold">
+                                      ₱{apportionedUnitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} each (Apportioned)
+                                    </span>
+                                    <span className="text-brand-muted/70 text-[9px] ml-1">
+                                      • Total: <span className="text-main font-bold">₱{(apportionedUnitPrice * item.quantity).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                    </span>
+                                  </>
+                                )}
                                 {item.sku && <span className="ml-2 text-brand-muted/70 uppercase">[{item.sku}]</span>}
                               </p>
                             </div>
