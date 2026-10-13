@@ -240,9 +240,32 @@ export default function StockReportPage() {
     }
   };
 
-  // Pagination UI helper
-  const pageNumbers = [];
-  for (let i = 1; i <= totalPages; i++) pageNumbers.push(i);
+  // Sliding window pagination helper (Option 1)
+  const getPaginationItems = (current, total) => {
+    if (!total || total <= 0) return [];
+    if (total <= 7) {
+      return Array.from({ length: total }, (_, i) => i + 1);
+    }
+    const items = [];
+    if (current <= 4) {
+      for (let i = 1; i <= 5; i++) items.push(i);
+      items.push("...");
+      items.push(total);
+    } else if (current >= total - 3) {
+      items.push(1);
+      items.push("...");
+      for (let i = total - 4; i <= total; i++) items.push(i);
+    } else {
+      items.push(1);
+      items.push("...");
+      items.push(current - 1);
+      items.push(current);
+      items.push(current + 1);
+      items.push("...");
+      items.push(total);
+    }
+    return items;
+  };
 
   const handleDeleteProduct = async (product) => {
     const confirmed = await showConfirm(
@@ -458,17 +481,118 @@ export default function StockReportPage() {
                 </table>
               </div>
             </div>
-            {/* Pagination Controls */}
-            <div className="flex items-center justify-between mt-4 text-sm">
-              <div>Showing {(page - 1) * limit + 1}–{Math.min(page * limit, totalItems)} of {totalItems} records</div>
-              <div className="flex items-center gap-1">
-                <button onClick={() => setPage(p => Math.max(p - 1, 1))} disabled={page === 1} className={`px-2 py-1 rounded ${page === 1 ? 'text-muted cursor-not-allowed' : 'hover:bg-brand-bgbase'}`}>← Previous</button>
-                {pageNumbers.map(p => (
-                  <button key={p} onClick={() => setPage(p)} className={`px-2 py-1 rounded ${p === page ? 'bg-brand-neonblue text-white' : 'hover:bg-brand-bgbase'}`}>{p}</button>
-                ))}
-                <button onClick={() => setPage(p => Math.min(p + 1, totalPages))} disabled={page === totalPages} className={`px-2 py-1 rounded ${page === totalPages ? 'text-muted cursor-not-allowed' : 'hover:bg-brand-bgbase'}`}>Next →</button>
+            {/* Pagination Controls — Option 1: Centered Sliding Window */}
+            {totalPages > 0 && (
+              <div className="mt-8 flex flex-col items-center justify-center gap-3">
+                {/* Centered Page Navigation */}
+                <div className="flex items-center justify-center flex-wrap gap-1.5 bg-brand-surface/60 p-2 rounded-2xl border border-border/50 backdrop-blur-sm shadow-sm">
+                  {/* First button */}
+                  <button
+                    onClick={() => setPage(1)}
+                    disabled={page === 1}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                      page === 1
+                        ? "text-muted/30 cursor-not-allowed border border-transparent"
+                        : "text-muted hover:text-main hover:bg-brand-bgbase border border-border/50"
+                    }`}
+                    title="First Page"
+                  >
+                    « First
+                  </button>
+
+                  {/* Previous button */}
+                  <button
+                    onClick={() => setPage(p => Math.max(p - 1, 1))}
+                    disabled={page === 1}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                      page === 1
+                        ? "text-muted/30 cursor-not-allowed border border-transparent"
+                        : "text-muted hover:text-main hover:bg-brand-bgbase border border-border/50"
+                    }`}
+                    title="Previous Page"
+                  >
+                    ‹ Previous
+                  </button>
+
+                  {/* Sliding Page Numbers with Ellipsis */}
+                  {getPaginationItems(page, totalPages).map((item, idx) => {
+                    if (item === "...") {
+                      return (
+                        <span key={`ellipsis-${idx}`} className="px-2 py-1 text-xs text-muted/40 font-bold select-none">
+                          …
+                        </span>
+                      );
+                    }
+                    const isCurrent = item === page;
+                    return (
+                      <button
+                        key={`page-${item}`}
+                        onClick={() => setPage(item)}
+                        className={`min-w-[34px] h-[34px] px-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center ${
+                          isCurrent
+                            ? "bg-brand-neonblue text-white shadow-lg shadow-brand-neonblue/25 scale-105"
+                            : "text-muted hover:text-main hover:bg-brand-bgbase border border-border/40 hover:border-brand-neonblue/30"
+                        }`}
+                      >
+                        {item}
+                      </button>
+                    );
+                  })}
+
+                  {/* Next button */}
+                  <button
+                    onClick={() => setPage(p => Math.min(p + 1, totalPages))}
+                    disabled={page === totalPages}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                      page === totalPages
+                        ? "text-muted/30 cursor-not-allowed border border-transparent"
+                        : "text-muted hover:text-main hover:bg-brand-bgbase border border-border/50"
+                    }`}
+                    title="Next Page"
+                  >
+                    Next ›
+                  </button>
+
+                  {/* Last button */}
+                  <button
+                    onClick={() => setPage(totalPages)}
+                    disabled={page === totalPages}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                      page === totalPages
+                        ? "text-muted/30 cursor-not-allowed border border-transparent"
+                        : "text-muted hover:text-main hover:bg-brand-bgbase border border-border/50"
+                    }`}
+                    title="Last Page"
+                  >
+                    Last »
+                  </button>
+                </div>
+
+                {/* Centered Record Summary & Rows Per Page Selector */}
+                <div className="flex items-center gap-3 text-[11px] font-black uppercase tracking-[2px] text-muted/60 text-center flex-wrap justify-center">
+                  <span>
+                    Showing <span className="text-main font-mono">{(page - 1) * limit + 1}–{Math.min(page * limit, totalItems)}</span> of <span className="text-main font-mono">{totalItems}</span> records
+                  </span>
+                  <span className="opacity-30">•</span>
+                  <div className="flex items-center gap-1.5 lowercase tracking-normal">
+                    <span className="text-[10px] uppercase font-bold text-muted/50 tracking-wider">Per page:</span>
+                    <select
+                      value={limit}
+                      onChange={e => {
+                        setLimit(Number(e.target.value));
+                        setPage(1);
+                      }}
+                      className="bg-brand-surface border border-border/50 rounded-lg px-2 py-0.5 text-xs font-bold text-main focus:outline-none cursor-pointer"
+                    >
+                      <option value={10}>10</option>
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
             <AnimatePresence>
               {showDebug && (
                 <motion.div
