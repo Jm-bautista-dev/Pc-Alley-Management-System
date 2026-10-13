@@ -4,7 +4,7 @@ const sequelize = require('../db');
 const User = sequelize.define('User', {
   first_name: { type: DataTypes.STRING, allowNull: true },
   last_name: { type: DataTypes.STRING, allowNull: true },
-  username: { type: DataTypes.STRING, allowNull: false },
+  username: { type: DataTypes.STRING, allowNull: false, unique: true },
   password: { type: DataTypes.STRING, allowNull: false },
   role: {
     type: DataTypes.ENUM('super_admin', 'branch_admin', 'employee'),
