@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import { Repeat, ArrowUpRight, ArrowDownRight, Activity, TrendingUp, Download } from "lucide-react";
@@ -10,7 +11,13 @@ import { showSuccess, showError, showInfo, showWarning, showConfirm, showModal }
 import { useTheme } from "@/context/ThemeContext";
 
 export default function PurchaseSalePage() {
+  const router = useRouter();
   const { theme } = useTheme();
+
+  useEffect(() => {
+    router.replace("/reports/profit-loss");
+  }, [router]);
+
   const [loading, setLoading] = useState(false);
   const [dataSynced, setDataSynced] = useState(false);
   
