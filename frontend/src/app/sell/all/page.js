@@ -19,7 +19,8 @@ import {
   FileDown,
   ChevronDown,
   Wrench,
-  Package
+  Package,
+  ArrowRight
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { showSuccess, showError } from "@/context/ModalContext";
@@ -464,25 +465,6 @@ export default function SalesLedgerPage() {
                 </div>
               )}
 
-              {/* Custom Date Range Inputs */}
-              {dateFilter === "custom" && (
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <input
-                    type="date"
-                    value={customStartDate}
-                    onChange={(e) => setCustomStartDate(e.target.value)}
-                    className="bg-brand-bgbase border border-border/50 text-main text-[11px] font-bold px-3 py-2.5 rounded-lg outline-none focus:border-brand-neonblue w-full sm:w-auto"
-                  />
-                  <span className="text-[10px] uppercase font-black text-muted">to</span>
-                  <input
-                    type="date"
-                    value={customEndDate}
-                    onChange={(e) => setCustomEndDate(e.target.value)}
-                    className="bg-brand-bgbase border border-border/50 text-main text-[11px] font-bold px-3 py-2.5 rounded-lg outline-none focus:border-brand-neonblue w-full sm:w-auto"
-                  />
-                </div>
-              )}
-
               {/* Sale Type Filter dropdown */}
               <div className="relative w-full sm:w-44">
                 <select
@@ -519,6 +501,32 @@ export default function SalesLedgerPage() {
                   <ChevronDown size={14} />
                 </div>
               </div>
+
+              {/* Custom Date Range Pill (Option A) */}
+              {dateFilter === "custom" && (
+                <div className="flex items-center bg-brand-bgbase border border-border/50 hover:border-brand-neonblue/40 rounded-lg px-3 py-2.5 gap-2.5 transition-colors w-full sm:w-auto">
+                  <div className="flex items-center gap-1.5 text-muted shrink-0">
+                    <Calendar size={13} className="text-purple-400" />
+                    <span className="text-[10px] font-black uppercase tracking-wider text-muted/70">From</span>
+                  </div>
+                  <input
+                    type="date"
+                    value={customStartDate}
+                    onChange={(e) => setCustomStartDate(e.target.value)}
+                    className="bg-transparent text-main text-xs font-bold outline-none cursor-pointer [color-scheme:dark] w-full sm:w-auto"
+                  />
+                  <ArrowRight size={12} className="text-brand-neonblue/70 shrink-0" />
+                  <div className="flex items-center gap-1.5 text-muted shrink-0">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-muted/70">To</span>
+                  </div>
+                  <input
+                    type="date"
+                    value={customEndDate}
+                    onChange={(e) => setCustomEndDate(e.target.value)}
+                    className="bg-transparent text-main text-xs font-bold outline-none cursor-pointer [color-scheme:dark] w-full sm:w-auto"
+                  />
+                </div>
+              )}
 
               {/* Export Button */}
               <button
