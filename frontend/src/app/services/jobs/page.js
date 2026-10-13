@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Sidebar from "@/components/Sidebar";
+import TopBar from "@/components/TopBar";
 import { useAuthGuard } from "@/lib/useAuthGuard";
 import { apiUrl } from "@/lib/api";
 import { showSuccess, showError, showConfirm } from "@/context/ModalContext";
@@ -311,6 +312,7 @@ export default function ServiceJobsPage() {
     <div className="flex bg-brand-bgbase min-h-screen text-main font-dmsans transition-colors duration-300">
       <Sidebar />
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
+        <TopBar title="SERVICE WORK ORDERS" />
         {/* Header */}
         <header className="px-8 py-6 bg-brand-surface border-b border-brand-border flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">
           <div>
