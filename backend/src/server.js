@@ -49,11 +49,11 @@ app.use('/api/product-requests', require('./routes/productRequestRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
 app.use('/api/audit', require('./routes/auditRoutes'));
 
-// Extended Routes
 app.use('/api/customers', require('./routes/customerRoutes'));
 app.use('/api/expenses', require('./routes/expenseRoutes'));
 app.use('/api/purchase-orders', require('./routes/purchaseRoutes'));
 app.use('/api/stock-transfers', require('./routes/transferRoutes'));
+app.use('/api/transfers', require('./routes/transferRoutes'));
 app.use('/api/analytics', require('./routes/analyticsRoutes'));
 app.use('/api/services', require('./routes/serviceRoutes'));
 app.use('/api/warranties', require('./routes/warrantyRoutes'));

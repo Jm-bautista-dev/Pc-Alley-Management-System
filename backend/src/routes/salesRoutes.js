@@ -8,7 +8,10 @@ const {
   getComparativeSales,
   getSalesTrends,
   getDailyTrends,
-  getProductPerformance
+  getProductPerformance,
+  getReturns,
+  createReturn,
+  reviewReturn
 } = require('../controllers/salesController');
 const { authenticateToken } = require('../middleware/authMiddleware');
 const upload = require('../middleware/uploadMiddleware');
@@ -46,5 +49,10 @@ router.get('/comparative',  authenticateToken, getComparativeSales);
 router.get('/trends',       authenticateToken, getSalesTrends);
 router.get('/daily-trends', authenticateToken, getDailyTrends);
 router.get('/performance',  authenticateToken, getProductPerformance);
+
+// Returns endpoints (Finding J)
+router.get('/returns',            authenticateToken, getReturns);
+router.post('/returns',           authenticateToken, createReturn);
+router.put('/returns/:id/review', authenticateToken, reviewReturn);
 
 module.exports = router;

@@ -13,7 +13,7 @@ const ServiceJob = sequelize.define('ServiceJob', {
     unique: true
   },
   customer_id: {
-    type: DataTypes.UUID,
+    type: 'CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin',
     allowNull: true,
     references: {
       model: 'customers',
@@ -110,7 +110,7 @@ const ServiceJob = sequelize.define('ServiceJob', {
     allowNull: true
   },
   sale_id: {
-    type: DataTypes.UUID,
+    type: 'CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin',
     allowNull: true,
     references: {
       model: 'sales',

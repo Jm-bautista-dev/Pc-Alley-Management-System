@@ -556,6 +556,39 @@ const repairImportedProducts = async (req, res) => {
   }
 };
 
+const getProductBranches = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const branches = await Branch.findAll({ attributes: ['id', 'name', 'location'] });
+    const inventories = await Inventory.findAll({
+      where: { product_id: id },
+      include: [{ model: Branch, attributes: ['id', 'name', 'location'] }]
+    });
+
+    const invMap = {};
+    inventories.forEach(inv => {
+      invMap[inv.branch_id] = inv.quantity;
+    });
+
+    const result = branches.map(b => ({
+      branch_id: b.id,
+      branch_name: b.name,
+      location: b.location,
+      quantity: invMap[b.id] || 0
+    }));
+
+    const totalQuantity = result.reduce((sum, b) => sum + b.quantity, 0);
+
+    res.json({
+      productId: parseInt(id),
+      branches: result,
+      totalQuantity
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = { 
   getAllProducts, 
   createProduct, 
@@ -568,5 +601,6 @@ module.exports = {
   adjustStock,
   deleteProduct,
   resyncProductsToBranches,
-  repairImportedProducts
+  repairImportedProducts,
+  getProductBranches
 };

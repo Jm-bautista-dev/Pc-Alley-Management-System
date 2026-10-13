@@ -42,48 +42,56 @@ const Sidebar = () => {
   const getNavItems = () => {
     const role = user?.role;
     if (role === "employee" || role === "staff") return [
-      { title: "Sales",     icon: Upload,      path: "#sell",            group: "SALES", subItems: [{ title: "All Sales", path: "/sell/all" }, { title: "Make a Sale", path: "/sales" }, { title: "Quotations", path: "/sell/quotations" }, { title: "Saved Drafts", path: "/sell/drafts" }] },
+      { title: "Sales",     icon: Upload,      path: "#sell",            group: "SALES", subItems: [{ title: "All Sales", path: "/sell/all" }, { title: "Make a Sale", path: "/sales" }, { title: "Quotations", path: "/sell/quotations" }] },
       { title: "Customers", icon: Users,       path: "#contacts",        group: "SALES", subItems: [{ title: "Customer List", path: "/customers" }] },
-      { title: "Products",  icon: Package,     path: "#products",        group: "SALES", subItems: [{ title: "Product List", path: "/products" }, { title: "Manage Stock", path: "/reports/stock" }] },
+      { title: "Products",  icon: Package,     path: "#products",        group: "SALES", subItems: [{ title: "Product List", path: "/products" }, { title: "Manage Stock", path: "/reports/stock" }, { title: "Stock Requests", path: "/purchases/restock" }, { title: "Branch Transfers", path: "/sell/shipments" }] },
     ];
     if (role === "super_admin") return [
-      { title: "Dashboard",    icon: LayoutDashboard, path: "/dashboard", group: "MAIN" },
-      { title: "Customers",    icon: Users,           path: "#contacts",  group: "SALES", subItems: [{ title: "Customer List", path: "/customers" }] },
-      { title: "Products",     icon: Package,         path: "#products",  group: "SALES", subItems: [{ title: "Product List", path: "/products" }, { title: "Manage Stock", path: "/reports/stock" }, { title: "Product Bundles", path: "/products/bundles" }] },
-      { title: "Sales",        icon: Upload,          path: "#sell",      group: "SALES", subItems: [
+      { title: "Dashboard",          icon: LayoutDashboard, path: "/dashboard", group: "MAIN" },
+      { title: "Customers",          icon: Users,           path: "#contacts",  group: "SALES", subItems: [{ title: "Customer List", path: "/customers" }] },
+      { title: "Products",           icon: Package,         path: "#products",  group: "SALES", subItems: [
+        { title: "Product List", path: "/products" },
+        { title: "Manage Stock", path: "/reports/stock" },
+        { title: "Product Bundles", path: "/products/bundles" },
+        { title: "Stock Requests", path: "/purchases/restock" },
+        { title: "Branch Transfers", path: "/sell/shipments" }
+      ] },
+      { title: "Sales",              icon: Upload,          path: "#sell",      group: "SALES", subItems: [
         { title: "All Sales", path: "/sell/all" },
         { title: "Make a Sale", path: "/sales" },
         { title: "Quotations", path: "/sell/quotations" },
-        { title: "Saved Drafts", path: "/sell/drafts" },
         { title: "Returns", path: "/sell/returns" },
-        { title: "Shipments", path: "/sell/shipments" },
         { title: "Discounts", path: "/sell/discounts" },
         { title: "Import Sales", path: "/sell/import" }
       ] },
-      { title: "Buy Stock",    icon: Download,        path: "#purchases", group: "SALES", subItems: [{ title: "Stock Purchases", path: "/purchases" }, { title: "Order Stock", path: "/purchases/restock" }] },
-      { title: "Expenses",     icon: DollarSign,      path: "/expenses",  group: "SALES" },
-      { title: "Personnel",    icon: UserPlus,        path: "/personnel", group: "SYSTEM" },
-      { title: "Reports",      icon: ClipboardList,   path: "#reports",   group: "SYSTEM", subItems: [{ title: "Profit / Loss", path: "/reports/profit-loss" }, { title: "Stock Activity", path: "/reports/purchase-sale" }] },
-      { title: "System Admin", icon: ShieldCheck,     path: "/admin",     group: "SYSTEM" },
+      { title: "Buy Stock",          icon: Download,        path: "#purchases", group: "SALES", subItems: [{ title: "Stock Purchases", path: "/purchases" }] },
+      { title: "Expenses",           icon: DollarSign,      path: "/expenses",  group: "SALES" },
+      { title: "Branch Management",  icon: UserPlus,        path: "/personnel", group: "SYSTEM" },
+      { title: "Reports",            icon: ClipboardList,   path: "#reports",   group: "SYSTEM", subItems: [{ title: "Profit / Loss", path: "/reports/profit-loss" }] },
+      { title: "System Admin",       icon: ShieldCheck,     path: "/admin",     group: "SYSTEM" },
     ];
     return [
-      { title: "Dashboard",    icon: LayoutDashboard, path: "/dashboard",        group: "MAIN" },
-      { title: "Customers",    icon: Users,           path: "#contacts",         group: "SALES", subItems: [{ title: "Customer List", path: "/customers" }] },
-      { title: "Products",     icon: Package,         path: "#products",         group: "SALES", subItems: [{ title: "Product List", path: "/products" }, { title: "Manage Stock", path: "/reports/stock" }, { title: "Product Bundles", path: "/products/bundles" }] },
-      { title: "Buy Stock",    icon: Download,        path: "#purchases",        group: "SALES", subItems: [{ title: "Stock Purchases", path: "/purchases" }, { title: "Order Stock", path: "/purchases/restock" }] },
-      { title: "Sales",        icon: Upload,          path: "#sell",             group: "SALES", subItems: [
+      { title: "Dashboard",          icon: LayoutDashboard, path: "/dashboard",        group: "MAIN" },
+      { title: "Customers",          icon: Users,           path: "#contacts",         group: "SALES", subItems: [{ title: "Customer List", path: "/customers" }] },
+      { title: "Products",           icon: Package,         path: "#products",         group: "SALES", subItems: [
+        { title: "Product List", path: "/products" },
+        { title: "Manage Stock", path: "/reports/stock" },
+        { title: "Product Bundles", path: "/products/bundles" },
+        { title: "Stock Requests", path: "/purchases/restock" },
+        { title: "Branch Transfers", path: "/sell/shipments" }
+      ] },
+      { title: "Buy Stock",          icon: Download,        path: "#purchases",        group: "SALES", subItems: [{ title: "Stock Purchases", path: "/purchases" }] },
+      { title: "Sales",              icon: Upload,          path: "#sell",             group: "SALES", subItems: [
         { title: "All Sales", path: "/sell/all" },
         { title: "Make a Sale", path: "/sales" },
         { title: "Quotations", path: "/sell/quotations" },
-        { title: "Saved Drafts", path: "/sell/drafts" },
         { title: "Returns", path: "/sell/returns" },
-        { title: "Shipments", path: "/sell/shipments" },
         { title: "Discounts", path: "/sell/discounts" },
         { title: "Import Sales", path: "/sell/import" }
       ] },
-      { title: "Personnel",    icon: UserPlus,        path: "/personnel",        group: "SALES" },
-      { title: "Expenses",     icon: DollarSign,      path: "/expenses",         group: "SALES" },
-      { title: "Reports",      icon: ClipboardList,   path: "#reports",          group: "SYSTEM", subItems: [{ title: "Profit / Loss", path: "/reports/profit-loss" }, { title: "Stock Activity", path: "/reports/purchase-sale" }] },
+      { title: "Branch Management",  icon: UserPlus,        path: "/personnel",        group: "SALES" },
+      { title: "Expenses",           icon: DollarSign,      path: "/expenses",         group: "SALES" },
+      { title: "Reports",            icon: ClipboardList,   path: "#reports",          group: "SYSTEM", subItems: [{ title: "Profit / Loss", path: "/reports/profit-loss" }] },
     ];
   };
 

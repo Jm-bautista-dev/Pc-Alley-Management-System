@@ -2,12 +2,13 @@ const express = require('express');
 const router = express.Router();
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
-const { getAllProducts, createProduct, updateStock, getInventory, getLowStock, getGlobalInventoryStatus, getProductRestockAnalytics, getStockHistory, deleteProduct, adjustStock, resyncProductsToBranches, repairImportedProducts } = require('../controllers/inventoryController');
+const { getAllProducts, createProduct, updateStock, getInventory, getLowStock, getGlobalInventoryStatus, getProductRestockAnalytics, getStockHistory, deleteProduct, adjustStock, resyncProductsToBranches, repairImportedProducts, getProductBranches } = require('../controllers/inventoryController');
 const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
 
 const upload = require('../middleware/uploadMiddleware');
 
 router.get('/products', authenticateToken, getAllProducts);
+router.get('/product/:id/branches', authenticateToken, getProductBranches);
 
 router.post('/products', [
   authenticateToken, 

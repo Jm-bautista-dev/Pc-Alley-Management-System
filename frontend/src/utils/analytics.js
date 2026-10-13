@@ -52,23 +52,52 @@ export const getKPIs = (salesHistory, inventory) => {
   };
 };
 
-/**
- * Process monthly trend data (Revenue & Profit by calendar month)
- */
 export const getTrendData = (salesHistory) => {
   const revenueByMonth = new Array(12).fill(0);
   const profitByMonth  = new Array(12).fill(0);
   const ordersByMonth  = new Array(12).fill(0);
 
+  const dayBuckets = {};
+
   salesHistory.forEach(raw => {
     const order = normalise(raw);
-    const month = new Date(order.createdAt).getMonth();
+    const dateObj = new Date(order.createdAt);
+    if (isNaN(dateObj.getTime())) return;
+
+    // Calendar month aggregates
+    const month = dateObj.getMonth();
     revenueByMonth[month] += order.totalAmount;
     profitByMonth[month]  += order.totalAmount * 0.30;
     ordersByMonth[month]  += 1;
+
+    // Date bucket
+    const dateKey = dateObj.toISOString().split('T')[0];
+    if (!dayBuckets[dateKey]) {
+      dayBuckets[dateKey] = { revenue: 0, profit: 0, orders: 0 };
+    }
+    dayBuckets[dateKey].revenue += order.totalAmount;
+    dayBuckets[dateKey].profit  += order.totalAmount * 0.30;
+    dayBuckets[dateKey].orders  += 1;
   });
 
-  return { revenueByMonth, profitByMonth, ordersByMonth };
+  const sortedDates = Object.keys(dayBuckets).sort();
+  const labels = sortedDates.map(d => {
+    const [y, m, day] = d.split('-');
+    const dt = new Date(Number(y), Number(m) - 1, Number(day));
+    return dt.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  });
+  const revenue = sortedDates.map(d => Number(dayBuckets[d].revenue.toFixed(2)));
+  const profit  = sortedDates.map(d => Number(dayBuckets[d].profit.toFixed(2)));
+
+  return {
+    revenueByMonth,
+    profitByMonth,
+    ordersByMonth,
+    labels,
+    revenue,
+    profit,
+    hasData: sortedDates.length > 0 && revenue.some(r => r > 0)
+  };
 };
 
 /**

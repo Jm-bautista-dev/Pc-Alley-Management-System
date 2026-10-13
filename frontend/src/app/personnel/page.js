@@ -65,7 +65,8 @@ export default function PersonnelPage() {
   const availableRoles = isSuperAdmin
     ? [
         { value: "employee", label: "Staff Member" },
-        { value: "branch_admin", label: "Branch Manager" }
+        { value: "branch_admin", label: "Branch Manager" },
+        { value: "super_admin", label: "Super Admin" }
       ]
     : [
         { value: "employee", label: "Staff Member" }
@@ -168,9 +169,9 @@ export default function PersonnelPage() {
       role: isSuperAdmin ? provisionData.role : "employee",
       username: provisionData.username.trim().toLowerCase(),
       password: provisionData.password,
-      branch_id: currentUser?.role === "branch_admin"
-        ? Number(currentUser.branch_id)
-        : Number(provisionData.branch_id)
+      branch_id: provisionData.role === "super_admin"
+        ? (provisionData.branch_id ? Number(provisionData.branch_id) : null)
+        : (currentUser?.role === "branch_admin" ? Number(currentUser.branch_id) : Number(provisionData.branch_id))
     };
 
     if (!payload.first_name) {
@@ -206,7 +207,7 @@ export default function PersonnelPage() {
       return;
     }
 
-    if (!payload.branch_id || Number.isNaN(payload.branch_id)) {
+    if (payload.role !== "super_admin" && (!payload.branch_id || Number.isNaN(payload.branch_id))) {
       toast.error("Please assign a branch for the account.");
       return;
     }
@@ -346,7 +347,7 @@ export default function PersonnelPage() {
     <div className="flex bg-brand-bgbase min-h-screen text-main font-dmsans transition-colors duration-300">
       <Sidebar />
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        <TopBar title={isSuperAdmin ? "PERSONNEL & BRANCH MATRIX" : "STAFF DIRECTORY"} />
+        <TopBar title={isSuperAdmin ? "BRANCH MANAGEMENT" : "STAFF DIRECTORY"} />
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-10 custom-scrollbar relative z-10 space-y-8">
           
@@ -356,12 +357,12 @@ export default function PersonnelPage() {
               <div className="flex items-center gap-3">
                 <div className="w-1.5 h-6 bg-brand-crimson rounded-full" />
                 <h1 className="text-2xl md:text-3xl font-rajdhani font-black tracking-wider uppercase text-main">
-                  {isSuperAdmin ? "Personnel & Sector Management" : "Branch Staff Roster"}
+                  {isSuperAdmin ? "Branch Management & Matrix" : "Branch Staff Roster"}
                 </h1>
               </div>
               <p className="text-[11px] text-muted font-semibold uppercase tracking-[0.2em] mt-1 ml-4.5">
                 {isSuperAdmin
-                  ? "Global personnel credential registry, manager allocations, and branch matrix"
+                  ? "Global branch management, sector configuration, and personnel allocations"
                   : `Active personnel assigned to ${currentUser?.branch_name || "your sector"}`}
               </p>
             </div>
@@ -1039,15 +1040,20 @@ export default function PersonnelPage() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-[9px] font-black uppercase tracking-widest text-muted ml-1">Branch Sector</label>
+                    <label className="text-[9px] font-black uppercase tracking-widest text-muted ml-1">
+                      Branch Sector {provisionData.role === "super_admin" ? "(Optional)" : "*"}
+                    </label>
                     <select
                       value={currentUser?.role === "branch_admin" ? currentUser.branch_id : provisionData.branch_id}
                       onChange={(e) => setProvisionData({ ...provisionData, branch_id: e.target.value })}
                       disabled={currentUser?.role === "branch_admin"}
                       className="w-full bg-brand-bgbase border border-border rounded-xl py-3 px-4 text-xs text-main focus:outline-none focus:border-brand-neonblue transition-all appearance-none disabled:opacity-75"
-                      required
+                      required={provisionData.role !== "super_admin"}
                     >
-                      {currentUser?.role !== "branch_admin" && (
+                      {provisionData.role === "super_admin" && (
+                        <option value="">Global / All Branches (Super Admin)</option>
+                      )}
+                      {currentUser?.role !== "branch_admin" && provisionData.role !== "super_admin" && (
                         <option value="" disabled>Select Branch</option>
                       )}
                       {branches.map((b) => (

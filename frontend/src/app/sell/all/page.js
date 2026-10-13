@@ -170,6 +170,9 @@ export default function SalesLedgerPage() {
   const [activeOrder, setActiveOrder] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   useEffect(() => {
     fetchSales();
@@ -181,21 +184,26 @@ export default function SalesLedgerPage() {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       if (res.ok) {
-        setSales(await res.json());
+        const raw = await res.json();
+        setSales(Array.isArray(raw) ? raw : (raw?.data ?? []));
       }
     } catch (error) {
       console.error(error);
     }
   };
 
-  const filteredSales = sales.filter(s => 
-    s.id.toString().includes(search) || 
-    (s.customer_name || '').toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredSales = sales.filter(s => {
+    const matchSearch = s.id.toString().includes(search) || 
+      (s.customer_name || '').toLowerCase().includes(search.toLowerCase());
+    if (!matchSearch) return false;
+    if (startDate && new Date(s.createdAt) < new Date(startDate)) return false;
+    if (endDate && new Date(s.createdAt) > new Date(new Date(endDate).setHours(23, 59, 59, 999))) return false;
+    return true;
+  });
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search]);
+  }, [search, startDate, endDate]);
 
   const totalPages = Math.ceil(filteredSales.length / itemsPerPage);
   const paginatedSales = filteredSales.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -259,9 +267,55 @@ export default function SalesLedgerPage() {
                  className="w-full bg-brand-bgbase border border-border/50 text-main text-xs font-bold rounded-lg pl-9 pr-4 py-3 outline-none focus:border-brand-neonblue transition-colors flex-1" 
                />
              </div>
-             <button className="bg-brand-bgbase border border-border/50 px-4 py-2.5 rounded-lg flex items-center justify-center text-muted hover:text-main hover:border-brand-neonblue/50 transition-colors w-full sm:w-auto text-[11px] uppercase tracking-widest font-black gap-2">
-               <Filter size={14} /> Filter Date
-             </button>
+             <div className="relative">
+               <button 
+                 onClick={() => setIsFilterOpen(!isFilterOpen)}
+                 className="bg-brand-bgbase border border-border/50 px-4 py-2.5 rounded-lg flex items-center justify-center text-muted hover:text-main hover:border-brand-neonblue/50 transition-colors w-full sm:w-auto text-[11px] uppercase tracking-widest font-black gap-2"
+               >
+                 <Filter size={14} className="text-brand-neonblue" /> 
+                 {startDate && endDate ? `${startDate} → ${endDate}` : "Custom Date"}
+               </button>
+               {isFilterOpen && (
+                 <div className="absolute right-0 left-auto mt-2 bg-brand-surface border border-border rounded-2xl p-4 shadow-xl z-50 w-72 space-y-3">
+                   <div className="flex justify-between items-center pb-2 border-b border-border">
+                     <span className="text-[10px] font-black uppercase tracking-wider text-muted">Custom Date Filter</span>
+                     <button onClick={() => setIsFilterOpen(false)} className="text-muted hover:text-main font-bold">✕</button>
+                   </div>
+                   <div>
+                     <label className="text-[9px] font-black uppercase text-muted block mb-1">Start Date</label>
+                     <input 
+                       type="date" 
+                       value={startDate} 
+                       onChange={e => setStartDate(e.target.value)}
+                       className="w-full bg-brand-bgbase border border-border rounded-lg p-2 text-xs text-main"
+                     />
+                   </div>
+                   <div>
+                     <label className="text-[9px] font-black uppercase text-muted block mb-1">End Date</label>
+                     <input 
+                       type="date" 
+                       value={endDate} 
+                       onChange={e => setEndDate(e.target.value)}
+                       className="w-full bg-brand-bgbase border border-border rounded-lg p-2 text-xs text-main"
+                     />
+                   </div>
+                   <div className="flex gap-2 pt-2">
+                     <button 
+                       onClick={() => { setStartDate(""); setEndDate(""); setIsFilterOpen(false); }}
+                       className="flex-1 py-1.5 text-[10px] font-bold text-muted hover:text-main rounded border border-border uppercase tracking-wider"
+                     >
+                       Reset
+                     </button>
+                     <button 
+                       onClick={() => setIsFilterOpen(false)}
+                       className="flex-1 py-1.5 text-[10px] font-bold bg-brand-neonblue text-white rounded shadow-sm uppercase tracking-wider"
+                     >
+                       Apply
+                     </button>
+                   </div>
+                 </div>
+               )}
+             </div>
              <button 
                onClick={handleExport}
                className="bg-brand-bgbase border border-border/50 px-5 py-2.5 rounded-lg flex items-center justify-center text-muted hover:text-main hover:border-brand-neonblue/50 transition-colors w-full sm:w-auto text-[11px] uppercase tracking-widest font-black gap-2"

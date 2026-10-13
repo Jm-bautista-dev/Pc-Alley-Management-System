@@ -4,7 +4,8 @@ const {
   Sale, SaleItem, Customer,
   Order, OrderItem,
   Product, Inventory, Category, StockMovement, Branch, User,
-  Service, ServiceJob, AuditLog
+  Service, ServiceJob, AuditLog,
+  ProductBundle, Warranty, Return
 } = require('../models');
 
 // ─────────────────────────────────────────────────────────────────
@@ -75,6 +76,7 @@ const createSale = async (req, res) => {
 
     let totalProductAmount = 0;
     let totalServiceAmount = 0;
+    const qualifyingProductItems = [];
 
     // Process each item ────────────────────────────────────────────
     for (const item of items) {
@@ -137,19 +139,21 @@ const createSale = async (req, res) => {
         const product = await Product.findByPk(productId, { transaction });
         if (!product) throw new Error(`Product #${productId} not found`);
 
-        // Stock check
-        const inventory = await Inventory.findOne({
-          where: { product_id: product.id, branch_id },
-          transaction
-        });
-        if (!inventory || inventory.quantity < qty) {
-          throw new Error(`Insufficient stock for "${product.name}" (available: ${inventory?.quantity ?? 0})`);
+        // Authoritative server-side price check (Finding D)
+        const unitPrice = parseFloat(product.price);
+        if (product.is_bundle) {
+          if (isNaN(unitPrice) || unitPrice <= 0) {
+            throw new Error(`Bundle "${product.name}" has no valid configured price. Checkout cannot proceed.`);
+          }
+        } else {
+          if (isNaN(unitPrice) || unitPrice < 0) {
+            throw new Error(`Product "${product.name}" has an invalid price.`);
+          }
         }
 
-        const unitPrice = parseFloat(product.price);
-        const subtotal  = parseFloat((unitPrice * qty).toFixed(2));
+        const subtotal = parseFloat((unitPrice * qty).toFixed(2));
 
-        // Create SaleItem with price/name snapshot
+        // Create SaleItem with authoritative database price/name snapshot
         await SaleItem.create({
           saleId:      sale.id,
           item_type:   'product',
@@ -161,21 +165,106 @@ const createSale = async (req, res) => {
           subtotal
         }, { transaction });
 
-        // Decrement physical inventory
-        const prevStock = inventory.quantity;
-        inventory.quantity -= qty;
-        await inventory.save({ transaction });
+        // Track qualifying product items for automatic warranty creation
+        qualifyingProductItems.push({
+          productId:   product.id,
+          productName: product.name,
+          productSku:  product.sku || null,
+          quantity:    qty,
+          unitPrice,
+          subtotal
+        });
 
-        // Log StockMovement
-        await StockMovement.create({
-          product_id:     product.id,
-          type:           'SALE',
-          quantity:       -qty,
-          previous_stock: prevStock,
-          new_stock:      inventory.quantity,
-          user_id,
-          note: `Sale ${invoiceNumber}`
-        }, { transaction });
+        // Stock checks & deductions
+        if (product.is_bundle) {
+          // If product is a bundle, check component stock in ProductBundle table
+          const bundleComponents = await ProductBundle.findAll({
+            where: { bundle_id: product.id },
+            transaction
+          });
+
+          if (bundleComponents && bundleComponents.length > 0) {
+            // Verify all components have sufficient stock first
+            for (const comp of bundleComponents) {
+              const neededQty = (parseInt(comp.quantity) || 1) * qty;
+              const compInv = await Inventory.findOne({
+                where: { product_id: comp.product_id, branch_id },
+                transaction
+              });
+              if (!compInv || compInv.quantity < neededQty) {
+                const compProduct = await Product.findByPk(comp.product_id, { transaction });
+                throw new Error(`Insufficient stock for bundle component "${compProduct?.name || comp.product_id}" (needed: ${neededQty}, available: ${compInv?.quantity ?? 0})`);
+              }
+            }
+
+            // Deduct each component's inventory
+            for (const comp of bundleComponents) {
+              const compDeductQty = (parseInt(comp.quantity) || 1) * qty;
+              const compInv = await Inventory.findOne({
+                where: { product_id: comp.product_id, branch_id },
+                transaction
+              });
+              const prevCompStock = compInv.quantity;
+              compInv.quantity -= compDeductQty;
+              await compInv.save({ transaction });
+
+              await StockMovement.create({
+                product_id:     comp.product_id,
+                type:           'SALE',
+                quantity:       -compDeductQty,
+                previous_stock: prevCompStock,
+                new_stock:      compInv.quantity,
+                user_id,
+                note: `Sale ${invoiceNumber} (Bundle: ${product.name})`
+              }, { transaction });
+            }
+          } else {
+            // Standalone bundle product
+            const inventory = await Inventory.findOne({
+              where: { product_id: product.id, branch_id },
+              transaction
+            });
+            if (!inventory || inventory.quantity < qty) {
+              throw new Error(`Insufficient stock for "${product.name}" (available: ${inventory?.quantity ?? 0})`);
+            }
+            const prevStock = inventory.quantity;
+            inventory.quantity -= qty;
+            await inventory.save({ transaction });
+
+            await StockMovement.create({
+              product_id:     product.id,
+              type:           'SALE',
+              quantity:       -qty,
+              previous_stock: prevStock,
+              new_stock:      inventory.quantity,
+              user_id,
+              note: `Sale ${invoiceNumber}`
+            }, { transaction });
+          }
+        } else {
+          // Standard product inventory check
+          const inventory = await Inventory.findOne({
+            where: { product_id: product.id, branch_id },
+            transaction
+          });
+          if (!inventory || inventory.quantity < qty) {
+            throw new Error(`Insufficient stock for "${product.name}" (available: ${inventory?.quantity ?? 0})`);
+          }
+
+          const prevStock = inventory.quantity;
+          inventory.quantity -= qty;
+          await inventory.save({ transaction });
+
+          await StockMovement.create({
+            product_id:     product.id,
+            type:           'SALE',
+            quantity:       -qty,
+            previous_stock: prevStock,
+            new_stock:      inventory.quantity,
+            user_id,
+            note: `Sale ${invoiceNumber}`
+          }, { transaction });
+        }
 
         totalProductAmount += subtotal;
       }
@@ -206,6 +295,29 @@ const createSale = async (req, res) => {
       sale.changeAmount = 0.00;
     }
     await sale.save({ transaction });
+
+    // Automatic Warranty Linking (Finding H) ──────────────────────
+    if (qualifyingProductItems.length > 0) {
+      const existingWarranty = await Warranty.findOne({
+        where: { sale_id: sale.id },
+        transaction
+      });
+      if (!existingWarranty) {
+        const validUntil = new Date();
+        validUntil.setFullYear(validUntil.getFullYear() + 1); // 1-year warranty coverage
+        await Warranty.create({
+          customer_id:   customerId || null,
+          sale_id:       sale.id,
+          customer_name: customerName,
+          valid_until:   validUntil.toISOString().split('T')[0],
+          items:         qualifyingProductItems,
+          note:          `Automated warranty for Sale ${invoiceNumber}`,
+          subtotal:      totalProductAmount,
+          status:        'Accepted',
+          createdBy:     user_id
+        }, { transaction });
+      }
+    }
 
     // Audit log
     await AuditLog.create({
@@ -497,6 +609,223 @@ const getProductPerformance = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────
+// RETURNS MANAGEMENT (Finding J)
+// ─────────────────────────────────────────────────────────────────
+
+const getReturns = async (req, res) => {
+  try {
+    const branchId = req.user.role !== 'super_admin' ? req.user.branch_id : req.query.branch_id;
+    const where = {};
+    if (branchId) where.branch_id = branchId;
+    if (req.query.status) where.status = req.query.status;
+
+    const returns = await Return.findAll({
+      where,
+      include: [
+        { model: Sale, attributes: ['id', 'invoiceNumber', 'totalAmount', 'createdAt'] },
+        { model: Branch, attributes: ['id', 'name'] },
+        { model: Customer, attributes: ['id', 'name', 'email', 'phone'] }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+    res.json(returns);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+const createReturn = async (req, res) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const { sale_id, items, disposition, reason, condition_note, notes } = req.body;
+    const branch_id = req.user.role !== 'super_admin' ? req.user.branch_id : (req.body.branch_id || req.user.branch_id);
+
+    if (!sale_id) throw new Error('Original sale ID is required.');
+    const sale = await Sale.findByPk(sale_id, {
+      include: [SaleItem],
+      transaction
+    });
+    if (!sale) throw new Error('Original completed sale record not found.');
+    if (sale.status !== 'completed') throw new Error('Only completed sales can be returned.');
+
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new Error('At least one item must be specified for return.');
+    }
+
+    // Fetch previously non-rejected returns for this sale to compute remaining returnable quantity
+    const existingReturns = await Return.findAll({
+      where: { sale_id: sale.id, status: { [Op.ne]: 'Rejected' } },
+      transaction
+    });
+
+    const previouslyReturned = {};
+    existingReturns.forEach(ret => {
+      const retItems = Array.isArray(ret.items) ? ret.items : [];
+      retItems.forEach(ri => {
+        const pid = ri.product_id || ri.productId;
+        previouslyReturned[pid] = (previouslyReturned[pid] || 0) + (parseInt(ri.quantity) || 0);
+      });
+    });
+
+    // Validate each item
+    const validatedItems = [];
+    let estimatedRefund = 0;
+
+    for (const item of items) {
+      const pid = item.product_id || item.productId || item.id;
+      const qty = parseInt(item.quantity) || 0;
+      if (qty <= 0) throw new Error('Return quantity must be greater than zero.');
+
+      const saleItem = sale.SaleItems.find(si => si.productId === pid || si.product_id === pid);
+      if (!saleItem) {
+        throw new Error(`Product #${pid} was not found in the original sale.`);
+      }
+
+      const soldQty = saleItem.quantity;
+      const prevQty = previouslyReturned[pid] || 0;
+      const returnableQty = soldQty - prevQty;
+
+      if (qty > returnableQty) {
+        throw new Error(`Cannot return ${qty} units of "${saleItem.productName}". Maximum returnable quantity is ${returnableQty}.`);
+      }
+
+      const unitPrice = parseFloat(saleItem.unitPrice || 0);
+      const lineRefund = parseFloat((unitPrice * qty).toFixed(2));
+      estimatedRefund += lineRefund;
+
+      validatedItems.push({
+        product_id: pid,
+        product_name: saleItem.productName,
+        product_sku: saleItem.productSku,
+        quantity: qty,
+        unit_price: unitPrice,
+        subtotal: lineRefund,
+        reason: item.reason || reason || 'Defective/Return',
+        condition: item.condition || condition_note || 'Inspected'
+      });
+    }
+
+    const returnNumber = `RET-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 900 + 100)}`;
+
+    const newReturn = await Return.create({
+      return_number: returnNumber,
+      sale_id: sale.id,
+      branch_id: branch_id || sale.branchId,
+      customer_id: sale.customerId || null,
+      customer_name: sale.customerName || 'Walk-in Customer',
+      status: 'Requested',
+      disposition: disposition || 'restock_review',
+      items: validatedItems,
+      reason: reason || 'Return for review',
+      condition_note: condition_note || null,
+      notes: notes || null,
+      restock_resellable: false,
+      refund_amount: estimatedRefund,
+      requested_by: req.user.id
+    }, { transaction });
+
+    await AuditLog.create({
+      action: 'RETURN_REQUESTED',
+      user_id: req.user.id,
+      details: `Return ${returnNumber} requested for Sale ${sale.invoiceNumber} (${validatedItems.length} items)`,
+      ip_address: req.ip
+    }, { transaction });
+
+    await transaction.commit();
+    res.status(201).json(newReturn);
+  } catch (err) {
+    await transaction.rollback();
+    res.status(400).json({ error: err.message });
+  }
+};
+
+const reviewReturn = async (req, res) => {
+  const transaction = await sequelize.transaction();
+  try {
+    // Only super_admin, admin, or branch_admin (Manager) can review returns
+    if (!['super_admin', 'branch_admin', 'admin'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Forbidden: You do not have permission to approve or reject returns.' });
+    }
+
+    const ret = await Return.findByPk(req.params.id, { transaction });
+    if (!ret) throw new Error('Return record not found.');
+
+    if (ret.status === 'Approved' || ret.status === 'Rejected') {
+      return res.status(400).json({ error: `Return has already been ${ret.status.toLowerCase()}.` });
+    }
+
+    const { status, restock_resellable, refund_amount, notes } = req.body;
+    if (!['Approved', 'Rejected'].includes(status)) {
+      throw new Error('Review status must be either Approved or Rejected.');
+    }
+
+    ret.status = status;
+    ret.reviewed_by = req.user.id;
+    ret.reviewed_at = new Date();
+    if (notes) ret.notes = notes;
+    if (refund_amount !== undefined) ret.refund_amount = parseFloat(refund_amount);
+
+    if (status === 'Approved') {
+      const shouldRestock = !!restock_resellable;
+      ret.restock_resellable = shouldRestock;
+
+      if (shouldRestock) {
+        const items = Array.isArray(ret.items) ? ret.items : [];
+        for (const item of items) {
+          const pid = item.product_id || item.productId;
+          const qty = parseInt(item.quantity) || 0;
+          if (!pid || qty <= 0) continue;
+
+          let inv = await Inventory.findOne({
+            where: { product_id: pid, branch_id: ret.branch_id },
+            transaction
+          });
+
+          let prevStock = 0;
+          if (!inv) {
+            inv = await Inventory.create({
+              product_id: pid,
+              branch_id: ret.branch_id,
+              quantity: qty,
+              low_stock_threshold: 5
+            }, { transaction });
+          } else {
+            prevStock = inv.quantity;
+            inv.quantity += qty;
+            await inv.save({ transaction });
+          }
+
+          await StockMovement.create({
+            product_id: pid,
+            type: 'RESTOCK',
+            quantity: qty,
+            previous_stock: prevStock,
+            new_stock: inv.quantity,
+            user_id: req.user.id,
+            note: `Return Approved (${ret.return_number})`
+          }, { transaction });
+        }
+      }
+    }
+
+    await ret.save({ transaction });
+
+    await AuditLog.create({
+      action: status === 'Approved' ? 'RETURN_APPROVED' : 'RETURN_REJECTED',
+      user_id: req.user.id,
+      details: `Return ${ret.return_number} ${status.toLowerCase()} by User #${req.user.id} (Restocked: ${ret.restock_resellable})`,
+      ip_address: req.ip
+    }, { transaction });
+
+    await transaction.commit();
+    res.json({ message: `Return ${status.toLowerCase()} successfully`, status: ret.status, returnRecord: ret });
+  } catch (err) {
+    await transaction.rollback();
+    res.status(400).json({ error: err.message });
+  }
+};
+
 module.exports = {
   createSale,
   // keep old name alias so any other import doesn't break
@@ -505,5 +834,8 @@ module.exports = {
   getComparativeSales,
   getSalesTrends,
   getDailyTrends,
-  getProductPerformance
+  getProductPerformance,
+  getReturns,
+  createReturn,
+  reviewReturn
 };

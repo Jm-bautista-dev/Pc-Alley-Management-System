@@ -21,7 +21,9 @@ import {
   LogOut,
   ExternalLink,
   Building2,
-  ArrowUpRight
+  ArrowUpRight,
+  UserX,
+  UserCheck
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiUrl, apiFetch } from "@/lib/api";
@@ -138,16 +140,25 @@ export default function AdminPage() {
     setIsEditModalOpen(true);
   };
 
-  const handleDeleteUser = async (userId) => {
-    if (!confirm("Are you sure you want to terminate this personnel account?")) return;
+  const handleToggleUserStatus = async (user) => {
+    const isCurrentlyActive = user.is_active !== false && user.is_active !== 0;
+    const actionText = isCurrentlyActive ? "disable" : "enable";
+    if (!confirm(`Are you sure you want to ${actionText} this personnel account (${user.username})?`)) return;
     try {
-      const res = await apiFetch(`/api/auth/users/${userId}`, {
-        method: "DELETE"
+      const res = await apiFetch(`/api/auth/users/${user.id}/status`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: !isCurrentlyActive })
       });
-      if (res.ok) fetchData();
-      else alert("Failed to delete user");
+      if (res.ok) {
+        fetchData();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.message || `Failed to ${actionText} user`);
+      }
     } catch (err) {
       console.error(err);
+      alert("Network error updating user account status.");
     }
   };
 
@@ -289,8 +300,8 @@ export default function AdminPage() {
                                 </div>
                                 <div>
                                    <h4 className="text-[13px] font-bold text-main group-hover:text-brand-neonblue transition-colors">{user.username}</h4>
-                                   <p className="text-[10px] text-muted-40 uppercase tracking-widest mt-0.5">
-                                     {user.id === currentUser?.id ? 'Current Session' : 'Active Account'}
+                                   <p className={`text-[10px] uppercase tracking-widest mt-0.5 ${user.is_active === false || user.is_active === 0 ? 'text-brand-crimson font-bold' : 'text-muted-40'}`}>
+                                     {user.id === currentUser?.id ? 'Current Session' : (user.is_active === false || user.is_active === 0 ? 'Disabled' : 'Active Account')}
                                    </p>
                                 </div>
                               </div>
@@ -310,15 +321,27 @@ export default function AdminPage() {
                             <td className="py-4 pl-4 text-right">
                                <div className="flex justify-end gap-2">
                                  {user.id !== currentUser?.id && (
-                                 <motion.button 
-                                   whileHover={{ scale: 1.1 }}
-                                   whileTap={{ scale: 0.9 }}
-                                   onClick={() => handleDeleteUser(user.id)} 
-                                   className="p-2.5 bg-brand-surface border border-border rounded-full text-brand-crimson hover:bg-brand-crimson hover:text-white transition-all shadow-sm"
-                                   title="Terminate Account"
-                                 >
-                                   <LogOut size={14} />
-                                 </motion.button>
+                                   user.is_active === false || user.is_active === 0 ? (
+                                     <motion.button 
+                                       whileHover={{ scale: 1.1 }}
+                                       whileTap={{ scale: 0.9 }}
+                                       onClick={() => handleToggleUserStatus(user)} 
+                                       className="p-2.5 bg-brand-surface border border-emerald-500/30 rounded-full text-emerald-400 hover:bg-emerald-500 hover:text-white transition-all shadow-sm"
+                                       title="Enable Account"
+                                     >
+                                       <UserCheck size={14} />
+                                     </motion.button>
+                                   ) : (
+                                     <motion.button 
+                                       whileHover={{ scale: 1.1 }}
+                                       whileTap={{ scale: 0.9 }}
+                                       onClick={() => handleToggleUserStatus(user)} 
+                                       className="p-2.5 bg-brand-surface border border-brand-crimson/30 rounded-full text-brand-crimson hover:bg-brand-crimson hover:text-white transition-all shadow-sm"
+                                       title="Disable Account"
+                                     >
+                                       <UserX size={14} />
+                                     </motion.button>
+                                   )
                                  )}
                                </div>
                             </td>

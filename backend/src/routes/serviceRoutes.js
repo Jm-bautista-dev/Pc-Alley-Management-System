@@ -13,7 +13,8 @@ const {
   getServiceJobs,
   getServiceJobById,
   createServiceJob,
-  updateServiceJobStatus
+  updateServiceJobStatus,
+  getServiceEmailLogs
 } = require('../controllers/serviceController');
 
 router.use(authenticateToken);
@@ -75,6 +76,7 @@ router.delete('/:id', [
 
 // Service Jobs / Work Orders Routes
 router.get('/jobs/list', getServiceJobs);
+router.get('/jobs/email-logs', getServiceEmailLogs);
 router.get('/jobs/:id', [
   param('id').isInt().withMessage('Invalid service job ID.'),
   validate

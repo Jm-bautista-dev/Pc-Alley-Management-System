@@ -28,6 +28,7 @@ const Attendance = require('./Attendance');
 const Warranty = require('./Warranty');
 const Service = require('./Service');
 const ServiceJob = require('./ServiceJob');
+const Return = require('./Return');
 
 // ── Existing Associations ──
 Branch.hasMany(User, { foreignKey: 'branch_id' });
@@ -180,6 +181,29 @@ ServiceJob.belongsTo(Sale, { foreignKey: 'sale_id' });
 ServiceJob.hasMany(SaleItem, { foreignKey: 'serviceJobId' });
 SaleItem.belongsTo(ServiceJob, { foreignKey: 'serviceJobId' });
 
+// Warranty associations
+Customer.hasMany(Warranty, { foreignKey: 'customer_id' });
+Warranty.belongsTo(Customer, { foreignKey: 'customer_id' });
+
+Sale.hasMany(Warranty, { foreignKey: 'sale_id' });
+Warranty.belongsTo(Sale, { foreignKey: 'sale_id' });
+
+// Return associations
+Sale.hasMany(Return, { foreignKey: 'sale_id' });
+Return.belongsTo(Sale, { foreignKey: 'sale_id' });
+
+Branch.hasMany(Return, { foreignKey: 'branch_id' });
+Return.belongsTo(Branch, { foreignKey: 'branch_id' });
+
+Customer.hasMany(Return, { foreignKey: 'customer_id' });
+Return.belongsTo(Customer, { foreignKey: 'customer_id' });
+
+User.hasMany(Return, { as: 'RequestedReturns', foreignKey: 'requested_by' });
+Return.belongsTo(User, { as: 'Requester', foreignKey: 'requested_by' });
+
+User.hasMany(Return, { as: 'ReviewedReturns', foreignKey: 'reviewed_by' });
+Return.belongsTo(User, { as: 'Reviewer', foreignKey: 'reviewed_by' });
+
 module.exports = {
   Branch,
   User,
@@ -211,5 +235,6 @@ module.exports = {
   Attendance,
   Warranty,
   Service,
-  ServiceJob
+  ServiceJob,
+  Return
 };

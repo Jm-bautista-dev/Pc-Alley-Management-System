@@ -35,6 +35,7 @@ import {
 import { Line } from 'react-chartjs-2';
 import { getChartTheme } from "@/lib/chartTheme";
 import { exportToExcel } from "@/lib/excelExport";
+import { apiFetch } from "@/lib/api";
 import toast, { Toaster } from "react-hot-toast";
 
 ChartJS.register(
@@ -52,36 +53,45 @@ export default function ProfitLossPage() {
   const [loading, setLoading] = useState(true);
   const chartTheme = getChartTheme();
 
-  // Mock data for the Profit & Loss analysis
-  const financialData = {
-    revenue: 1248500,
-    cogs: 842300,
-    grossProfit: 406200,
-    operatingExpenses: 125000,
-    netIncome: 281200,
-    trends: [
-      { date: "Day 1", revenue: 45000, expenses: 32000 },
-      { date: "Day 5", revenue: 52000, expenses: 31000 },
-      { date: "Day 10", revenue: 48000, expenses: 35000 },
-      { date: "Day 15", revenue: 61000, expenses: 38000 },
-      { date: "Day 20", revenue: 58000, expenses: 36000 },
-      { date: "Day 25", revenue: 65000, expenses: 40000 },
-      { date: "Day 30", revenue: 72000, expenses: 42000 },
-    ]
-  };
+  const [financialData, setFinancialData] = useState({
+    revenue: 0,
+    grossSales: 0,
+    returnsRefunded: 0,
+    cogs: 0,
+    grossProfit: 0,
+    operatingExpenses: 0,
+    netIncome: 0,
+    trends: [],
+    formula: "Net Sales (Gross Sales less Returns) - Cost of Goods Sold - Operating Expenses = Net Income"
+  });
 
   useEffect(() => {
-    // Simulate loading
-    const timer = setTimeout(() => setLoading(false), 800);
-    return () => clearTimeout(timer);
+    const fetchPL = async () => {
+      setLoading(true);
+      try {
+        const res = await apiFetch("/api/analytics/profit-loss");
+        if (res.ok) {
+          const data = await res.json();
+          setFinancialData(data);
+        }
+      } catch (err) {
+        console.error("Failed to load P&L:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPL();
   }, []);
 
+  const trendLabels = financialData.trends?.length > 0 ? financialData.trends.map(t => t.date) : ["Current Period"];
+  const trendValues = financialData.trends?.length > 0 ? financialData.trends.map(t => t.revenue) : [financialData.revenue];
+
   const trendData = {
-    labels: financialData.trends.map(t => t.date),
+    labels: trendLabels,
     datasets: [
       {
-        label: 'Daily Revenue',
-        data: [45000, 42000, 68000, 32000, 31000, 54000, 48000, 58000, 38000, 54000, 56000, 68000, 71000, 32000, 48000, 59000, 64000, 35000, 32000, 54000, 58000, 56000, 42000, 48000, 42000, 32000, 41000, 48000, 52000, 31000],
+        label: 'Net Sales',
+        data: trendValues,
         borderColor: '#00F2FF',
         backgroundColor: 'rgba(0, 242, 255, 0.1)',
         borderWidth: 3,
@@ -154,8 +164,8 @@ export default function ProfitLossPage() {
                <h1 className="text-2xl font-rajdhani font-black uppercase mb-0">
                  FINANCIAL <span className="text-brand-neonblue">STATUS</span>
                </h1>
-              <p className="text-[10px] text-muted font-black tracking-[2px] uppercase mt-1">
-                Period: Q2 2026 | Real-time Sales & Expense Analysis
+              <p className="text-[10px] text-brand-neonblue font-black tracking-[2px] uppercase mt-1">
+                Audited Formula: {financialData.formula || "Net Sales - Cost of Goods Sold - Operating Expenses = Net Income"}
               </p>
             </div>
             <div className="flex gap-4 w-full md:w-auto">
@@ -177,31 +187,31 @@ export default function ProfitLossPage() {
           {/* Key Financial Metrics */}
           <div className="responsive-grid mb-6">
             <StatCard 
-              title="Total Sales" 
-              value={`₱${(financialData.revenue / 1000).toFixed(1)}k`} 
+              title="Net Sales" 
+              value={`₱${Number(financialData.revenue || 0).toLocaleString()}`} 
               trend="+12.4%" 
-              subtext="Total Money In" 
+              subtext={`Gross: ₱${Number(financialData.grossSales || 0).toLocaleString()}${financialData.returnsRefunded > 0 ? ` (Less ₱${Number(financialData.returnsRefunded).toLocaleString()} Returns)` : ""}`} 
               icon={PesoSign} 
             />
             <StatCard 
-              title="Item Costs" 
-              value={`₱${(financialData.cogs / 1000).toFixed(1)}k`} 
+              title="Cost of Goods Sold" 
+              value={`₱${Number(financialData.cogs || 0).toLocaleString()}`} 
               trend="-2.1%" 
-              subtext="Buying Stock" 
+              subtext="Inventory Sold Cost" 
               icon={Briefcase} 
             />
             <StatCard 
               title="Gross Profit" 
-              value={`₱${(financialData.grossProfit / 1000).toFixed(1)}k`} 
+              value={`₱${Number(financialData.grossProfit || 0).toLocaleString()}`} 
               trend="+8.1%" 
-              subtext="Profit Margin" 
+              subtext="Net Sales less COGS" 
               icon={Layers} 
             />
             <StatCard 
               title="Net Income" 
-              value={`₱${(financialData.netIncome / 1000).toFixed(1)}k`} 
+              value={`₱${Number(financialData.netIncome || 0).toLocaleString()}`} 
               trend="+15.2%" 
-              subtext="Final Profit" 
+              subtext={`Less ₱${Number(financialData.operatingExpenses || 0).toLocaleString()} Operating Expenses`} 
               icon={Activity} 
             />
           </div>

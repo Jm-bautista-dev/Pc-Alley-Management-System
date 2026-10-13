@@ -7,7 +7,9 @@ const {
   getAllTransfers,
   getTransferById,
   createTransfer,
-  completeTransferRoute
+  dispatchTransferRoute,
+  completeTransferRoute,
+  getTransmittalRoute
 } = require('../controllers/transferController');
 
 router.use(authenticateToken);
@@ -19,6 +21,11 @@ router.get('/:id', [
   validate
 ], getTransferById);
 
+router.get('/:id/transmittal', [
+  param('id').isInt().withMessage('Invalid transfer ID.'),
+  validate
+], getTransmittalRoute);
+
 router.post('/', [
   body('fromBranchId').isInt().withMessage('Source branch ID must be an integer.'),
   body('toBranchId').isInt().withMessage('Destination branch ID must be an integer.'),
@@ -29,7 +36,17 @@ router.post('/', [
   validate
 ], createTransfer);
 
+router.post('/:id/dispatch', [
+  param('id').isInt().withMessage('Invalid transfer ID.'),
+  validate
+], dispatchTransferRoute);
+
 router.post('/:id/complete', [
+  param('id').isInt().withMessage('Invalid transfer ID.'),
+  validate
+], completeTransferRoute);
+
+router.post('/:id/receive', [
   param('id').isInt().withMessage('Invalid transfer ID.'),
   validate
 ], completeTransferRoute);

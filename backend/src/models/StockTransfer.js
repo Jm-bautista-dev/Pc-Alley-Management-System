@@ -23,9 +23,32 @@ const StockTransfer = sequelize.define('StockTransfer', {
       key: 'id'
     }
   },
+  reference_number: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    unique: true
+  },
   status: {
-    type: DataTypes.ENUM('Pending', 'In-Transit', 'Completed'),
+    type: DataTypes.ENUM('Draft', 'Submitted', 'Pending', 'In-Transit', 'Dispatched', 'Received', 'Completed', 'Cancelled'),
     defaultValue: 'Pending'
+  },
+  dispatched_by: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: { model: 'users', key: 'id' }
+  },
+  received_by: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: { model: 'users', key: 'id' }
+  },
+  dispatched_at: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  received_at: {
+    type: DataTypes.DATE,
+    allowNull: true
   },
   notes: {
     type: DataTypes.TEXT

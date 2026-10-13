@@ -4,7 +4,7 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
-import { PackageCheck, Search, Download, Plus, RefreshCw, AlertCircle, TrendingUp, Edit, Clock, ShieldAlert, CheckCircle2, FileDown, Trash2, UploadCloud, Image as ImageIcon } from "lucide-react";
+import { PackageCheck, Search, Download, Plus, RefreshCw, AlertCircle, TrendingUp, Edit, Clock, ShieldAlert, CheckCircle2, FileDown, Trash2, UploadCloud, Image as ImageIcon, Building2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiUrl } from "@/lib/api";
 import { useTheme } from "@/context/ThemeContext";
@@ -141,6 +141,98 @@ import EditProductModal from "./EditProductModal";
 import HistoryModal from "./HistoryModal";
 import DeleteActionModal from "./DeleteActionModal";
 
+const BranchStockModal = ({ product, isOpen, onClose }) => {
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    if (isOpen && product) {
+      setLoading(true);
+      const fetchBranchData = async () => {
+        try {
+          const token = localStorage.getItem("token");
+          const res = await fetch(apiUrl(`/api/inventory/product/${product.id}/branches`), {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (res.ok) {
+            setData(await res.json());
+          } else {
+            toast.error("Failed to load branch stock distribution");
+          }
+        } catch (e) {
+          toast.error("Network error loading branch stock");
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchBranchData();
+    }
+  }, [isOpen, product]);
+
+  if (!isOpen || !product) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        className="bg-brand-surface border border-brand-neonblue/30 rounded-2xl p-6 lg:p-8 max-w-lg w-full shadow-2xl relative"
+      >
+        <div className="flex items-center justify-between mb-6 pb-4 border-b border-border">
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-widest text-brand-neonblue">Branch Stock Distribution</span>
+            <h2 className="text-xl font-rajdhani font-black uppercase text-main mt-0.5">{product.name}</h2>
+          </div>
+          <button onClick={onClose} className="p-2 text-muted hover:text-main rounded-lg hover:bg-brand-bgbase transition-colors font-bold">
+            ✕
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="py-12 text-center text-xs font-bold text-muted animate-pulse uppercase tracking-widest">
+            Aggregating Branch Inventories...
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between bg-brand-bgbase/60 p-4 rounded-xl border border-border">
+              <span className="text-xs font-black uppercase tracking-wider text-muted">Combined Total Stock</span>
+              <span className="text-xl font-black text-brand-neonblue">{data?.totalQuantity ?? product.stock} units</span>
+            </div>
+
+            <div className="max-h-60 overflow-y-auto custom-scrollbar space-y-2">
+              {data?.branches && data.branches.length > 0 ? (
+                data.branches.map((b) => (
+                  <div key={b.branch_id} className="flex items-center justify-between p-3.5 rounded-xl border border-border/50 bg-brand-bgbase/30 hover:bg-brand-bgbase/60 transition-colors">
+                    <div>
+                      <h4 className="text-sm font-bold text-main">{b.branch_name}</h4>
+                      <p className="text-[10px] text-muted uppercase tracking-wider">{b.location || 'Branch Unit'}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className={`text-base font-black ${b.quantity > 0 ? 'text-main' : 'text-muted'}`}>
+                        {b.quantity}
+                      </span>
+                      <span className="text-[10px] text-muted ml-1 uppercase">units</span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="py-8 text-center text-xs text-muted">No branch inventory records found.</div>
+              )}
+            </div>
+
+            <div className="pt-4 border-t border-border flex justify-end">
+              <button onClick={onClose} className="px-6 py-2.5 rounded-xl bg-brand-bgbase border border-border text-xs font-bold text-main hover:bg-brand-surface transition-colors uppercase tracking-wider">
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+      </motion.div>
+    </div>
+  );
+};
+
 export default function StockReportPage() {
   const { theme } = useTheme();
   const router = useRouter();
@@ -155,6 +247,7 @@ export default function StockReportPage() {
   const [activeHistory, setActiveHistory] = useState(null);
   const [activeDelete, setActiveDelete] = useState(null);
   const [activeEdit, setActiveEdit] = useState(null);
+  const [activeBranchStock, setActiveBranchStock] = useState(null);
   const [isAddingProduct, setIsAddingProduct] = useState(false);
 
   // Pagination & sorting state
@@ -222,22 +315,35 @@ export default function StockReportPage() {
         });
       }
     });
-    return inventory.map(item => {
-      const sold = prodSales[item.product_id] || 0;
+
+    // Group inventory rows by product_id so default view shows combined total stock
+    const grouped = {};
+    inventory.forEach(item => {
+      const pid = item.product_id;
+      if (!grouped[pid]) {
+        grouped[pid] = {
+          id: pid,
+          name: item.Product?.name || 'Unknown',
+          category: item.Product?.Category?.name || 'Uncategorized',
+          sku: item.Product?.sku || '',
+          last_purchase_price: item.Product?.last_purchase_price,
+          price: item.Product?.price,
+          stock: 0,
+        };
+      }
+      grouped[pid].stock += Number(item.quantity || 0);
+    });
+
+    return Object.values(grouped).map(item => {
+      const sold = prodSales[item.id] || 0;
       const daily = sold / 30;
-      const daysRem = daily > 0 ? Math.floor(item.quantity / daily) : 999;
+      const daysRem = daily > 0 ? Math.floor(item.stock / daily) : 999;
       let statusGroup = 'Healthy', statusColor = 'text-green-500', badge = 'bg-green-500/10 border-green-500/20';
       if (sold === 0) { statusGroup = 'Dead Stock'; statusColor = 'text-main/50'; badge = 'bg-brand-bgbase border-border'; }
       else if (daysRem <= 5) { statusGroup = 'Critical'; statusColor = 'text-brand-crimson'; badge = 'bg-red-500/10 border-red-500/20'; }
       else if (daysRem <= 10) { statusGroup = 'Low'; statusColor = 'text-orange-500'; badge = 'bg-orange-500/10 border-orange-500/20'; }
       return {
-        id: item.product_id,
-        branch_id: item.branch_id,
-        name: item.Product?.name || 'Unknown',
-        category: item.Product?.Category?.name || 'Uncategorized',
-        last_purchase_price: item.Product?.last_purchase_price,
-        price: item.Product?.price,
-        stock: item.quantity,
+        ...item,
         dailySales: daily.toFixed(1),
         daysRemaining: daysRem > 500 ? '∞' : daysRem,
         statusGroup,
@@ -416,7 +522,20 @@ export default function StockReportPage() {
                         <motion.tr initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }} key={idx} className="border-b border-border/20 text-sm hover:bg-brand-bgbase/30 transition-colors group">
                           <td className="py-4 px-6 font-bold text-main">{item.name}</td>
                           <td className="py-4 px-6 text-xs text-muted/80 font-bold uppercase tracking-wider">{item.category}</td>
-                          <td className="py-4 px-4 text-right font-black text-main text-lg">{item.stock}</td>
+                          <td 
+                            className="py-4 px-4 text-right cursor-pointer group/cell"
+                            onClick={() => setActiveBranchStock(item)}
+                            title="Click to view branch stock distribution"
+                          >
+                            <div className="flex items-center justify-end gap-2">
+                              <span className="font-black text-main text-lg group-hover/cell:text-brand-neonblue transition-colors">
+                                {item.stock}
+                              </span>
+                              <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-brand-neonblue/10 text-brand-neonblue border border-brand-neonblue/20 flex items-center gap-1 group-hover/cell:bg-brand-neonblue group-hover/cell:text-white transition-all">
+                                <Building2 size={10} /> Branches
+                              </span>
+                            </div>
+                          </td>
                           <td className="py-4 px-4 text-center text-xs font-bold text-muted">{item.dailySales}/day</td>
                           <td className={`py-4 px-4 text-center font-black ${item.statusColor}`}>{item.daysRemaining} {item.daysRemaining !== '∞' && 'days'}</td>
                           <td className="py-4 px-4 text-center"><span className={`px-2.5 py-1 text-[9px] font-black uppercase tracking-widest border rounded w-full inline-block ${item.badge} ${item.statusColor}`}>{item.statusGroup}</span></td>
@@ -455,6 +574,7 @@ export default function StockReportPage() {
         {activeHistory && <HistoryModal isOpen={!!activeHistory} onClose={() => setActiveHistory(null)} product={activeHistory} />}
         {activeDelete && <DeleteActionModal product={activeDelete} onClose={() => setActiveDelete(null)} onSuccess={() => { setPage(1); setActiveDelete(null); }} user={user} />}
         {activeRestock && <RestockRequestModal isOpen={!!activeRestock} onClose={() => setActiveRestock(null)} product={activeRestock} />}
+        {activeBranchStock && <BranchStockModal isOpen={!!activeBranchStock} product={activeBranchStock} onClose={() => setActiveBranchStock(null)} />}
       </main>
     </div>
   );

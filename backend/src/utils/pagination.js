@@ -20,6 +20,24 @@ function getPaginationParams(query, defaultLimit = 20) {
   return { page, limit, offset, search, filter, sort };
 }
 
-module.exports = {
-  getPaginationParams
-};
+function pagination({ page = 1, limit = 20, search = '', searchableFields = [] } = {}) {
+  const { Op } = require('sequelize');
+  const params = getPaginationParams({ page, limit, search });
+  const where = {};
+  if (params.search && searchableFields.length > 0) {
+    where[Op.or] = searchableFields.map(field => ({
+      [field]: { [Op.like]: `%${params.search}%` }
+    }));
+  }
+  return {
+    page: params.page,
+    limit: params.limit,
+    offset: params.offset,
+    where,
+    order: [['createdAt', 'DESC']]
+  };
+}
+
+module.exports = pagination;
+module.exports.pagination = pagination;
+module.exports.getPaginationParams = getPaginationParams;

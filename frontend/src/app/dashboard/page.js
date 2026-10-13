@@ -104,11 +104,15 @@ export default function Dashboard() {
         fetch(apiUrl("/api/analytics/best-sellers"), { headers })
       ]);
 
-      if (salesRes.ok) setSalesHistory(limitData(await salesRes.json(), 1000));
+      if (salesRes.ok) {
+        const rawSales = await salesRes.json();
+        const salesList = Array.isArray(rawSales) ? rawSales : (rawSales?.data ?? []);
+        setSalesHistory(limitData(salesList, 1000));
+      }
       if (invRes.ok) {
-  const invData = await invRes.json();
-  setInventory(Array.isArray(invData) ? invData : invData?.data ?? []);
-}
+        const invData = await invRes.json();
+        setInventory(Array.isArray(invData) ? invData : invData?.data ?? []);
+      }
       if (compRes.ok) setComparative(await compRes.json());
       if (dailyRes.ok) setDailyTrends(await dailyRes.json());
       if (perfRes.ok) setPerformance(await perfRes.json());
@@ -147,31 +151,35 @@ export default function Dashboard() {
   };
 
   // --- 1. Line Chart: Revenue & Profit Trend ---
+  const trendLabels = trends.labels?.length > 0 ? trends.labels : ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const trendRevenues = trends.labels?.length > 0 ? trends.revenue : trends.revenueByMonth;
+  const trendProfits = trends.labels?.length > 0 ? trends.profit : trends.profitByMonth;
+
   const lineChartData = {
-    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+    labels: trendLabels,
     datasets: [
       {
         label: 'Revenue',
-        data: trends.revenueByMonth,
+        data: trendRevenues,
         borderColor: '#0EA5E9',
         backgroundColor: 'rgba(14, 165, 233, 0.1)',
         borderWidth: 3,
         tension: 0.4,
         fill: true,
         pointBackgroundColor: '#0EA5E9',
-        pointRadius: 0,
+        pointRadius: trends.labels?.length > 0 ? 3 : 0,
         pointHoverRadius: 6,
       },
       {
-        label: 'Est. Profit',
-        data: trends.profitByMonth,
+        label: 'Est. Margin / Profit',
+        data: trendProfits,
         borderColor: '#10B981',
         backgroundColor: 'transparent',
         borderWidth: 2,
         tension: 0.4,
         fill: false,
         pointBackgroundColor: '#10B981',
-        pointRadius: 0,
+        pointRadius: trends.labels?.length > 0 ? 3 : 0,
         pointHoverRadius: 6,
       }
     ]
@@ -446,7 +454,7 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <div className="flex-1 min-h-[250px] md:min-h-[300px]">
-                  {salesHistory.length > 0 && currentRevenue > 0 ? (
+                  {salesHistory.length > 0 && (trends.hasData || currentRevenue > 0) ? (
                     <Line data={lineChartData} options={lineChartOptions} />
                   ) : (
                     <div className="h-full w-full flex flex-col items-center justify-center text-muted border border-dashed border-border/20 rounded-xl bg-brand-bgbase/20 p-8">

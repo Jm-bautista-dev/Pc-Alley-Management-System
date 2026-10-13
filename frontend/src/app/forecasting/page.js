@@ -738,7 +738,7 @@ function ForecastingPageContent() {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 10 }}
                         transition={{ duration: 0.15 }}
-                        className="absolute left-0 mt-2 bg-brand-surface border border-border rounded-2xl p-4 shadow-xl z-[200] w-[460px] flex gap-4"
+                        className="absolute right-0 left-auto mt-2 bg-brand-surface border border-border rounded-2xl p-4 shadow-xl z-[200] w-[460px] max-w-[95vw] flex gap-4"
                       >
                         {/* Quick Presets left panel */}
                         <div className="w-[130px] border-r border-border/60 pr-3 flex flex-col gap-1.5 shrink-0">

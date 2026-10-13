@@ -37,7 +37,7 @@ const register = async (req, res) => {
     }
 
     const allowedRolesByCreator = {
-      super_admin: ['branch_admin', 'employee'],
+      super_admin: ['super_admin', 'branch_admin', 'employee'],
       branch_admin: ['employee']
     };
 
@@ -46,7 +46,7 @@ const register = async (req, res) => {
       return res.status(403).json({
         message: req.user.role === 'branch_admin'
           ? 'Managers can only provision Staff accounts'
-          : 'Admins can only provision Manager or Staff accounts'
+          : 'Super Admins can provision Super Admin, Manager, or Staff accounts'
       });
     }
 
@@ -58,11 +58,11 @@ const register = async (req, res) => {
       ? normalizeBranchId(req.user.branch_id)
       : normalizeBranchId(branch_id);
 
-    if (normalizedBranchId === null) {
+    if (role !== 'super_admin' && normalizedBranchId === null) {
       return res.status(400).json({ message: 'A branch assignment is required for Manager and Staff accounts' });
     }
 
-    if (Number.isNaN(normalizedBranchId)) {
+    if (role !== 'super_admin' && Number.isNaN(normalizedBranchId)) {
       return res.status(400).json({ message: 'Invalid branch assignment' });
     }
 
@@ -70,9 +70,11 @@ const register = async (req, res) => {
       return res.status(403).json({ message: 'Managers can only provision accounts for their own sector' });
     }
 
-    const branch = await Branch.findByPk(normalizedBranchId);
-    if (!branch) {
-      return res.status(404).json({ message: 'Assigned branch does not exist' });
+    if (normalizedBranchId !== null) {
+      const branch = await Branch.findByPk(normalizedBranchId);
+      if (!branch) {
+        return res.status(404).json({ message: 'Assigned branch does not exist' });
+      }
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -82,9 +84,22 @@ const register = async (req, res) => {
       username,
       password: hashedPassword,
       role,
-      branch_id: normalizedBranchId
+      branch_id: role === 'super_admin' ? (normalizedBranchId || null) : normalizedBranchId,
+      is_active: true
     });
-    res.status(201).json({ message: 'User provisioned successfully', userId: user.id });
+    res.status(201).json({
+      message: 'User provisioned successfully',
+      userId: user.id,
+      user: {
+        id: user.id,
+        username: user.username,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        role: user.role,
+        branch_id: user.branch_id,
+        is_active: user.is_active
+      }
+    });
   } catch (error) {
     if (error.name === 'SequelizeUniqueConstraintError') {
       return res.status(409).json({ message: 'A duplicate database value blocked this registration. Please restart the backend so account migrations can run, then try again.' });
@@ -121,6 +136,11 @@ const login = async (req, res) => {
     if (!user) {
       console.warn(`[AUTH] Login failed: Password mismatch for user: ${username}`);
       return res.status(401).json({ message: 'Incorrect Username or Password' });
+    }
+
+    if (user.is_active === false) {
+      console.warn(`[AUTH] Login blocked: User account is disabled: ${username}`);
+      return res.status(403).json({ message: 'Account is disabled. Please contact administrator.' });
     }
 
     console.log(`[AUTH] User successfully authenticated: ${username} (Role: ${user.role})`);
@@ -264,4 +284,49 @@ const changePassword = async (req, res) => {
   }
 };
 
-module.exports = { register, login, getUsers, updateProfile, changePassword };
+const toggleUserStatus = async (req, res) => {
+  try {
+    const { AuditLog } = require('../models');
+    const user = await User.findByPk(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Branch admins can only toggle users in their own branch
+    if (req.user.role === 'branch_admin' && user.branch_id !== req.user.branch_id) {
+      return res.status(403).json({ message: 'Access denied: Cannot modify users from other branches' });
+    }
+
+    // Prevent self lockout
+    if (user.id === req.user.id) {
+      return res.status(400).json({ message: 'Cannot disable your own account' });
+    }
+
+    const { is_active } = req.body;
+    const newStatus = is_active !== undefined ? Boolean(is_active) : !user.is_active;
+    user.is_active = newStatus;
+    await user.save();
+
+    await AuditLog.create({
+      action: newStatus ? 'USER_ENABLED' : 'USER_DISABLED',
+      user_id: req.user.id,
+      details: `${newStatus ? 'Enabled' : 'Disabled'} account for user ${user.username} (ID: ${user.id})`,
+      ip_address: req.ip
+    });
+
+    res.json({
+      message: `User account ${newStatus ? 'enabled' : 'disabled'} successfully`,
+      is_active: user.is_active,
+      user: {
+        id: user.id,
+        username: user.username,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        role: user.role,
+        is_active: user.is_active
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+module.exports = { register, login, getUsers, updateProfile, changePassword, toggleUserStatus };

@@ -349,12 +349,14 @@ const createServiceJob = async (req, res) => {
   }
 };
 
+const { sendServiceStatusEmail } = require('../services/notificationEmailService');
+
 const updateServiceJobStatus = async (req, res) => {
   try {
     const job = await ServiceJob.findByPk(req.params.id);
     if (!job) return res.status(404).json({ error: 'Service job not found' });
 
-    const { status, diagnosis, final_price, price_override_reason, customer_approved } = req.body;
+    const { status, diagnosis, final_price, price_override_reason, customer_approved, technician_id } = req.body;
     const validStatuses = ['received', 'diagnosing', 'waiting_for_approval', 'in_progress', 'ready_for_release', 'completed', 'cancelled'];
 
     if (status && !validStatuses.includes(status)) {
@@ -367,6 +369,19 @@ const updateServiceJobStatus = async (req, res) => {
         return res.status(400).json({ error: 'Final price must be between ₱0.00 and ₱1,000,000.00' });
       }
       job.final_price = fp;
+    }
+
+    // Technician assignment (Finding E)
+    if (technician_id !== undefined) {
+      if (!technician_id) {
+        job.technician_id = null;
+        job.technician_name = null;
+      } else {
+        const tech = await User.findByPk(technician_id);
+        if (!tech) return res.status(400).json({ error: 'Assigned technician not found' });
+        job.technician_id = tech.id;
+        job.technician_name = req.body.technician_name || `${tech.first_name || ''} ${tech.last_name || ''}`.trim() || tech.username;
+      }
     }
 
     const prevStatus = job.status;
@@ -384,6 +399,20 @@ const updateServiceJobStatus = async (req, res) => {
 
     await job.save();
 
+    // Trigger customer email notification on meaningful state transitions (Finding F)
+    if (status && prevStatus !== status && (status === 'in_progress' || status === 'ready_for_release')) {
+      try {
+        const customer = job.customer_id ? await Customer.findByPk(job.customer_id) : null;
+        const branch = await Branch.findByPk(job.branch_id);
+        const customerEmail = req.body.customer_email || customer?.email || job.customer_email;
+        sendServiceStatusEmail({ job: { ...job.toJSON(), customer_email: customerEmail }, customer, branch, status }).catch(mailErr => {
+          console.warn('[SERVICE_MAIL] Email dispatch failed asynchronously:', mailErr.message);
+        });
+      } catch (err) {
+        console.warn('[SERVICE_MAIL] Could not load customer/branch details for email:', err.message);
+      }
+    }
+
     await AuditLog.create({
       action: 'SERVICE_JOB_STATUS_UPDATED',
       user_id: req.user?.id || null,
@@ -397,6 +426,11 @@ const updateServiceJobStatus = async (req, res) => {
   }
 };
 
+const getServiceEmailLogs = (req, res) => {
+  const { getSentEmails } = require('../services/notificationEmailService');
+  res.json(getSentEmails());
+};
+
 module.exports = {
   getServices,
   getServiceById,
@@ -407,5 +441,6 @@ module.exports = {
   getServiceJobs,
   getServiceJobById,
   createServiceJob,
-  updateServiceJobStatus
+  updateServiceJobStatus,
+  getServiceEmailLogs
 };

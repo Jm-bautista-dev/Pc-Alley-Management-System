@@ -7,6 +7,22 @@ const Warranty = sequelize.define('Warranty', {
     autoIncrement: true,
     primaryKey: true
   },
+  customer_id: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: {
+      model: 'customers',
+      key: 'id'
+    }
+  },
+  sale_id: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: {
+      model: 'sales',
+      key: 'id'
+    }
+  },
   customer_name: {
     type: DataTypes.STRING,
     allowNull: false

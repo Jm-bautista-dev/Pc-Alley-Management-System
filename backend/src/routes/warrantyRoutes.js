@@ -3,13 +3,19 @@ const router = express.Router();
 const { body, param } = require('express-validator');
 const validate = require('../middleware/validate');
 const { authenticateToken } = require('../middleware/authMiddleware');
-const { Warranty } = require('../models');
+const { Warranty, Customer, Sale } = require('../models');
 
 router.use(authenticateToken);
 
 router.get('/', async (req, res) => {
   try {
-    const warranties = await Warranty.findAll({ order: [['createdAt', 'DESC']] });
+    const warranties = await Warranty.findAll({
+      include: [
+        { model: Customer, attributes: ['id', 'name', 'email', 'phone'] },
+        { model: Sale, attributes: ['id', 'invoiceNumber', 'totalAmount', 'createdAt'] }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
     res.json(warranties);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -23,6 +29,8 @@ router.post('/', [
     .isLength({ min: 2, max: 100 }).withMessage('Customer name must be between 2 and 100 characters.')
     .custom(val => !/\d/.test(val)).withMessage('Customer name cannot contain numbers.')
     .matches(/^[A-Za-z\s.\'-]+$/).withMessage('Customer name can only contain letters, spaces, hyphens, apostrophes, and dots.'),
+  body('customer_id').optional({ checkFalsy: true }).isUUID().withMessage('Invalid customer ID.'),
+  body('sale_id').optional({ checkFalsy: true }).isUUID().withMessage('Invalid sale ID.'),
   body('valid_until')
     .optional({ checkFalsy: true })
     .isISO8601().withMessage('Valid until must be a valid date.'),
@@ -36,9 +44,11 @@ router.post('/', [
   validate
 ], async (req, res) => {
   try {
-    const { customer_name, valid_until, items, note, subtotal, status } = req.body;
+    const { customer_name, customer_id, sale_id, valid_until, items, note, subtotal, status } = req.body;
     const warranty = await Warranty.create({
       customer_name: customer_name.trim(),
+      customer_id: customer_id || null,
+      sale_id: sale_id || null,
       valid_until: valid_until || null,
       items: items || null,
       note: note ? note.trim().slice(0, 1000) : '',

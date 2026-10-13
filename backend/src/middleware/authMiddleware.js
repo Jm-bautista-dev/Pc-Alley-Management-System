@@ -23,7 +23,7 @@ const authenticateToken = (req, res, next) => {
     });
   }
 
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+  jwt.verify(token, process.env.JWT_SECRET, async (err, user) => {
     if (err) {
       console.error(`[AUTH] Token validation failed for ${req.url}: ${err.name} - ${err.message}`);
       if (err.name === 'TokenExpiredError') {
@@ -38,6 +38,20 @@ const authenticateToken = (req, res, next) => {
         message: 'Invalid authentication token. Please sign in again.'
       });
     }
+
+    try {
+      const { User } = require('../models');
+      const dbUser = await User.findByPk(user.id, { attributes: ['id', 'is_active'] });
+      if (dbUser && dbUser.is_active === false) {
+        return res.status(403).json({
+          code: 'ACCOUNT_DISABLED',
+          message: 'Account has been disabled. Access denied.'
+        });
+      }
+    } catch (dbErr) {
+      // Non-blocking fallback
+    }
+
     req.user = user;
     next();
   });

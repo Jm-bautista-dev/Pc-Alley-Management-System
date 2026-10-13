@@ -852,9 +852,15 @@ const getForecastingAnalytics = async (req, res) => {
       return { slope, intercept };
     };
 
-    // 5. Validation Split
-    let mae = 0, rmse = 0, accuracy = 100.0, confidence = "High";
-    if (preparedData.length >= 3) {
+    // 5. Validation Split & Data Sufficiency Audit (Finding O)
+    let mae = 0, rmse = 0, accuracy = 0, confidence = "Low";
+    const nonZeroDataPoints = preparedData.filter(d => d.revenue > 0).length;
+    const hasInsufficientData = preparedData.length < 3 || nonZeroDataPoints < 2;
+
+    if (hasInsufficientData) {
+      confidence = "Insufficient Data (minimum 3 historical periods required)";
+      accuracy = 0.0;
+    } else {
       const splitIdx = Math.round(preparedData.length * 0.8);
       const trainSet = preparedData.slice(0, splitIdx);
       const testSet = preparedData.slice(splitIdx);
@@ -871,7 +877,7 @@ const getForecastingAnalytics = async (req, res) => {
         mae = parseFloat((errorSum / testSet.length).toFixed(2));
         rmse = parseFloat(Math.sqrt(squaredErrorSum / testSet.length).toFixed(2));
         const meanActual = actualSum / testSet.length;
-        accuracy = meanActual > 0 ? parseFloat((Math.max(0, 1 - (mae / meanActual)) * 100).toFixed(1)) : 100.0;
+        accuracy = meanActual > 0 ? parseFloat((Math.max(0, 1 - (mae / meanActual)) * 100).toFixed(1)) : 0.0;
         confidence = accuracy < 70 ? "Low" : (accuracy <= 85 ? "Medium" : "High");
       }
     }
@@ -1011,13 +1017,23 @@ const getForecastingAnalytics = async (req, res) => {
     }
 
     res.json({
+      metric: "Sales Revenue (₱)",
+      basis: {
+        model: "Ordinary Least Squares Linear Trend with 80/20 Cross-Validation",
+        historyWindow: `${computedStart} to ${computedEnd}`,
+        metric: "Sales Revenue (₱)",
+        timeHorizon: horizon,
+        grouping: groupBy
+      },
+      hasInsufficientData,
+      dataWarning: hasInsufficientData ? "Insufficient historical records to generate reliable statistical predictions (minimum 3 periods required)." : null,
       mae,
       rmse,
       accuracy,
       confidence,
-      predictedSales: nextMonthProj.predictedRevenue,
-      predictedInventoryUsage: nextMonthProj.predictedInventory,
-      predictedDemand: nextMonthProj.predictedDemand,
+      predictedSales: Math.max(0, nextMonthProj.predictedRevenue),
+      predictedInventoryUsage: Math.max(0, nextMonthProj.predictedInventory),
+      predictedDemand: Math.max(0, nextMonthProj.predictedDemand),
       growthPercentage: growthPercent,
       trends: preparedData,
       projections,
@@ -1349,6 +1365,135 @@ const getBrandAnalytics = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────
+// PROFIT & LOSS AUDIT ENDPOINT (Finding M)
+// ─────────────────────────────────────────────────────────────────
+const getProfitLoss = async (req, res) => {
+  try {
+    const { Expense, Return } = require('../models');
+    const branchId = req.user.role !== 'super_admin' ? req.user.branch_id : req.query.branchId;
+    const { days = 30, startDate, endDate } = req.query;
+
+    const saleWhere = { status: 'completed' };
+    const expWhere = {};
+    const returnWhere = { status: 'Approved' };
+
+    if (branchId) {
+      saleWhere.branchId = branchId;
+      expWhere.branch_id = branchId;
+      returnWhere.branch_id = branchId;
+    }
+
+    let dStart, dEnd;
+    if (startDate && endDate) {
+      dStart = new Date(startDate);
+      dEnd = new Date(new Date(endDate).setHours(23, 59, 59, 999));
+    } else {
+      dEnd = new Date();
+      dStart = new Date();
+      dStart.setDate(dStart.getDate() - parseInt(days));
+    }
+
+    saleWhere.createdAt = { [Op.between]: [dStart, dEnd] };
+    expWhere.createdAt = { [Op.between]: [dStart, dEnd] };
+    returnWhere.createdAt = { [Op.between]: [dStart, dEnd] };
+
+    // 1. Completed Sales and Items
+    const sales = await Sale.findAll({
+      where: saleWhere,
+      include: [
+        {
+          model: SaleItem,
+          include: [{ model: Product, attributes: ['id', 'name', 'last_purchase_price', 'price'] }]
+        }
+      ]
+    });
+
+    let grossRevenue = 0;
+    let cogs = 0;
+    const dailyMap = {};
+
+    sales.forEach(sale => {
+      const dateKey = new Date(sale.createdAt).toISOString().split('T')[0];
+      if (!dailyMap[dateKey]) {
+        dailyMap[dateKey] = { revenue: 0, cogs: 0, expenses: 0 };
+      }
+
+      const saleAmt = parseFloat(sale.totalAmount || 0);
+      grossRevenue += saleAmt;
+      dailyMap[dateKey].revenue += saleAmt;
+
+      if (Array.isArray(sale.SaleItems)) {
+        sale.SaleItems.forEach(item => {
+          if (item.productId && item.Product) {
+            const unitCost = parseFloat(item.Product.last_purchase_price || item.Product.price || 0);
+            const lineCost = unitCost * (parseInt(item.quantity) || 1);
+            cogs += lineCost;
+            dailyMap[dateKey].cogs += lineCost;
+          }
+        });
+      }
+    });
+
+    // 2. Approved Returns / Refunds
+    let totalRefunds = 0;
+    try {
+      const returns = await Return.findAll({ where: returnWhere });
+      returns.forEach(ret => {
+        totalRefunds += parseFloat(ret.refund_amount || 0);
+      });
+    } catch (e) {
+      // Returns table optional check
+    }
+
+    // 3. Operating Expenses
+    let operatingExpenses = 0;
+    try {
+      const expenses = await Expense.findAll({ where: expWhere });
+      expenses.forEach(exp => {
+        const amt = parseFloat(exp.amount || 0);
+        operatingExpenses += amt;
+        const dateKey = new Date(exp.createdAt).toISOString().split('T')[0];
+        if (!dailyMap[dateKey]) {
+          dailyMap[dateKey] = { revenue: 0, cogs: 0, expenses: 0 };
+        }
+        dailyMap[dateKey].expenses += amt;
+      });
+    } catch (e) {
+      // Expenses table optional check
+    }
+
+    const netSales = Math.max(0, parseFloat((grossRevenue - totalRefunds).toFixed(2)));
+    cogs = parseFloat(cogs.toFixed(2));
+    const grossProfit = parseFloat((netSales - cogs).toFixed(2));
+    operatingExpenses = parseFloat(operatingExpenses.toFixed(2));
+    const netIncome = parseFloat((grossProfit - operatingExpenses).toFixed(2));
+
+    const trends = Object.keys(dailyMap).sort().map(d => ({
+      date: d,
+      revenue: parseFloat(dailyMap[d].revenue.toFixed(2)),
+      cogs: parseFloat(dailyMap[d].cogs.toFixed(2)),
+      expenses: parseFloat(dailyMap[d].expenses.toFixed(2)),
+      profit: parseFloat((dailyMap[d].revenue - dailyMap[d].cogs - dailyMap[d].expenses).toFixed(2))
+    }));
+
+    res.json({
+      revenue: netSales,
+      grossSales: parseFloat(grossRevenue.toFixed(2)),
+      refunds: parseFloat(totalRefunds.toFixed(2)),
+      returnsRefunded: parseFloat(totalRefunds.toFixed(2)),
+      netSales,
+      cogs,
+      grossProfit,
+      operatingExpenses,
+      netIncome,
+      trends
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   getDashboardMetrics,
   getBranchPerformance,
@@ -1360,5 +1505,6 @@ module.exports = {
   getForecastingAnalytics,
   getPrescriptiveAnalytics,
   getForecastingBenchmark,
-  getBrandAnalytics
+  getBrandAnalytics,
+  getProfitLoss
 };
