@@ -1488,6 +1488,23 @@ const getProfitLossAnalytics = async (req, res) => {
       order: [['expenseDate', 'ASC']]
     });
 
+    // Helper to compute COGS per sale item accurately
+    const computeItemCogs = (item) => {
+      const itemType = (item.item_type || (item.serviceId ? 'service' : 'product')).toLowerCase();
+      if (itemType !== 'product') return 0; // Services carry no material COGS
+      const qty = parseInt(item.quantity, 10) || 1;
+      const product = item.Product;
+      let unitCost = 0;
+      if (product && product.last_purchase_price !== null && product.last_purchase_price !== undefined && parseFloat(product.last_purchase_price) > 0) {
+        unitCost = parseFloat(product.last_purchase_price);
+      } else if (product && product.price && parseFloat(product.price) > 0) {
+        unitCost = parseFloat(product.price) * 0.70;
+      } else if (item.unitPrice && parseFloat(item.unitPrice) > 0) {
+        unitCost = parseFloat(item.unitPrice) * 0.70;
+      }
+      return unitCost * qty;
+    };
+
     // Compute Summary Totals
     let totalRevenue = 0;
     let totalCogs = 0;
@@ -1499,20 +1516,7 @@ const getProfitLossAnalytics = async (req, res) => {
 
       if (sale.SaleItems && sale.SaleItems.length > 0) {
         sale.SaleItems.forEach(item => {
-          const qty = parseInt(item.quantity, 10) || 1;
-          const itemType = (item.item_type || (item.serviceId ? 'service' : 'product')).toLowerCase();
-          if (itemType === 'product') {
-            const product = item.Product;
-            let unitCost = 0;
-            if (product && product.last_purchase_price !== null && product.last_purchase_price !== undefined) {
-              unitCost = parseFloat(product.last_purchase_price);
-            } else if (product && product.price) {
-              unitCost = parseFloat(product.price) * 0.70; // 30% margin fallback
-            } else if (item.unitPrice) {
-              unitCost = parseFloat(item.unitPrice) * 0.70;
-            }
-            totalCogs += unitCost * qty;
-          }
+          totalCogs += computeItemCogs(item);
         });
       }
     });
@@ -1531,13 +1535,31 @@ const getProfitLossAnalytics = async (req, res) => {
     const grossMargin = totalRevenue > 0 ? parseFloat(((grossProfit / totalRevenue) * 100).toFixed(1)) : 0;
     const netMargin = totalRevenue > 0 ? parseFloat(((netIncome / totalRevenue) * 100).toFixed(1)) : 0;
 
-    // Daily trends (last 30 days)
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    thirtyDaysAgo.setHours(0, 0, 0, 0);
+    // Dynamic daily trends range
+    let trendDays = 30;
+    if (days && !isNaN(parseInt(days, 10))) {
+      trendDays = Math.min(Math.max(parseInt(days, 10), 1), 365);
+    } else if (startDate && endDate) {
+      const s = new Date(startDate);
+      const e = new Date(endDate);
+      const diff = Math.ceil((e - s) / (1000 * 60 * 60 * 24)) + 1;
+      trendDays = Math.min(Math.max(diff, 1), 365);
+    } else if (days === 'all' || !days) {
+      if (sales.length > 0) {
+        const earliestSale = new Date(sales[0].createdAt);
+        const daysFromEarliest = Math.ceil((new Date() - earliestSale) / (1000 * 60 * 60 * 24)) + 1;
+        trendDays = Math.min(Math.max(daysFromEarliest, 30), 365);
+      } else {
+        trendDays = 30;
+      }
+    }
+
+    const trendCutoff = new Date();
+    trendCutoff.setDate(trendCutoff.getDate() - trendDays);
+    trendCutoff.setHours(0, 0, 0, 0);
 
     const dailyMap = {};
-    for (let i = 29; i >= 0; i--) {
+    for (let i = trendDays - 1; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const key = d.toISOString().split('T')[0];
@@ -1547,7 +1569,7 @@ const getProfitLossAnalytics = async (req, res) => {
 
     sales.forEach(sale => {
       const saleDate = new Date(sale.createdAt);
-      if (saleDate >= thirtyDaysAgo) {
+      if (saleDate >= trendCutoff) {
         const key = saleDate.toISOString().split('T')[0];
         if (dailyMap[key]) {
           const rev = parseFloat(sale.totalAmount || 0);
@@ -1555,12 +1577,7 @@ const getProfitLossAnalytics = async (req, res) => {
           let cogs = 0;
           if (sale.SaleItems) {
             sale.SaleItems.forEach(item => {
-              const qty = parseInt(item.quantity, 10) || 1;
-              if ((item.item_type || 'product').toLowerCase() === 'product') {
-                const p = item.Product;
-                const cost = p?.last_purchase_price ? parseFloat(p.last_purchase_price) : (parseFloat(item.unitPrice || 0) * 0.70);
-                cogs += cost * qty;
-              }
+              cogs += computeItemCogs(item);
             });
           }
           dailyMap[key].cogs += cogs;
@@ -1570,7 +1587,7 @@ const getProfitLossAnalytics = async (req, res) => {
 
     expenses.forEach(exp => {
       const expDate = new Date(exp.expenseDate || exp.createdAt);
-      if (expDate >= thirtyDaysAgo) {
+      if (expDate >= trendCutoff) {
         const key = expDate.toISOString().split('T')[0];
         if (dailyMap[key]) {
           dailyMap[key].expenses += parseFloat(exp.amount || 0);
@@ -1593,12 +1610,12 @@ const getProfitLossAnalytics = async (req, res) => {
       };
     });
 
-    // Monthly breakdown across the last 12 calendar months
+    // Monthly breakdown across the last 12 calendar months (latest month first)
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     const monthlyMap = {};
     
     const now = new Date();
-    for (let i = 11; i >= 0; i--) {
+    for (let i = 0; i < 12; i++) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const mIdx = d.getMonth();
       const yr = d.getFullYear();
@@ -1613,7 +1630,8 @@ const getProfitLossAnalytics = async (req, res) => {
         expenses: 0,
         profit: 0,
         margin: 0,
-        status: 'positive'
+        hasActivity: false,
+        status: 'neutral'
       };
     }
 
@@ -1626,12 +1644,7 @@ const getProfitLossAnalytics = async (req, res) => {
         let cogs = 0;
         if (sale.SaleItems) {
           sale.SaleItems.forEach(item => {
-            const qty = parseInt(item.quantity, 10) || 1;
-            if ((item.item_type || 'product').toLowerCase() === 'product') {
-              const p = item.Product;
-              const cost = p?.last_purchase_price ? parseFloat(p.last_purchase_price) : (parseFloat(item.unitPrice || 0) * 0.70);
-              cogs += cost * qty;
-            }
+            cogs += computeItemCogs(item);
           });
         }
         monthlyMap[key].cogs += cogs;
@@ -1653,6 +1666,15 @@ const getProfitLossAnalytics = async (req, res) => {
       const gp = parseFloat((rev - cogs).toFixed(2));
       const np = parseFloat((gp - exp).toFixed(2));
       const margin = rev > 0 ? parseFloat(((np / rev) * 100).toFixed(1)) : 0;
+      const hasActivity = rev > 0 || exp > 0 || cogs > 0;
+      
+      let status = 'neutral';
+      if (hasActivity) {
+        if (np > 0) status = 'positive';
+        else if (np < 0) status = 'negative';
+        else status = 'breakeven';
+      }
+
       return {
         month: m.month,
         year: m.year,
@@ -1663,7 +1685,8 @@ const getProfitLossAnalytics = async (req, res) => {
         expenses: exp,
         profit: np,
         margin,
-        status: np >= 0 ? 'positive' : 'negative'
+        hasActivity,
+        status
       };
     });
 

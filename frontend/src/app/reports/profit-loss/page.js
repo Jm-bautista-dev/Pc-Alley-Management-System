@@ -57,6 +57,8 @@ export default function ProfitLossPage() {
   const [branches, setBranches] = useState([]);
   const [selectedBranch, setSelectedBranch] = useState("");
   const [periodFilter, setPeriodFilter] = useState("all");
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [hideInactiveMonths, setHideInactiveMonths] = useState(false);
 
   const [pnlData, setPnlData] = useState({
     summary: {
@@ -100,8 +102,8 @@ export default function ProfitLossPage() {
     }
   };
 
-  const fetchPnlData = async () => {
-    setLoading(true);
+  const fetchPnlData = async (isBackground = false) => {
+    if (!isBackground) setLoading(true);
     const token = localStorage.getItem("token");
     try {
       let query = `?`;
@@ -115,19 +117,27 @@ export default function ProfitLossPage() {
       if (res.ok) {
         const data = await res.json();
         setPnlData(data);
-      } else {
+        setLastUpdated(new Date());
+      } else if (!isBackground) {
         showError("Failed to load profit & loss analytics.");
       }
     } catch (err) {
       console.error("Error fetching P&L data:", err);
-      showError("Connection error while loading financial report.");
+      if (!isBackground) {
+        showError("Connection error while loading financial report.");
+      }
     } finally {
-      setLoading(false);
+      if (!isBackground) setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchPnlData();
+    // Realtime background polling every 30 seconds
+    const interval = setInterval(() => {
+      fetchPnlData(true);
+    }, 30000);
+    return () => clearInterval(interval);
   }, [selectedBranch, periodFilter]);
 
   const { summary, trends, monthly } = pnlData;
@@ -201,6 +211,17 @@ export default function ProfitLossPage() {
     }
   };
 
+  const displayedMonthly = hideInactiveMonths ? monthly.filter(m => m.hasActivity) : monthly;
+
+  const getChartTitle = () => {
+    switch (periodFilter) {
+      case '30': return 'REVENUE & EXPENSE FLOW (30-DAY DAILY TELEMETRY)';
+      case '90': return 'REVENUE & EXPENSE FLOW (90-DAY DAILY TELEMETRY)';
+      case '365': return 'REVENUE & EXPENSE FLOW (365-DAY ANNUAL TELEMETRY)';
+      default: return 'REVENUE & EXPENSE FLOW (ALL-TIME TELEMETRY)';
+    }
+  };
+
   const handleExport = () => {
     const exportSummary = [
       { Metric: 'Total Revenue', Amount: summary.revenue, Notes: `Gross sales from ${summary.totalSalesCount} transactions` },
@@ -210,7 +231,7 @@ export default function ProfitLossPage() {
       { Metric: 'Net Income', Amount: summary.netIncome, Notes: `Net Margin: ${summary.netMargin}%` }
     ];
 
-    const exportMonthly = monthly.map(m => ({
+    const exportMonthly = displayedMonthly.map(m => ({
       Month: m.month,
       Year: m.year,
       Revenue: m.revenue,
@@ -218,8 +239,8 @@ export default function ProfitLossPage() {
       'Gross Profit': m.grossProfit,
       Expenses: m.expenses,
       'Net Profit': m.profit,
-      'Margin %': `${m.margin}%`,
-      Status: m.status
+      'Margin %': m.revenue > 0 ? `${m.margin}%` : 'N/A',
+      Status: m.status === 'positive' ? 'Profitable' : m.status === 'negative' ? 'Deficit' : m.status === 'breakeven' ? 'Break-Even' : 'No Activity'
     }));
 
     try {
@@ -247,9 +268,18 @@ export default function ProfitLossPage() {
                 <h1 className="text-2xl font-rajdhani font-black uppercase mb-0">
                   FINANCIAL <span className="text-brand-neonblue">STATUS</span>
                 </h1>
-                <p className="text-[10px] text-muted font-black tracking-[2px] uppercase mt-1">
-                  Real-time Sales, COGS & Operating Expense Analysis
-                </p>
+                <div className="flex flex-wrap items-center gap-3 mt-1.5">
+                  <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-black text-emerald-400 uppercase tracking-widest">
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                    </span>
+                    LIVE REAL-TIME SYNC
+                  </span>
+                  <span className="text-[10px] text-muted font-bold">
+                    {lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : 'Synchronizing...'}
+                  </span>
+                </div>
               </div>
 
               {/* Filters & Actions */}
@@ -292,11 +322,12 @@ export default function ProfitLossPage() {
                 </div>
 
                 <button 
-                  onClick={fetchPnlData}
-                  className="h-9 px-3 bg-brand-surface border border-border rounded-lg flex items-center justify-center gap-1 text-[10px] font-black uppercase tracking-widest hover:bg-brand-hover text-muted hover:text-main transition-all"
-                  title="Refresh Data"
+                  onClick={() => fetchPnlData(false)}
+                  className="h-9 px-3 bg-brand-surface border border-border rounded-lg flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-widest hover:bg-brand-hover text-muted hover:text-main transition-all"
+                  title="Refresh Financial Data"
                 >
-                  <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
+                  <RefreshCw size={12} className={loading ? "animate-spin text-brand-neonblue" : ""} />
+                  <span className="hidden sm:inline">Sync</span>
                 </button>
 
                 <button 
@@ -335,7 +366,7 @@ export default function ProfitLossPage() {
                 title="Net Income" 
                 value={`₱${Number(summary.netIncome).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} 
                 trend={`${summary.netMargin}% Margin`} 
-                subtext={`After ₱${Number(summary.operatingExpenses).toLocaleString()} Expenses`} 
+                subtext={`After ₱${Number(summary.operatingExpenses).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Operating Expenses`} 
                 icon={Activity} 
               />
             </div>
@@ -350,7 +381,7 @@ export default function ProfitLossPage() {
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-3">
                     <div className="w-1.5 h-6 bg-brand-neonblue rounded-full" />
-                    <h3 className="text-sm font-rajdhani font-black uppercase text-main tracking-widest">REVENUE & EXPENSE FLOW (30-DAY DAILY TELEMETRY)</h3>
+                    <h3 className="text-sm font-rajdhani font-black uppercase text-main tracking-widest">{getChartTitle()}</h3>
                   </div>
                   <span className="text-[10px] font-black uppercase tracking-widest text-muted">
                     {trends.length} Active Days
@@ -375,19 +406,33 @@ export default function ProfitLossPage() {
               transition={{ delay: 0.1 }}
               className="bg-brand-surface border border-border rounded-2xl overflow-hidden shadow-sm mb-6"
             >
-              <div className="p-6 border-b border-border flex items-center justify-between bg-white/[0.02]">
+              <div className="p-6 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/[0.02]">
                 <div className="flex items-center gap-3">
                   <div className="w-1.5 h-6 bg-green-500 rounded-full" />
-                  <h3 className="text-sm font-rajdhani font-black uppercase text-main tracking-widest">Monthly Financial Breakdown</h3>
+                  <div>
+                    <h3 className="text-sm font-rajdhani font-black uppercase text-main tracking-widest">Monthly Financial Breakdown</h3>
+                    <p className="text-[10px] font-bold text-muted uppercase tracking-wider">
+                      Live Ledger (Past 12 Months)
+                    </p>
+                  </div>
                 </div>
-                <span className="text-[10px] font-black text-muted uppercase tracking-widest">
-                  Live Monthly Ledger (Past 12 Months)
-                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setHideInactiveMonths(!hideInactiveMonths)}
+                    className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg border transition-all ${
+                      hideInactiveMonths 
+                        ? 'bg-brand-neonblue/10 border-brand-neonblue/30 text-brand-neonblue shadow-sm' 
+                        : 'bg-brand-surface border-border text-muted hover:text-main'
+                    }`}
+                  >
+                    {hideInactiveMonths ? 'Showing Active Months' : 'Hide Inactive Months'}
+                  </button>
+                </div>
               </div>
               <div className="overflow-x-auto custom-scrollbar">
                 <table className="w-full text-left min-w-[800px]">
                   <thead>
-                    <tr className="bg-brand-bgbase/50 text-[9px] font-black text-main/40 uppercase tracking-[2px] border-b border-border">
+                    <tr className="bg-brand-bgbase/50 text-[10px] font-bold text-muted uppercase tracking-wider border-b border-border">
                       <th className="px-6 py-4">Month / Year</th>
                       <th className="px-6 py-4 text-right">Revenue</th>
                       <th className="px-6 py-4 text-right">COGS</th>
@@ -404,14 +449,14 @@ export default function ProfitLossPage() {
                           Loading monthly financial records...
                         </td>
                       </tr>
-                    ) : monthly.length === 0 ? (
+                    ) : displayedMonthly.length === 0 ? (
                       <tr>
                         <td colSpan={7} className="px-6 py-8 text-center text-muted text-xs font-bold">
                           No financial transactions recorded for this period.
                         </td>
                       </tr>
                     ) : (
-                      monthly.map((row, i) => (
+                      displayedMonthly.map((row, i) => (
                         <tr key={i} className="hover:bg-white/[0.02] transition-colors text-xs font-bold">
                           <td className="px-6 py-4 font-black text-main">{row.month} {row.year}</td>
                           <td className="px-6 py-4 text-right font-rajdhani font-black text-main">
@@ -423,20 +468,33 @@ export default function ProfitLossPage() {
                           <td className="px-6 py-4 text-right font-rajdhani font-bold text-muted">
                             ₱{Number(row.expenses).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
-                          <td className={`px-6 py-4 text-right font-rajdhani font-black ${row.profit >= 0 ? 'text-brand-neonblue' : 'text-brand-crimson'}`}>
+                          <td className={`px-6 py-4 text-right font-rajdhani font-black ${row.profit > 0 ? 'text-brand-neonblue' : row.profit < 0 ? 'text-brand-crimson' : 'text-muted'}`}>
                             ₱{Number(row.profit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
                           <td className="px-6 py-4 text-center text-xs font-bold">
-                            {row.margin}%
+                            {row.revenue > 0 ? `${row.margin}%` : '—'}
                           </td>
                           <td className="px-6 py-4 text-center">
-                            <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${
-                              row.status === 'positive' 
-                                ? 'bg-green-500/10 text-green-500 border-green-500/20' 
-                                : 'bg-red-500/10 text-red-500 border-red-500/20'
-                            }`}>
-                              {row.status === 'positive' ? 'Profitable' : 'Deficit'}
-                            </span>
+                            {row.status === 'positive' && (
+                              <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+                                Profitable
+                              </span>
+                            )}
+                            {row.status === 'negative' && (
+                              <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border bg-rose-500/10 text-rose-400 border-rose-500/20">
+                                Deficit
+                              </span>
+                            )}
+                            {row.status === 'breakeven' && (
+                              <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border bg-amber-500/10 text-amber-400 border-amber-500/20">
+                                Break-Even
+                              </span>
+                            )}
+                            {row.status === 'neutral' && (
+                              <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border bg-slate-500/10 text-slate-400 border-slate-500/20">
+                                No Activity
+                              </span>
+                            )}
                           </td>
                         </tr>
                       ))
