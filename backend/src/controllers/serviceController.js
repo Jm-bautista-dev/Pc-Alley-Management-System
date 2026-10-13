@@ -420,8 +420,12 @@ const updateServiceJobStatus = async (req, res) => {
 
 const getTechnicians = async (req, res) => {
   try {
+    const where = {};
+    if (req.user?.branch_id && req.user?.role !== 'super_admin') {
+      where.branch_id = req.user.branch_id;
+    }
     const users = await User.findAll({
-      where: { is_active: 1 },
+      where,
       attributes: ['id', 'username', 'first_name', 'last_name', 'role', 'branch_id'],
       order: [['first_name', 'ASC'], ['username', 'ASC']]
     });

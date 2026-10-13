@@ -352,6 +352,19 @@ const migrateSchema = async () => {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
 
+      await addColumnIfMissing(queryInterface, 'services', 'staff_name', {
+        type: DataTypes.STRING,
+        allowNull: true
+      });
+      await addColumnIfMissing(queryInterface, 'service_jobs', 'technician_id', {
+        type: DataTypes.INTEGER,
+        allowNull: true
+      });
+      await addColumnIfMissing(queryInterface, 'service_jobs', 'technician_name', {
+        type: DataTypes.STRING,
+        allowNull: true
+      });
+
       // 3. Alter sales table
       await addColumnIfMissing(queryInterface, 'sales', 'sale_type', {
         type: DataTypes.ENUM('product', 'service', 'mixed'),
