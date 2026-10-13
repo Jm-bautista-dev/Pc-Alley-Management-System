@@ -678,7 +678,7 @@ export default function Dashboard() {
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                 {[
-                  { title: "Sales POS", desc: "Terminal & Billing", href: "/sales", icon: ShoppingCart, color: "#10B981" },
+                  { title: "All Sales", desc: "Sales History & Records", href: "/sell/all", icon: History, color: "#10B981" },
                   { title: "Products", desc: "Catalog & Barcodes", href: "/products", icon: Package, color: "#0EA5E9" },
                   { title: "Stock Health", desc: "Levels & Inventory", href: "/reports/stock", icon: Box, color: "#F59E0B" },
                   { title: "Restock Orders", desc: "Replenishments", href: "/purchases/restock", icon: ClipboardCheck, color: "#8B5CF6" },

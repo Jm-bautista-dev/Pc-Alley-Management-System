@@ -460,7 +460,7 @@ export default function ServiceJobsPage() {
                           View / Update
                         </button>
 
-                        {job.status !== 'completed' && job.status !== 'cancelled' && (
+                        {job.status !== 'completed' && job.status !== 'cancelled' && (user?.role === 'employee' || user?.role === 'staff') && (
                           <button
                             onClick={() => handleSendToPOS(job)}
                             className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all flex items-center gap-1.5 shadow-sm shrink-0 whitespace-nowrap"

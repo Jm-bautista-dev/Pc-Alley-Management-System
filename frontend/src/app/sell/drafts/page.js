@@ -14,14 +14,18 @@ import {
   Package,
   Plus,
   Play,
-  Eye
+  Eye,
+  History
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { showSuccess, showError, showInfo, showWarning, showConfirm, showModal } from "@/context/ModalContext";
 import { useRouter } from "next/navigation";
+import { useAuthGuard } from "@/lib/useAuthGuard";
 
 export default function DraftsPage() {
   const router = useRouter();
+  const { user } = useAuthGuard();
+  const isStaff = user?.role === "employee" || user?.role === "staff";
   const [drafts, setDrafts] = useState([]);
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -104,10 +108,16 @@ export default function DraftsPage() {
             </motion.div>
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
               className="bg-brand-surface border border-border rounded-2xl p-5 flex flex-col justify-between">
-              <p className="text-[10px] font-black uppercase tracking-[3px] text-main/40 mb-1">Start New Sale</p>
-              <button onClick={() => router.push("/sales")}
+              <p className="text-[10px] font-black uppercase tracking-[3px] text-main/40 mb-1">
+                {isStaff ? "Start New Sale" : "Sales History"}
+              </p>
+              <button onClick={() => router.push(isStaff ? "/sales" : "/sell/all")}
                 className="mt-2 btn-premium flex items-center gap-2 text-xs px-4 py-2 rounded-full w-fit">
-                <ShoppingCart size={14} /> Open POS
+                {isStaff ? (
+                  <><ShoppingCart size={14} /> Open POS</>
+                ) : (
+                  <><History size={14} /> All Sales</>
+                )}
               </button>
             </motion.div>
           </div>
@@ -155,10 +165,12 @@ export default function DraftsPage() {
                       <p className="text-[10px] font-black uppercase tracking-widest text-muted">
                         {search ? "No matching drafts" : "No saved drafts — park a cart in the POS to save a draft"}
                       </p>
-                      <button onClick={() => router.push("/sales")}
-                        className="mt-4 px-6 py-2.5 bg-brand-surface border border-border rounded-full text-[10px] font-black uppercase tracking-widest text-muted hover:text-main hover:border-brand-neonblue/40 transition-all flex items-center gap-2 mx-auto">
-                        <ShoppingCart size={12} /> Open POS Terminal
-                      </button>
+                      {isStaff && (
+                        <button onClick={() => router.push("/sales")}
+                          className="mt-4 px-6 py-2.5 bg-brand-surface border border-border rounded-full text-[10px] font-black uppercase tracking-widest text-muted hover:text-main hover:border-brand-neonblue/40 transition-all flex items-center gap-2 mx-auto">
+                          <ShoppingCart size={12} /> Open POS Terminal
+                        </button>
+                      )}
                     </td></tr>
                   ) : paginated.map((d, idx) => {
                     const value = (d.items || []).reduce((s, i) => s + (i.price * i.quantity), 0);

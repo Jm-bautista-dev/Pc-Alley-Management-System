@@ -6,6 +6,7 @@ import Sidebar from "@/components/Sidebar";
 import { useLayout } from "@/context/LayoutContext";
 import { useAuthGuard } from "@/lib/useAuthGuard";
 import { useTheme } from "@/context/ThemeContext";
+import { useRouter } from "next/navigation";
 import {
   ShoppingCart,
   Search,
@@ -376,8 +377,15 @@ function ReceiptModal({ isOpen, onClose, receipt }) {
 // MAIN SALES COMPONENT (KIOSK REDESIGN)
 // ─────────────────────────────────────────────────────────────────
 export default function SalesPage() {
+  const router = useRouter();
   const { user } = useAuthGuard();
   const { theme } = useTheme(); // Inherit active application theme
+
+  useEffect(() => {
+    if (user && (user.role === 'super_admin' || user.role === 'branch_admin')) {
+      router.replace('/sell/all');
+    }
+  }, [user, router]);
   
   // Theme state — always start with "yellow" to match SSR, then sync from localStorage after mount
   const [accentColor, setAccentColor] = useState("yellow");
@@ -1545,6 +1553,14 @@ export default function SalesPage() {
     clearCustomer();
     setSelectedDiscount(null);
   };
+
+  if (user && (user.role === 'super_admin' || user.role === 'branch_admin')) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-brand-bgbase text-muted">
+        <Loader2 className="animate-spin text-brand-neonblue" size={32} />
+      </div>
+    );
+  }
 
   return (
     <div className="flex bg-brand-bgbase min-h-screen text-main font-sans transition-colors duration-300 select-none">
