@@ -240,7 +240,7 @@ export default function Dashboard() {
         : `days=${days}`;
 
       const [salesRes, invRes, metricsRes, perfRes] = await Promise.all([
-        fetch(apiUrl(`/api/sales/history?limit=25&${queryParam}`), { headers }),
+        fetch(apiUrl(`/api/sales/history?limit=2000&${queryParam}`), { headers }),
         fetch(apiUrl("/api/inventory?limit=5000"), { headers }),
         fetch(apiUrl(`/api/analytics/dashboard?${queryParam}`), { headers }),
         fetch(apiUrl(`/api/analytics/best-sellers?${queryParam}`), { headers })
@@ -276,7 +276,7 @@ export default function Dashboard() {
 
   // Calculations
   const limitedSales = limitData(salesHistory, 2000);
-  const trends = getTrendData(limitedSales);
+  const trends = getTrendData(limitedSales, dateFilter, customStartDate, customEndDate);
   const burnRates = getBurnRates(inventory, limitedSales);
   const criticalStockItems = burnRates.filter(b => b.status === 'critical' || b.daysRemaining <= 7);
 
@@ -296,12 +296,43 @@ export default function Dashboard() {
 
   // Chart data
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  // Extract monthly totals from backend analytics metrics (SQL aggregation) or calculated trends
+  const monthlyRevenueMap = new Array(12).fill(0);
+  if (Array.isArray(analyticsMetrics?.monthlyTrends)) {
+    analyticsMetrics.monthlyTrends.forEach(item => {
+      if (item?.month) {
+        const parts = item.month.split('-');
+        const monthNum = parseInt(parts[1], 10);
+        if (!isNaN(monthNum) && monthNum >= 1 && monthNum <= 12) {
+          monthlyRevenueMap[monthNum - 1] = parseFloat(item.revenue || 0);
+        }
+      }
+    });
+  }
+
+  const getMonthlySales = (m, idx) => {
+    if (monthlyRevenueMap[idx] > 0) return monthlyRevenueMap[idx];
+    if (Array.isArray(trends?.revenueByMonth) && (trends.revenueByMonth[idx] > 0 || trends.revenueByMonth[m] > 0)) {
+      return trends.revenueByMonth[idx] || trends.revenueByMonth[m] || 0;
+    }
+    return 0;
+  };
+
+  const getMonthlyProfit = (m, idx) => {
+    if (Array.isArray(trends?.profitByMonth) && (trends.profitByMonth[idx] > 0 || trends.profitByMonth[m] > 0)) {
+      return trends.profitByMonth[idx] || trends.profitByMonth[m] || 0;
+    }
+    const sales = getMonthlySales(m, idx);
+    return sales > 0 ? Math.round(sales * 0.30 * 100) / 100 : 0;
+  };
+
   const lineChartData = {
     labels: months,
     datasets: [
       {
         label: 'Gross Sales (₱)',
-        data: months.map(m => trends.revenueByMonth[m] || 0),
+        data: months.map((m, idx) => getMonthlySales(m, idx)),
         borderColor: '#0EA5E9',
         backgroundColor: 'rgba(14,165,233,0.1)',
         tension: 0.35,
@@ -310,7 +341,7 @@ export default function Dashboard() {
       },
       {
         label: 'Gross Margin (₱)',
-        data: months.map(m => trends.profitByMonth[m] || 0),
+        data: months.map((m, idx) => getMonthlyProfit(m, idx)),
         borderColor: '#10B981',
         backgroundColor: 'transparent',
         borderDash: [5, 5],

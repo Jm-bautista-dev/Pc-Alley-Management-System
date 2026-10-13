@@ -148,9 +148,11 @@ const getDashboardMetrics = async (req, res) => {
       limit: 5
     });
 
-    // Monthly Sales Trend
+    // Monthly Sales Trend (12-month trajectory across completed sales)
+    const trendsWhere = { status: 'completed' };
+    if (branchId) trendsWhere.branchId = branchId;
     const trends = await Sale.findAll({
-      where: whereSale,
+      where: trendsWhere,
       attributes: [
         [sequelize.fn('DATE_FORMAT', sequelize.col('createdAt'), '%Y-%m'), 'month'],
         [sequelize.fn('SUM', sequelize.col('totalAmount')), 'revenue']

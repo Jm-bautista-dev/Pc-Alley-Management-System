@@ -69,6 +69,13 @@ export const getTrendData = (salesHistory, filterType = "30", startDate = null, 
     ordersByMonth[month]  += 1;
   });
 
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  monthNames.forEach((name, idx) => {
+    revenueByMonth[name] = revenueByMonth[idx];
+    profitByMonth[name]  = profitByMonth[idx];
+    ordersByMonth[name]  = ordersByMonth[idx];
+  });
+
   // Dynamic grouping based on filters
   let labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   let revenue = [...revenueByMonth];
