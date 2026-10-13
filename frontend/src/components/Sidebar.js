@@ -87,7 +87,6 @@ const Sidebar = () => {
         { title: "Sales",           icon: Upload,          path: "#sell",             group: "SALES", subItems: [
           { title: "All Sales", path: "/sell/all" },
           { title: "Customer Warranties", path: "/sell/quotations" },
-          { title: "Saved Drafts", path: "/sell/drafts" },
           { title: "Returns", path: "/sell/returns" },
           { title: "Shipments", path: "/sell/shipments" },
           { title: "Discounts", path: "/sell/discounts" }
@@ -134,7 +133,6 @@ const Sidebar = () => {
         { title: "All Sales", path: "/sell/all" },
         { title: "Customer Warranties", path: "/sell/quotations" },
         { title: "Returns", path: "/sell/returns" },
-        { title: "Saved Drafts", path: "/sell/drafts" },
         { title: "Shipments", path: "/sell/shipments" },
         { title: "Discounts", path: "/sell/discounts" }
       ] },

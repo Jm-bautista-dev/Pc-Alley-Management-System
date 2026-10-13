@@ -32,6 +32,12 @@ export default function DraftsPage() {
   const itemsPerPage = 10;
 
   useEffect(() => {
+    if (user && (user.role === 'super_admin' || user.role === 'branch_admin')) {
+      router.replace('/sell/all');
+    }
+  }, [user, router]);
+
+  useEffect(() => {
     // Load drafts from the same storage the POS uses
     try {
       const posDrafts = JSON.parse(localStorage.getItem("pc_alley_pos_drafts") || "[]");
@@ -75,6 +81,20 @@ export default function DraftsPage() {
 
   const totalDraftValue = drafts.reduce((sum, d) =>
     sum + (d.items || []).reduce((s, i) => s + (i.price * i.quantity), 0), 0);
+
+  if (user && (user.role === 'super_admin' || user.role === 'branch_admin')) {
+    return (
+      <div className="flex bg-brand-bgbase min-h-screen text-main font-dmsans">
+        <Sidebar />
+        <main className="flex-1 flex flex-col h-screen overflow-hidden">
+          <TopBar title="SAVED DRAFTS" />
+          <div className="flex-1 flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-500"></div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex bg-brand-bgbase min-h-screen text-main font-dmsans transition-colors duration-300">
