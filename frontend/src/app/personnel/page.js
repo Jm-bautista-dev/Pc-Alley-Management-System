@@ -75,7 +75,8 @@ function PersonnelPageContent() {
   const availableRoles = isSuperAdmin
     ? [
         { value: "employee", label: "Staff" },
-        { value: "branch_admin", label: "Manager" }
+        { value: "branch_admin", label: "Manager" },
+        { value: "super_admin", label: "Super Admin" }
       ]
     : [{ value: "employee", label: "Staff" }];
 
@@ -248,7 +249,9 @@ function PersonnelPageContent() {
     e.preventDefault();
     const token = localStorage.getItem("token");
 
-    if (!branches.length) {
+    const isSuperAdminAccount = userFormData.role === "super_admin";
+
+    if (!branches.length && !isSuperAdminAccount) {
       showError("No branches available yet. Create a branch first before registering users.");
       return;
     }
@@ -260,9 +263,11 @@ function PersonnelPageContent() {
       password: userFormData.password,
       role: isSuperAdmin ? userFormData.role : "employee",
       branch_id:
-        currentUser?.role === "branch_admin"
-          ? Number(currentUser.branch_id)
-          : Number(userFormData.branch_id)
+        isSuperAdminAccount
+          ? null
+          : currentUser?.role === "branch_admin"
+            ? Number(currentUser.branch_id)
+            : Number(userFormData.branch_id)
     };
 
     if (!payload.first_name) {
@@ -316,7 +321,7 @@ function PersonnelPageContent() {
       return;
     }
 
-    if (!payload.branch_id || Number.isNaN(payload.branch_id)) {
+    if (!isSuperAdminAccount && (!payload.branch_id || Number.isNaN(payload.branch_id))) {
       showError("Please assign a branch for the user account.");
       return;
     }
@@ -336,9 +341,13 @@ function PersonnelPageContent() {
       if (res.ok) {
         setIsCreateUserModalOpen(false);
         resetUserForm();
-        showSuccess(
-          `${payload.role === "branch_admin" ? "Manager" : "Staff"} account created successfully!`
-        );
+        const roleLabel =
+          payload.role === "super_admin"
+            ? "Super Admin"
+            : payload.role === "branch_admin"
+            ? "Manager"
+            : "Staff";
+        showSuccess(`${roleLabel} account created successfully!`);
         fetchData();
       } else if (data.errors && Array.isArray(data.errors)) {
         const msgs = data.errors
@@ -1125,7 +1134,9 @@ function PersonnelPageContent() {
                   Create User Account
                 </h3>
                 <p className="text-[10px] text-muted font-bold uppercase tracking-widest">
-                  Register a new Manager or Staff account
+                  {isSuperAdmin
+                    ? "Register a new Super Admin, Manager, or Staff account"
+                    : "Register a new Staff account"}
                 </p>
               </div>
 
@@ -1239,16 +1250,30 @@ function PersonnelPageContent() {
                 </div>
 
                 {/* Role and Branch Assignment */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div
+                  className={`grid gap-4 ${
+                    userFormData.role === "super_admin"
+                      ? "grid-cols-1"
+                      : "grid-cols-1 sm:grid-cols-2"
+                  }`}
+                >
                   <div className="space-y-1.5">
                     <label className="text-[9px] font-black uppercase tracking-[3px] text-muted ml-2">
                       Designated Role
                     </label>
                     <select
                       value={userFormData.role}
-                      onChange={(e) =>
-                        setUserFormData({ ...userFormData, role: e.target.value })
-                      }
+                      onChange={(e) => {
+                        const nextRole = e.target.value;
+                        setUserFormData({
+                          ...userFormData,
+                          role: nextRole,
+                          branch_id:
+                            nextRole === "super_admin"
+                              ? ""
+                              : userFormData.branch_id || (branches[0] ? String(branches[0].id) : "")
+                        });
+                      }}
                       className="w-full bg-brand-bgbase border border-border rounded-2xl py-3 px-4 text-sm text-main focus:outline-none focus:border-brand-neonblue transition-all cursor-pointer"
                     >
                       {availableRoles.map((roleOption) => (
@@ -1263,35 +1288,37 @@ function PersonnelPageContent() {
                     </select>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <label className="text-[9px] font-black uppercase tracking-[3px] text-muted ml-2">
-                      Branch Assignment *
-                    </label>
-                    <select
-                      value={
-                        currentUser?.role === "branch_admin"
-                          ? currentUser.branch_id
-                          : userFormData.branch_id
-                      }
-                      onChange={(e) =>
-                        setUserFormData({ ...userFormData, branch_id: e.target.value })
-                      }
-                      disabled={currentUser?.role === "branch_admin"}
-                      required
-                      className="w-full bg-brand-bgbase border border-border rounded-2xl py-3 px-4 text-sm text-main focus:outline-none focus:border-brand-neonblue transition-all cursor-pointer disabled:opacity-60"
-                    >
-                      {currentUser?.role !== "branch_admin" && (
-                        <option value="" disabled className="bg-brand-surface">
-                          Select Branch
-                        </option>
-                      )}
-                      {branches.map((b) => (
-                        <option key={b.id} value={b.id} className="bg-brand-surface">
-                          {b.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  {userFormData.role !== "super_admin" && (
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-black uppercase tracking-[3px] text-muted ml-2">
+                        Branch Assignment *
+                      </label>
+                      <select
+                        value={
+                          currentUser?.role === "branch_admin"
+                            ? currentUser.branch_id
+                            : userFormData.branch_id
+                        }
+                        onChange={(e) =>
+                          setUserFormData({ ...userFormData, branch_id: e.target.value })
+                        }
+                        disabled={currentUser?.role === "branch_admin"}
+                        required={userFormData.role !== "super_admin"}
+                        className="w-full bg-brand-bgbase border border-border rounded-2xl py-3 px-4 text-sm text-main focus:outline-none focus:border-brand-neonblue transition-all cursor-pointer disabled:opacity-60"
+                      >
+                        {currentUser?.role !== "branch_admin" && (
+                          <option value="" disabled className="bg-brand-surface">
+                            Select Branch
+                          </option>
+                        )}
+                        {branches.map((b) => (
+                          <option key={b.id} value={b.id} className="bg-brand-surface">
+                            {b.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-4 flex gap-4">
