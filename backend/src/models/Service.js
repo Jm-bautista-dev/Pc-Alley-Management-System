@@ -41,6 +41,10 @@ const Service = sequelize.define('Service', {
     allowNull: false,
     defaultValue: true
   },
+  staff_name: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
   status: {
     type: DataTypes.ENUM('active', 'inactive', 'archived'),
     allowNull: false,

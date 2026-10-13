@@ -42,6 +42,7 @@ export default function ServiceJobsPage() {
   const router = useRouter();
   const [jobs, setJobs] = useState([]);
   const [services, setServices] = useState([]);
+  const [technicians, setTechnicians] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("all");
@@ -53,6 +54,7 @@ export default function ServiceJobsPage() {
     customer_name: "",
     customer_phone: "",
     service_id: "",
+    technician_name: "",
     device_type: "Desktop Gaming PC",
     device_specs: "",
     serial_number: "",
@@ -68,13 +70,27 @@ export default function ServiceJobsPage() {
     diagnosis: "",
     final_price: "",
     price_override_reason: "",
-    customer_approved: false
+    customer_approved: false,
+    technician_name: ""
   });
 
   useEffect(() => {
     fetchJobs();
     fetchServices();
+    fetchTechnicians();
   }, [selectedStatus]);
+
+  const fetchTechnicians = async () => {
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(apiUrl("/api/services/technicians"), {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) setTechnicians(await res.json());
+    } catch (err) {
+      console.error("Error loading technicians:", err);
+    }
+  };
 
   const fetchJobs = async () => {
     setLoading(true);
@@ -109,26 +125,29 @@ export default function ServiceJobsPage() {
   };
 
   const handleOpenCreate = () => {
+    const defaultService = services[0];
     setCreateForm({
       customer_name: "",
       customer_phone: "",
-      service_id: services[0]?.id || "",
+      service_id: defaultService?.id || "",
+      technician_name: defaultService?.staff_name || "",
       device_type: "Desktop Gaming PC",
       device_specs: "",
       serial_number: "",
       reported_issue: "",
-      estimated_price: services[0]?.base_price || 500
+      estimated_price: defaultService?.base_price || 500
     });
     setIsCreateOpen(true);
   };
 
   const handleServiceSelectInCreate = (sId) => {
     const s = services.find(x => String(x.id) === String(sId));
-    setCreateForm({
-      ...createForm,
+    setCreateForm(prev => ({
+      ...prev,
       service_id: sId,
-      estimated_price: s ? s.base_price : createForm.estimated_price
-    });
+      estimated_price: s ? s.base_price : prev.estimated_price,
+      technician_name: prev.technician_name || (s?.staff_name || "")
+    }));
   };
 
   const handleCreateJob = async (e) => {
@@ -213,7 +232,8 @@ export default function ServiceJobsPage() {
       diagnosis: job.diagnosis || "",
       final_price: parseFloat(job.final_price || job.estimated_price || 0),
       price_override_reason: job.price_override_reason || "",
-      customer_approved: !!job.customer_approved
+      customer_approved: !!job.customer_approved,
+      technician_name: job.technician_name || ""
     });
   };
 
@@ -409,6 +429,11 @@ export default function ServiceJobsPage() {
                             {job.device_type} {job.serial_number ? `• S/N: ${job.serial_number}` : ''}
                           </span>
                         </div>
+                        {job.technician_name && (
+                          <div className="flex items-center gap-1 text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md text-[10px] font-bold border border-purple-500/20">
+                            <span>Tech: {job.technician_name}</span>
+                          </div>
+                        )}
                       </div>
 
                       <p className="text-xs text-brand-muted font-normal truncate" title={`Service: ${job.service_name} | Issue: ${job.reported_issue || "No notes"}`}>
@@ -511,21 +536,48 @@ export default function ServiceJobsPage() {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-[10px] font-black uppercase tracking-wider text-brand-muted mb-1.5">
-                      Technical Service *
-                    </label>
-                    <select
-                      value={createForm.service_id}
-                      onChange={e => handleServiceSelectInCreate(e.target.value)}
-                      className="w-full px-4 py-2 bg-brand-panel border border-brand-border rounded-xl text-xs font-bold text-main focus:outline-none"
-                    >
-                      {services.map(s => (
-                        <option key={s.id} value={s.id}>
-                          {s.name} ({s.pricing_type.toUpperCase()} • ₱{s.base_price})
-                        </option>
-                      ))}
-                    </select>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-brand-muted mb-1.5">
+                        Technical Service *
+                      </label>
+                      <select
+                        value={createForm.service_id}
+                        onChange={e => handleServiceSelectInCreate(e.target.value)}
+                        className="w-full px-4 py-2 bg-brand-panel border border-brand-border rounded-xl text-xs font-bold text-main focus:outline-none"
+                      >
+                        {services.map(s => (
+                          <option key={s.id} value={s.id}>
+                            {s.name} ({s.pricing_type.toUpperCase()} • ₱{s.base_price})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-brand-muted mb-1.5 flex items-center justify-between">
+                        <span>Assigned Technician</span>
+                        <span className="text-[9px] font-bold text-purple-400 lowercase">Staff member</span>
+                      </label>
+                      <input
+                        type="text"
+                        list="order-technicians-list"
+                        placeholder="Select or enter technician..."
+                        value={createForm.technician_name}
+                        onChange={e => setCreateForm({ ...createForm, technician_name: e.target.value })}
+                        className="w-full px-4 py-2 bg-brand-panel border border-brand-border rounded-xl text-xs font-bold text-main focus:outline-none"
+                      />
+                      <datalist id="order-technicians-list">
+                        {technicians.map(t => {
+                          const fullName = `${t.first_name || ''} ${t.last_name || ''}`.trim() || t.username;
+                          return (
+                            <option key={t.id} value={fullName}>
+                              {fullName} ({t.role || 'Staff'})
+                            </option>
+                          );
+                        })}
+                      </datalist>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
@@ -633,19 +685,46 @@ export default function ServiceJobsPage() {
                 </p>
 
                 <form onSubmit={handleUpdateStatus} className="space-y-4 overflow-y-auto custom-scrollbar flex-1 pr-1">
-                  <div>
-                    <label className="block text-[10px] font-black uppercase tracking-wider text-brand-muted mb-1.5">
-                      Workflow Stage
-                    </label>
-                    <select
-                      value={statusForm.status}
-                      onChange={e => setStatusForm({ ...statusForm, status: e.target.value })}
-                      className="w-full px-4 py-2.5 bg-brand-panel border border-brand-border rounded-xl text-xs font-bold text-main focus:outline-none"
-                    >
-                      {STATUS_PIPELINE.map(st => (
-                        <option key={st.key} value={st.key}>{st.label}</option>
-                      ))}
-                    </select>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-brand-muted mb-1.5">
+                        Workflow Stage
+                      </label>
+                      <select
+                        value={statusForm.status}
+                        onChange={e => setStatusForm({ ...statusForm, status: e.target.value })}
+                        className="w-full px-4 py-2.5 bg-brand-panel border border-brand-border rounded-xl text-xs font-bold text-main focus:outline-none"
+                      >
+                        {STATUS_PIPELINE.map(st => (
+                          <option key={st.key} value={st.key}>{st.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-brand-muted mb-1.5 flex items-center justify-between">
+                        <span>Assigned Technician</span>
+                        <span className="text-[9px] font-bold text-purple-400 lowercase">Staff member</span>
+                      </label>
+                      <input
+                        type="text"
+                        list="update-technicians-list"
+                        placeholder="Search or enter technician..."
+                        value={statusForm.technician_name}
+                        onChange={e => setStatusForm({ ...statusForm, technician_name: e.target.value })}
+                        className="w-full px-4 py-2.5 bg-brand-panel border border-brand-border rounded-xl text-xs font-bold text-main focus:outline-none"
+                      />
+                      <datalist id="update-technicians-list">
+                        {technicians.map(t => {
+                          const fullName = `${t.first_name || ''} ${t.last_name || ''}`.trim() || t.username;
+                          return (
+                            <option key={t.id} value={fullName}>
+                              {fullName} ({t.role || 'Staff'})
+                            </option>
+                          );
+                        })}
+                      </datalist>
+                    </div>
                   </div>
 
                   <div>

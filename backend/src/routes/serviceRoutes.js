@@ -10,6 +10,7 @@ const {
   updateService,
   deleteService,
   getServiceCategories,
+  getTechnicians,
   getServiceJobs,
   getServiceJobById,
   createServiceJob,
@@ -18,8 +19,9 @@ const {
 
 router.use(authenticateToken);
 
-// Service Categories
+// Service Categories & Technicians
 router.get('/categories', getServiceCategories);
+router.get('/technicians', getTechnicians);
 
 // Service Catalog Routes
 router.get('/', getServices);
@@ -43,10 +45,14 @@ router.post('/', [
     .isLength({ max: 100 }).withMessage('Category cannot exceed 100 characters.'),
   body('pricing_type')
     .optional({ checkFalsy: true })
-    .isIn(['fixed', 'hourly', 'quote', 'tiered']).withMessage('Invalid pricing type designation.'),
+    .isIn(['fixed', 'variable', 'custom', 'hourly', 'quote', 'tiered']).withMessage('Invalid pricing type designation.'),
   body('estimated_duration_mins')
     .optional({ checkFalsy: true })
     .isInt({ min: 1, max: 10080 }).withMessage('Estimated duration must be between 1 and 10080 minutes.'),
+  body('staff_name')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isLength({ max: 255 }).withMessage('Staff name cannot exceed 255 characters.'),
   validate
 ], createService);
 
@@ -63,7 +69,11 @@ router.put('/:id', [
     .isFloat({ min: 0, max: 1000000 }).withMessage('Base price must be between ₱0.00 and ₱1,000,000.00.'),
   body('pricing_type')
     .optional()
-    .isIn(['fixed', 'hourly', 'quote', 'tiered']).withMessage('Invalid pricing type designation.'),
+    .isIn(['fixed', 'variable', 'custom', 'hourly', 'quote', 'tiered']).withMessage('Invalid pricing type designation.'),
+  body('staff_name')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isLength({ max: 255 }).withMessage('Staff name cannot exceed 255 characters.'),
   validate
 ], updateService);
 
@@ -114,6 +124,13 @@ router.post('/jobs', [
     .optional({ checkFalsy: true })
     .trim()
     .isLength({ max: 1000 }).withMessage('Reported issue cannot exceed 1000 characters.'),
+  body('technician_name')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isLength({ max: 255 }).withMessage('Technician name cannot exceed 255 characters.'),
+  body('technician_id')
+    .optional({ checkFalsy: true })
+    .isInt({ min: 1 }).withMessage('Invalid technician ID.'),
   validate
 ], createServiceJob);
 
@@ -134,6 +151,13 @@ router.put('/jobs/:id/status', [
     .optional({ checkFalsy: true })
     .trim()
     .isLength({ max: 1000 }).withMessage('Diagnosis cannot exceed 1000 characters.'),
+  body('technician_name')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isLength({ max: 255 }).withMessage('Technician name cannot exceed 255 characters.'),
+  body('technician_id')
+    .optional({ checkFalsy: true })
+    .isInt({ min: 1 }).withMessage('Invalid technician ID.'),
   validate
 ], updateServiceJobStatus);
 

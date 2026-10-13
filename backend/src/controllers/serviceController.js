@@ -64,6 +64,7 @@ const createService = async (req, res) => {
       base_price,
       estimated_duration_mins,
       requires_device_info,
+      staff_name,
       status
     } = req.body;
 
@@ -89,6 +90,7 @@ const createService = async (req, res) => {
       base_price: basePriceVal,
       estimated_duration_mins: estimated_duration_mins ? parseInt(estimated_duration_mins) : 60,
       requires_device_info: requires_device_info !== undefined ? !!requires_device_info : true,
+      staff_name: staff_name ? staff_name.trim() : null,
       status: status || 'active',
       created_by: req.user?.id || null,
       updated_by: req.user?.id || null
@@ -126,6 +128,7 @@ const updateService = async (req, res) => {
       base_price,
       estimated_duration_mins,
       requires_device_info,
+      staff_name,
       status
     } = req.body;
 
@@ -142,6 +145,7 @@ const updateService = async (req, res) => {
     }
     if (estimated_duration_mins !== undefined) service.estimated_duration_mins = parseInt(estimated_duration_mins);
     if (requires_device_info !== undefined) service.requires_device_info = !!requires_device_info;
+    if (staff_name !== undefined) service.staff_name = staff_name ? staff_name.trim() : null;
     if (status !== undefined) service.status = status;
     service.updated_by = req.user?.id || null;
 
@@ -276,7 +280,8 @@ const createServiceJob = async (req, res) => {
       serial_number,
       reported_issue,
       estimated_price,
-      technician_id
+      technician_id,
+      technician_name
     } = req.body;
 
     const userBranch = req.user.role !== 'super_admin' ? req.user.branch_id : (branch_id || req.user.branch_id || 1);
@@ -303,9 +308,14 @@ const createServiceJob = async (req, res) => {
     }
 
     let techName = null;
+    let techId = technician_id || null;
     if (technician_id) {
       const tech = await User.findByPk(technician_id);
       if (tech) techName = tech.username || `${tech.first_name || ''} ${tech.last_name || ''}`.trim();
+    } else if (technician_name && technician_name.trim()) {
+      techName = technician_name.trim();
+    } else if (service.staff_name && service.staff_name.trim()) {
+      techName = service.staff_name.trim();
     }
 
     const estPrice = estimated_price !== undefined && estimated_price !== '' ? parseFloat(estimated_price) : parseFloat(service.base_price || 0);
@@ -330,7 +340,7 @@ const createServiceJob = async (req, res) => {
       status: 'received',
       estimated_price: estPrice,
       final_price: estPrice,
-      technician_id: technician_id || null,
+      technician_id: techId,
       technician_name: techName,
       received_at: new Date()
     });
@@ -354,7 +364,7 @@ const updateServiceJobStatus = async (req, res) => {
     const job = await ServiceJob.findByPk(req.params.id);
     if (!job) return res.status(404).json({ error: 'Service job not found' });
 
-    const { status, diagnosis, final_price, price_override_reason, customer_approved } = req.body;
+    const { status, diagnosis, final_price, price_override_reason, customer_approved, technician_id, technician_name } = req.body;
     const validStatuses = ['received', 'diagnosing', 'waiting_for_approval', 'in_progress', 'ready_for_release', 'completed', 'cancelled'];
 
     if (status && !validStatuses.includes(status)) {
@@ -378,6 +388,17 @@ const updateServiceJobStatus = async (req, res) => {
       if (job.customer_approved && !job.approved_at) job.approved_at = new Date();
     }
 
+    if (technician_id !== undefined) {
+      job.technician_id = technician_id || null;
+      if (technician_id) {
+        const tech = await User.findByPk(technician_id);
+        if (tech) job.technician_name = tech.username || `${tech.first_name || ''} ${tech.last_name || ''}`.trim();
+      }
+    }
+    if (technician_name !== undefined) {
+      job.technician_name = technician_name ? technician_name.trim() : null;
+    }
+
     if (status === 'completed' && !job.completed_at) {
       job.completed_at = new Date();
     }
@@ -397,6 +418,19 @@ const updateServiceJobStatus = async (req, res) => {
   }
 };
 
+const getTechnicians = async (req, res) => {
+  try {
+    const users = await User.findAll({
+      where: { is_active: 1 },
+      attributes: ['id', 'username', 'first_name', 'last_name', 'role', 'branch_id'],
+      order: [['first_name', 'ASC'], ['username', 'ASC']]
+    });
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   getServices,
   getServiceById,
@@ -404,6 +438,7 @@ module.exports = {
   updateService,
   deleteService,
   getServiceCategories,
+  getTechnicians,
   getServiceJobs,
   getServiceJobById,
   createServiceJob,

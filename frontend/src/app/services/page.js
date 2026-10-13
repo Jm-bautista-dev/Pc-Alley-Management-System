@@ -22,7 +22,8 @@ import {
   RefreshCw,
   X,
   Layers,
-  Sparkles
+  Sparkles,
+  User
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -30,6 +31,7 @@ export default function ServicesPage() {
   const { user } = useAuthGuard();
   const [services, setServices] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [technicians, setTechnicians] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -47,13 +49,29 @@ export default function ServicesPage() {
     base_price: 500,
     estimated_duration_mins: 60,
     requires_device_info: true,
+    staff_name: "",
     status: "active"
   });
 
   useEffect(() => {
     fetchServices();
     fetchCategories();
+    fetchTechnicians();
   }, [selectedCategory, selectedStatus]);
+
+  const fetchTechnicians = async () => {
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(apiUrl("/api/services/technicians"), {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setTechnicians(await res.json());
+      }
+    } catch (err) {
+      console.error("Error loading technicians:", err);
+    }
+  };
 
   const fetchServices = async () => {
     setLoading(true);
@@ -101,6 +119,7 @@ export default function ServicesPage() {
       base_price: 500,
       estimated_duration_mins: 60,
       requires_device_info: true,
+      staff_name: "",
       status: "active"
     });
     setIsModalOpen(true);
@@ -116,6 +135,7 @@ export default function ServicesPage() {
       base_price: parseFloat(s.base_price || 0),
       estimated_duration_mins: s.estimated_duration_mins || 60,
       requires_device_info: s.requires_device_info,
+      staff_name: s.staff_name || "",
       status: s.status
     });
     setIsModalOpen(true);
@@ -324,9 +344,17 @@ export default function ServicesPage() {
                         {s.name}
                       </h3>
 
-                      <p className="text-xs text-brand-muted leading-relaxed line-clamp-2 mb-4">
+                      <p className="text-xs text-brand-muted leading-relaxed line-clamp-2 mb-2">
                         {s.description || "No description provided for this technical service."}
                       </p>
+
+                      {s.staff_name && (
+                        <div className="flex items-center gap-1.5 text-xs text-brand-muted font-bold mb-3">
+                          <User size={13} className="text-purple-400 shrink-0" />
+                          <span className="text-main font-bold truncate">{s.staff_name}</span>
+                          <span className="text-[10px] text-purple-400 font-bold shrink-0">(Assigned Staff)</span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="border-t border-brand-border/60 pt-4 mt-auto">
@@ -473,6 +501,33 @@ export default function ServicesPage() {
                         onChange={e => setFormData({ ...formData, estimated_duration_mins: e.target.value })}
                         className="w-full px-4 py-2.5 bg-brand-panel border border-brand-border rounded-xl text-xs font-bold text-main focus:outline-none focus:border-brand-neonblue"
                       />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-brand-muted mb-1.5 flex items-center justify-between">
+                      <span>Assigned Staff / Technician</span>
+                      <span className="text-[9px] font-bold text-purple-400 lowercase">Optional assignee</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        list="service-technicians-list"
+                        placeholder="Search or enter staff name who performs this service..."
+                        value={formData.staff_name}
+                        onChange={e => setFormData({ ...formData, staff_name: e.target.value })}
+                        className="w-full px-4 py-2.5 bg-brand-panel border border-brand-border rounded-xl text-xs font-bold text-main focus:outline-none focus:border-brand-neonblue"
+                      />
+                      <datalist id="service-technicians-list">
+                        {technicians.map(t => {
+                          const fullName = `${t.first_name || ''} ${t.last_name || ''}`.trim() || t.username;
+                          return (
+                            <option key={t.id} value={fullName}>
+                              {fullName} ({t.role || 'Staff'})
+                            </option>
+                          );
+                        })}
+                      </datalist>
                     </div>
                   </div>
 
