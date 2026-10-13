@@ -977,32 +977,10 @@ function PersonnelPageContent() {
               </div>
 
               {/* Modal Footer */}
-              <div className="pt-4 border-t border-border/80 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="pt-4 border-t border-border/80 flex items-center justify-between">
                 <p className="text-[11px] text-muted font-medium">
                   Total {currentModalBranchStats.admins.length + currentModalBranchStats.staff.length} personnel assigned to {selectedBranchForModal.name}
                 </p>
-                <div className="flex items-center gap-3 w-full sm:w-auto">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const bId = selectedBranchForModal.id;
-                      setIsBranchModalOpen(false);
-                      openCreateUserModal(String(bId));
-                    }}
-                    className="flex-1 sm:flex-initial px-5 py-2.5 rounded-full bg-brand-surface border border-brand-neonblue/30 text-brand-neonblue hover:bg-brand-neonblue/10 text-xs font-bold transition-all flex items-center justify-center gap-1.5"
-                  >
-                    <UserPlus size={13} />
-                    <span>Add User to Branch</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsBranchModalOpen(false)}
-                    className="flex-1 sm:flex-initial px-5 py-2.5 rounded-full border border-border text-xs font-bold text-muted hover:text-main hover:bg-brand-bgbase transition-all"
-                  >
-                    Close
-                  </button>
-                </div>
               </div>
             </motion.div>
           </div>
