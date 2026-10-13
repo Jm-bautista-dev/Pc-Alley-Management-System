@@ -74,14 +74,20 @@ server.on('error', (err) => {
 });
 
 // Authenticate and sync DB asynchronously
+const runMigrations = require('./db/migrations');
 sequelize
   .authenticate()
   .then(() => {
     console.log('DATABASE: Connected to MySQL successfully.');
     return sequelize.sync({ force: false });
   })
-  .then(() => {
+  .then(async () => {
     console.log('DATABASE: Schema synced.');
+    try {
+      await runMigrations();
+    } catch (migErr) {
+      console.error('MIGRATION WARNING:', migErr.message);
+    }
   })
   .catch((err) => {
     console.error('DATABASE ERROR:', err.message);
