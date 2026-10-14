@@ -1,18 +1,13 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
+import { ThermalReceiptModal } from "@/components/ThermalReceipt";
 import {
   FileText,
   Search,
-  Plus,
   Eye,
-  Edit3,
-  Download,
-  User,
-  ChevronLeft,
-  ChevronRight,
   Printer,
   X,
   AlertCircle,
@@ -21,305 +16,186 @@ import {
   Calendar,
   Clock,
   Package,
-  ShieldCheck
+  ShieldCheck,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Building2,
+  CheckCircle2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiUrl } from "@/lib/api";
-import { showSuccess, showError, showInfo, showWarning, showConfirm, showModal } from "@/context/ModalContext";
+import { showSuccess, showError } from "@/context/ModalContext";
+import { exportToExcel } from "@/lib/excelExport";
 import { useTheme } from "@/context/ThemeContext";
 
-export default function QuotationsPage() {
+export default function CustomerWarrantiesPage() {
   const { theme } = useTheme();
-  const [quotations, setQuotations] = useState(() => {
-    if (typeof window !== "undefined") {
-      try { return JSON.parse(localStorage.getItem("pc_alley_quotations") || "[]"); } catch { return []; }
-    }
-    return [];
-  });
-  const [products, setProducts] = useState([]);
-  const [customers, setCustomers] = useState([]);
+  const [sales, setSales] = useState([]);
+  const [branches, setBranches] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [search, setSearch] = useState("");
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [viewQuote, setViewQuote] = useState(null);
-  const [editingQuote, setEditingQuote] = useState(null);
-  const [voidQuote, setVoidQuote] = useState(null);
-  const [voidReason, setVoidReason] = useState("");
-  const [voidError, setVoidError] = useState("");
-  const [selectedIds, setSelectedIds] = useState(new Set());
-  const [showArchived, setShowArchived] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [branchFilter, setBranchFilter] = useState("");
+  const [viewWarranty, setViewWarranty] = useState(null);
+  const [printReceiptOrder, setPrintReceiptOrder] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [errors, setErrors] = useState({});
-  const [customerSearch, setCustomerSearch] = useState("");
-  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const itemsPerPage = 10;
-
-  const [form, setForm] = useState({
-    customer_name: "",
-    valid_until: new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0],
-    items: [{ product_id: "", product_name: "", quantity: 1, unit_price: 0 }],
-    note: ""
-  });
-
-  const filteredCustomers = useMemo(() => {
-    if (!customerSearch) return [];
-    return customers.filter(c =>
-      (c.name || c.first_name || "").toLowerCase().includes(customerSearch.toLowerCase()) ||
-      (c.contact_number || c.phone || "").includes(customerSearch)
-    ).slice(0, 8);
-  }, [customerSearch, customers]);
 
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem("user") || "{}");
     setUser(userData);
-    const token = localStorage.getItem("token");
-    const headers = { Authorization: `Bearer ${token}` };
-    Promise.all([
-      fetch(apiUrl("/api/products"), { headers }).then(r => r.ok ? r.json() : []),
-      fetch(apiUrl("/api/customers"), { headers }).then(r => r.ok ? r.json() : [])
-    ]).then(([prods, custs]) => {
-      setProducts(Array.isArray(prods) ? prods : []);
-      setCustomers(Array.isArray(custs) ? custs : []);
-    });
+    fetchBranches();
+    fetchSalesWarranties();
   }, []);
 
-  const saveQuotations = (updated) => {
-    setQuotations(updated);
-    localStorage.setItem("pc_alley_quotations", JSON.stringify(updated));
-  };
-
-  const addItem = () =>
-    setForm(f => ({ ...f, items: [...f.items, { product_id: "", product_name: "", quantity: 1, unit_price: 0 }] }));
-
-  const removeItem = (idx) =>
-    setForm(f => ({ ...f, items: f.items.filter((_, i) => i !== idx) }));
-
-  const updateItem = (idx, field, value) =>
-    setForm(f => {
-      const items = [...f.items];
-      items[idx] = { ...items[idx], [field]: value };
-      if (field === "product_id") {
-        const prod = products.find(p => String(p.id) === String(value));
-        if (prod) { items[idx].product_name = prod.name; items[idx].unit_price = parseFloat(prod.price); }
-        else { items[idx].product_name = ""; items[idx].unit_price = 0; }
+  const fetchBranches = async () => {
+    try {
+      const res = await fetch(apiUrl("/api/branches"), {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setBranches(Array.isArray(data) ? data : []);
       }
-      return { ...f, items };
-    });
-
-  const subtotal = form.items.reduce((sum, i) => sum + (i.unit_price * i.quantity), 0);
-
-  const validate = () => {
-    const errs = {};
-    if (!form.customer_name || !form.customer_name.trim())
-      errs.customer_name = "Customer name is required";
-    else if (/\d/.test(form.customer_name))
-      errs.customer_name = "Customer name cannot contain numbers";
-    else if (!/^[A-Za-z\s.\'-]+$/.test(form.customer_name.trim()))
-      errs.customer_name = "Customer name can only contain letters, spaces, hyphens, and dots";
-    else if (form.customer_name.trim().length < 2 || form.customer_name.trim().length > 100)
-      errs.customer_name = "Name must be between 2 and 100 characters";
-    if (!form.valid_until)
-      errs.valid_until = "Valid until date is required";
-    else if (new Date(form.valid_until) <= new Date(new Date().toDateString()))
-      errs.valid_until = "Must be a future date";
-    const itemErrors = [];
-    form.items.forEach((item, i) => {
-      const ie = {};
-      if (!item.product_id) ie.product_id = "Select a product";
-      if (!item.quantity || item.quantity < 1) ie.quantity = "Min 1";
-      else if (item.quantity > 99999) ie.quantity = "Too high";
-      if (item.unit_price < 0) ie.unit_price = "Can't be negative";
-      if (Object.keys(ie).length) itemErrors[i] = ie;
-    });
-    if (itemErrors.length) errs.items = itemErrors;
-    setErrors(errs);
-    return !Object.keys(errs).length && !itemErrors.length;
-  };
-
-  const handleCreate = (e) => {
-    e.preventDefault();
-    if (!validate()) return;
-    if (editingQuote) {
-      const updated = quotations.map(q => q.id === editingQuote.id
-        ? { ...q, ...form, customer_name: form.customer_name.trim(), subtotal }
-        : q);
-      saveQuotations(updated);
-      showSuccess("Warranty updated");
-    } else {
-      const newQuote = {
-        id: Date.now(),
-        ...form,
-        customer_name: form.customer_name.trim(),
-        subtotal,
-        status: "Draft",
-        createdAt: new Date().toISOString()
-      };
-      saveQuotations([newQuote, ...quotations]);
-      showSuccess("Warranty record created");
+    } catch (err) {
+      console.error("Error fetching branches:", err);
     }
-    setIsModalOpen(false);
-    resetForm();
   };
 
-  const openEditModal = (q) => {
-    setEditingQuote(q);
-    setForm({
-      customer_name: q.customer_name || "",
-      valid_until: q.valid_until || new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0],
-      items: (q.items || []).length > 0
-        ? q.items.map(i => ({ ...i }))
-        : [{ product_id: "", product_name: "", quantity: 1, unit_price: 0 }],
-      note: q.note || ""
-    });
-    setCustomerSearch(q.customer_name || "");
-    setErrors({});
-    setIsModalOpen(true);
+  const fetchSalesWarranties = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(apiUrl("/api/sales/history?limit=1000"), {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const rawSales = Array.isArray(json.data) ? json.data : Array.isArray(json) ? json : [];
+        setSales(rawSales);
+      }
+    } catch (err) {
+      console.error("Error fetching sales for warranties:", err);
+      showError("Failed to load customer warranties from sales.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const resetForm = () => {
-    setForm({ customer_name: "", valid_until: new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0], items: [{ product_id: "", product_name: "", quantity: 1, unit_price: 0 }], note: "" });
-    setErrors({});
-    setCustomerSearch("");
-    setEditingQuote(null);
-  };
-
-  const closeModal = () => {
-    setIsModalOpen(false);
-    resetForm();
-  };
-
-  const selectCustomer = (name) => {
-    setForm(f => ({ ...f, customer_name: name }));
-    setCustomerSearch(name);
-    setShowCustomerDropdown(false);
-    if (errors.customer_name) setErrors(e => { const { customer_name, ...rest } = e; return rest; });
-  };
-
-  // Auto-expire warranties past their valid_until date
-  const expireOverdue = useCallback((list) => {
+  // Convert each sale into a customer warranty representation
+  const warranties = useMemo(() => {
     const now = new Date();
-    return list.map(q => {
-      if (q.status !== 'Expired' && new Date(q.valid_until) < now) {
-        return { ...q, status: 'Expired' };
-      }
-      return q;
+    return sales.map(s => {
+      const purchaseDate = new Date(s.createdAt);
+      // Standard 1 Year Warranty from purchase date
+      const validUntil = new Date(purchaseDate);
+      validUntil.setFullYear(validUntil.getFullYear() + 1);
+
+      const items = (s.SaleItems || s.OrderItems || []).filter(
+        i => (i.item_type || i.itemType) !== "package_charge"
+      );
+      const productItems = items.filter(
+        i => (i.item_type || i.itemType) !== "service" && !i.Service && !i.serviceId
+      );
+
+      const isVoid = s.status === "cancelled" || s.status === "void";
+      const isExpired = !isVoid && now > validUntil;
+      const daysRemaining = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      const isExpiringSoon = !isVoid && !isExpired && daysRemaining <= 30;
+
+      let status = "Active";
+      if (isVoid) status = "Void";
+      else if (isExpired) status = "Expired";
+      else if (isExpiringSoon) status = "Expiring Soon";
+
+      const invClean = (s.invoiceNumber || "").replace(/^2026-/, "");
+      const warrantyNumber = `WR-${invClean || s.id.toString().slice(-5)}`;
+
+      return {
+        id: s.id,
+        warrantyNumber,
+        invoiceNumber: s.invoiceNumber || `INV-${s.id.toString().slice(-6)}`,
+        customerName: s.customerName || s.Customer?.name || "Walk-In Customer",
+        branchId: s.branchId,
+        branchName: s.Branch?.name || "PC Alley Branch",
+        purchaseDate: s.createdAt,
+        validUntil: validUntil.toISOString().split("T")[0],
+        daysRemaining,
+        totalAmount: parseFloat(s.totalAmount || 0),
+        items: items.map(it => ({
+          product_name: it.productName || it.Product?.name || "Hardware Item",
+          quantity: it.quantity || 1,
+          unit_price: parseFloat(it.unitPrice || it.price_at_sale || 0),
+          subtotal: parseFloat(it.subtotal || 0),
+          item_type: it.item_type || "product"
+        })),
+        productCount: productItems.length || items.length,
+        status,
+        rawSale: s
+      };
     });
-  }, []);
+  }, [sales]);
 
-  useEffect(() => {
-    const expired = expireOverdue(quotations);
-    const hasChanges = expired.some((q, i) => q.status !== quotations[i]?.status);
-    if (hasChanges) saveQuotations(expired);
-    const timer = setInterval(() => {
-      const updated = expireOverdue(quotations);
-      const changed = updated.some((q, i) => q.status !== quotations[i]?.status);
-      if (changed) saveQuotations(updated);
-    }, 60000);
-    return () => clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Filtered Warranties
+  const filtered = useMemo(() => {
+    return warranties.filter(w => {
+      const q = search.toLowerCase();
+      const matchesSearch =
+        w.customerName.toLowerCase().includes(q) ||
+        w.invoiceNumber.toLowerCase().includes(q) ||
+        w.warrantyNumber.toLowerCase().includes(q) ||
+        w.items.some(it => it.product_name.toLowerCase().includes(q));
 
-  const handleStatusChange = (id, status) => {
-    if (status === 'Void') {
-      const q = quotations.find(x => x.id === id);
-      if (q) {
-        setVoidQuote(q);
-        setVoidReason("");
-        setVoidError("");
+      if (!matchesSearch) return false;
+
+      if (statusFilter !== "all" && w.status.toLowerCase() !== statusFilter.toLowerCase()) {
+        return false;
       }
-      return;
-    }
-    const isAdmin = user?.role === 'super_admin';
-    if (isAdmin && status === 'Accepted') {
-      saveQuotations(quotations.map(x => x.id === id ? { ...x, status: 'Accepted' } : x));
-      showSuccess('Warranty accepted');
-    } else if (status === 'Sent') {
-      saveQuotations(quotations.map(x => x.id === id ? { ...x, status: 'Sent' } : x));
-      showSuccess('Warranty marked as Sent');
-    } else if (isAdmin && status === 'Draft') {
-      saveQuotations(quotations.map(x => x.id === id ? { ...x, status: 'Draft' } : x));
-      showSuccess('Warranty set to Draft');
-    }
-  };
 
-  const confirmVoidWarranty = () => {
-    if (!voidReason.trim()) {
-      setVoidError("Please provide a reason for voiding/canceling this warranty.");
-      return;
-    }
-    if (voidReason.trim().length < 3) {
-      setVoidError("Cancellation reason must be at least 3 characters.");
-      return;
-    }
-    const updated = quotations.map(x => x.id === voidQuote.id ? {
-      ...x,
-      status: 'Void',
-      void_reason: voidReason.trim(),
-      voided_at: new Date().toISOString(),
-      voided_by: user?.first_name ? `${user.first_name} ${user.last_name}` : (user?.username || 'Admin')
-    } : x);
-    saveQuotations(updated);
-    showSuccess(`Warranty WR-${String(voidQuote.id).slice(-5)} marked as Void`);
-    setVoidQuote(null);
-    setVoidReason("");
-    setVoidError("");
-  };
+      if (branchFilter && String(w.branchId) !== String(branchFilter)) {
+        return false;
+      }
 
-  const canArchive = (q) => (q.status === 'Accepted' || q.status === 'Expired' || q.status === 'Void') && !q.archived;
-
-  const toggleSelect = (id) => {
-    const q = quotations.find(x => x.id === id);
-    if (!q || !canArchive(q)) return;
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
+      return true;
     });
-  };
+  }, [warranties, search, statusFilter, branchFilter]);
 
-  const toggleSelectAll = () => {
-    const archivable = paginated.filter(canArchive);
-    if (selectedIds.size === archivable.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(archivable.map(q => q.id)));
-    }
-  };
-
-  const bulkArchive = () => {
-    if (!selectedIds.size) return;
-    const updated = quotations.map(q =>
-      selectedIds.has(q.id) && canArchive(q) ? { ...q, archived: true } : q
-    );
-    saveQuotations(updated);
-    showSuccess(`${selectedIds.size} warranty(s) archived`);
-    setSelectedIds(new Set());
-  };
-
-  const canChangeStatus = (q) => {
-    if (q.status === 'Expired' || q.status === 'Void' || q.archived) return false;
-    return true;
-  };
-
-  const statusOptions = (q) => {
-    if (q.status === 'Void') return ['Void'];
-    if (user?.role === 'super_admin') return ['Draft', 'Sent', 'Accepted', 'Void'];
-    return ['Draft', 'Sent', 'Void'];
-  };
-
-  const filtered = quotations.filter(q =>
-    (showArchived ? q.archived : !q.archived) &&
-    (q.customer_name || "").toLowerCase().includes(search.toLowerCase())
-  );
-  const totalPages = Math.ceil(filtered.length / itemsPerPage);
+  // Pagination
+  const totalPages = Math.ceil(filtered.length / itemsPerPage) || 1;
   const paginated = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
+  // Statistics
+  const stats = useMemo(() => {
+    return {
+      total: warranties.length,
+      active: warranties.filter(w => w.status === "Active" || w.status === "Expiring Soon").length,
+      expiring: warranties.filter(w => w.status === "Expiring Soon").length,
+      expired: warranties.filter(w => w.status === "Expired").length
+    };
+  }, [warranties]);
+
   const STATUS_STYLE = {
-    Draft:    "text-muted bg-border/30 border-border",
-    Sent:     "text-brand-neonblue bg-brand-neonblue/10 border-brand-neonblue/30",
-    Accepted: "text-green-500 bg-green-500/10 border-green-500/30",
-    Expired:  "text-orange-500 bg-orange-500/10 border-orange-500/30",
-    Void:     "text-brand-crimson bg-brand-crimson/10 border-brand-crimson/30",
+    Active: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30",
+    "Expiring Soon": "text-amber-400 bg-amber-500/10 border-amber-500/30",
+    Expired: "text-brand-crimson bg-brand-crimson/10 border-brand-crimson/30",
+    Void: "text-muted bg-border/30 border-border"
+  };
+
+  const handleExport = () => {
+    const dataToExport = filtered.map(w => ({
+      "Warranty #": w.warrantyNumber,
+      "Invoice #": w.invoiceNumber,
+      "Customer Name": w.customerName,
+      "Branch": w.branchName,
+      "Purchase Date": new Date(w.purchaseDate).toLocaleDateString(),
+      "Warranty Valid Until": new Date(w.validUntil).toLocaleDateString(),
+      "Covered Items Count": w.productCount,
+      "Total Amount (₱)": w.totalAmount,
+      "Warranty Status": w.status
+    }));
+    exportToExcel(dataToExport, "Customer_Warranties_Registry");
+    showSuccess("Customer warranties exported to Excel");
   };
 
   return (
@@ -329,83 +205,124 @@ export default function QuotationsPage() {
         <TopBar title="CUSTOMER WARRANTIES" />
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-10 custom-scrollbar relative z-10 bg-brand-bgbase text-main">
-
           {/* Header */}
-          <div className="mb-6">
-            <motion.h2 initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="text-[10px] font-black tracking-[4px] uppercase text-main/40 mb-1">
-              Customer Warranties
-            </motion.h2>
-            <h1 className="text-2xl font-rajdhani font-black uppercase">
-              CUSTOMER <span className="text-brand-neonblue">WARRANTIES</span>
-            </h1>
+          <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <motion.h2
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="text-[10px] font-black tracking-[4px] uppercase text-main/40 mb-1"
+              >
+                Hardware Protection &amp; Serial Tracking
+              </motion.h2>
+              <h1 className="text-2xl font-rajdhani font-black uppercase">
+                CUSTOMER <span className="text-brand-neonblue">WARRANTIES</span>
+              </h1>
+            </div>
+
+            <button
+              onClick={handleExport}
+              disabled={filtered.length === 0}
+              className="px-5 py-2.5 rounded-full border border-border bg-brand-surface hover:bg-brand-surface/80 text-xs font-black uppercase tracking-wider text-muted hover:text-main flex items-center gap-2 transition-all self-start sm:self-auto disabled:opacity-40"
+            >
+              <Download size={14} /> Export Warranties
+            </button>
           </div>
 
-          {/* Stats */}
+          {/* Stats Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             {[
-              { label: "Total Warranties", value: quotations.length, color: "text-main" },
-              { label: "Draft", value: quotations.filter(q => q.status === "Draft").length, color: "text-muted" },
-              { label: "Accepted", value: quotations.filter(q => q.status === "Accepted").length, color: "text-green-500" },
-              { label: "Expired", value: quotations.filter(q => q.status === "Expired").length, color: "text-brand-crimson" },
+              { label: "Total Warranties", value: stats.total, color: "text-main" },
+              { label: "Active Coverage", value: stats.active, color: "text-emerald-400" },
+              { label: "Expiring Soon", value: stats.expiring, color: "text-amber-400" },
+              { label: "Expired", value: stats.expired, color: "text-brand-crimson" }
             ].map((s, i) => (
-              <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-                className="bg-brand-surface border border-border rounded-2xl p-4 shadow-sm">
-                <p className="text-[10px] font-black uppercase tracking-[3px] text-main/40 mb-1">{s.label}</p>
-                <p className={`text-2xl font-rajdhani font-black ${s.color}`}>{s.value}</p>
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05 }}
+                className="bg-brand-surface border border-border rounded-2xl p-4 shadow-sm"
+              >
+                <p className="text-[10px] font-black uppercase tracking-[3px] text-main/40 mb-1">
+                  {s.label}
+                </p>
+                <p className={`text-2xl font-rajdhani font-black ${s.color}`}>
+                  {loading ? "..." : s.value}
+                </p>
               </motion.div>
             ))}
           </div>
 
           {/* Toolbar */}
-          <div className="flex flex-col sm:flex-row gap-3 mb-6">
-            <div className="relative flex-1 max-w-sm">
+          <div className="flex flex-col md:flex-row gap-3 mb-6">
+            <div className="relative flex-1">
               <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
-              <input type="text" value={search} onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
-                placeholder="Search by customer name..."
-                className="w-full bg-brand-surface border border-border text-main text-xs font-bold rounded-xl pl-9 pr-4 py-2.5 outline-none focus:border-brand-neonblue transition-colors" />
+              <input
+                type="text"
+                value={search}
+                onChange={e => {
+                  setSearch(e.target.value);
+                  setCurrentPage(1);
+                }}
+                placeholder="Search by customer name, invoice #, serial number, product..."
+                className="w-full bg-brand-surface border border-border text-main text-xs font-bold rounded-xl pl-9 pr-4 py-2.5 outline-none focus:border-brand-neonblue transition-colors"
+              />
             </div>
-            <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="btn-premium flex items-center gap-2 px-6 py-2.5 rounded-full text-xs">
-              <Plus size={16} /> New Warranty
-            </button>
-            <button onClick={() => { setShowArchived(!showArchived); setSelectedIds(new Set()); setCurrentPage(1); }}
-              className={`flex items-center gap-2 px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-widest border transition-all ${showArchived ? 'bg-brand-surface border-brand-neonblue/40 text-brand-neonblue' : 'bg-brand-bgbase border-border text-muted hover:text-main'}`}>
-              <Archive size={14} /> {showArchived ? 'Active Warranties' : 'Archived'}
-            </button>
+
+            <div className="flex flex-wrap gap-2">
+              {/* Status Filter */}
+              <select
+                value={statusFilter}
+                onChange={e => {
+                  setStatusFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="bg-brand-surface border border-border text-main text-xs font-bold rounded-xl px-4 py-2.5 outline-none focus:border-brand-neonblue transition-colors cursor-pointer"
+              >
+                <option value="all">All Status</option>
+                <option value="Active">Active Coverage</option>
+                <option value="Expiring Soon">Expiring Soon (≤30 Days)</option>
+                <option value="Expired">Expired</option>
+                <option value="Void">Void / Cancelled</option>
+              </select>
+
+              {/* Branch Filter */}
+              {branches.length > 0 && (
+                <select
+                  value={branchFilter}
+                  onChange={e => {
+                    setBranchFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="bg-brand-surface border border-border text-main text-xs font-bold rounded-xl px-4 py-2.5 outline-none focus:border-brand-neonblue transition-colors cursor-pointer"
+                >
+                  <option value="">All Branches</option>
+                  {branches.map(b => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
           </div>
 
-          {/* Bulk action bar */}
-          <AnimatePresence>
-            {selectedIds.size > 0 && (
-              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
-                className="bg-brand-surface border border-brand-neonblue/30 rounded-xl px-4 py-3 mb-4 flex items-center justify-between">
-                <span className="text-xs font-bold text-muted">{selectedIds.size} selected</span>
-                <div className="flex gap-2">
-                  <button onClick={bulkArchive} className="px-4 py-2 rounded-lg bg-brand-bgbase border border-border text-xs font-bold text-muted hover:text-main hover:border-border transition-all flex items-center gap-2">
-                    <Archive size={14} /> Archive Selected
-                  </button>
-                  <button onClick={() => setSelectedIds(new Set())} className="px-4 py-2 rounded-lg bg-brand-bgbase border border-border text-xs font-bold text-muted hover:text-main transition-all">
-                    Clear
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
           {/* Table */}
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            className="bg-brand-surface border border-border rounded-2xl overflow-hidden shadow-sm">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="bg-brand-surface border border-border rounded-2xl overflow-hidden shadow-sm"
+          >
             <div className="overflow-x-auto">
-              <table className="w-full text-left min-w-[750px]">
+              <table className="w-full text-left min-w-[850px]">
                 <thead>
                   <tr className="bg-brand-bgbase/50 text-[10px] font-black uppercase tracking-widest text-muted border-b border-border">
-                    <th className="py-4 px-4 w-10">
-                      <input type="checkbox" checked={paginated.length > 0 && selectedIds.size === paginated.length}
-                        onChange={toggleSelectAll}
-                        className="accent-brand-neonblue cursor-pointer" />
-                    </th>
                     <th className="py-4 px-6">Warranty #</th>
+                    <th className="py-4 px-6">Invoice #</th>
                     <th className="py-4 px-6">Customer</th>
-                    <th className="py-4 px-6">Items</th>
+                    <th className="py-4 px-6">Covered Items</th>
+                    <th className="py-4 px-6">Purchase Date</th>
                     <th className="py-4 px-6">Valid Until</th>
                     <th className="py-4 px-6 text-right">Amount</th>
                     <th className="py-4 px-6">Status</th>
@@ -413,93 +330,153 @@ export default function QuotationsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {paginated.length === 0 ? (
-                    <tr><td colSpan="8" className="py-20 text-center">
-                      <FileText className="mx-auto text-main/10 mb-3" size={36} />
-                      <p className="text-[10px] font-black uppercase tracking-widest text-muted">
-                        {search ? "No matching warranties" : 'No warranties logged yet — click "New Warranty" to start'}
-                      </p>
-                    </td></tr>
-                  ) : paginated.map((q, idx) => (
-                    <motion.tr key={q.id} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: idx * 0.03 }}
-                      className={`border-b border-border/30 hover:bg-brand-bgbase/30 transition-colors group ${selectedIds.has(q.id) ? 'bg-brand-neonblue/5' : ''}`}>
-                      <td className="py-4 px-4 w-10">
-                        <input type="checkbox" checked={selectedIds.has(q.id)}
-                          disabled={!canArchive(q)}
-                          onChange={() => toggleSelect(q.id)}
-                          className={`accent-brand-neonblue ${canArchive(q) ? 'cursor-pointer' : 'cursor-not-allowed opacity-30'}`} />
+                  {loading ? (
+                    <tr>
+                      <td colSpan="9" className="py-20 text-center">
+                        <div className="w-8 h-8 border-2 border-brand-neonblue border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                        <p className="text-[10px] font-black uppercase tracking-widest text-muted">
+                          Loading customer warranties from sales ledger...
+                        </p>
                       </td>
-                      <td className="py-4 px-6 font-mono text-[10px] text-muted">WR-{String(q.id).slice(-5)}</td>
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-lg bg-brand-bgbase border border-border flex items-center justify-center text-[10px] font-bold text-muted">
-                            {(q.customer_name || "?").substring(0, 2).toUpperCase()}
+                    </tr>
+                  ) : paginated.length === 0 ? (
+                    <tr>
+                      <td colSpan="9" className="py-20 text-center">
+                        <FileText className="mx-auto text-main/10 mb-3" size={36} />
+                        <p className="text-[10px] font-black uppercase tracking-widest text-muted">
+                          {search ? "No matching customer warranties found" : "No warranties logged yet in sales"}
+                        </p>
+                      </td>
+                    </tr>
+                  ) : (
+                    paginated.map((w, idx) => (
+                      <motion.tr
+                        key={w.id}
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: idx * 0.02 }}
+                        className="border-b border-border/30 hover:bg-brand-bgbase/30 transition-colors group"
+                      >
+                        <td className="py-4 px-6 font-mono text-[11px] font-bold text-brand-neonblue">
+                          {w.warrantyNumber}
+                        </td>
+                        <td className="py-4 px-6 font-mono text-[11px] text-muted font-bold">
+                          {w.invoiceNumber}
+                        </td>
+                        <td className="py-4 px-6">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-lg bg-brand-bgbase border border-border flex items-center justify-center text-[10px] font-bold text-muted shrink-0">
+                              {(w.customerName || "?").substring(0, 2).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <span className="text-xs font-bold text-main block truncate max-w-[180px]">
+                                {w.customerName}
+                              </span>
+                              {w.branchName && (
+                                <span className="text-[9px] uppercase font-semibold text-muted/60 block">
+                                  {w.branchName}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <span className="text-sm font-bold text-main">{q.customer_name}</span>
-                        </div>
-                      </td>
-                      <td className="py-4 px-6">
-                        <span className="px-2 py-0.5 bg-brand-bgbase border border-border rounded text-[9px] font-black text-muted">
-                          {q.items.length} Products
-                        </span>
-                      </td>
-                      <td className="py-4 px-6 text-xs text-muted font-bold">
-                        {new Date(q.valid_until).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}
-                      </td>
-                      <td className="py-4 px-6 text-right font-rajdhani font-black text-main text-lg">
-                        ₱{q.subtotal.toLocaleString()}
-                      </td>
-                      <td className="py-4 px-6">
-                        <select value={q.status}
-                          disabled={!canChangeStatus(q)}
-                          onChange={e => handleStatusChange(q.id, e.target.value)}
-                          className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest border appearance-none bg-transparent ${canChangeStatus(q) ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'} ${STATUS_STYLE[q.status] || STATUS_STYLE.Draft}`}>
-                          {user?.role === 'super_admin'
-                            ? (canChangeStatus(q)
-                              ? statusOptions(q).map(s => <option key={s} value={s}>{s}</option>)
-                              : <option value={q.status}>{q.status}</option>)
-                            : (canChangeStatus(q)
-                              ? Object.keys(STATUS_STYLE).map(s => <option key={s} value={s}>{s}</option>)
-                              : <option value={q.status}>{q.status}</option>)
-                          }
-                        </select>
-                      </td>
-                      <td className="py-4 px-6 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <button onClick={() => openEditModal(q)}
-                            disabled={q.status !== 'Draft'}
-                            className={`p-2 rounded-lg border transition-all ${q.status === 'Draft' ? 'border-border text-muted hover:text-main hover:border-brand-neonblue/40 cursor-pointer' : 'border-border/20 text-muted/30 cursor-not-allowed'}`} title={q.status === 'Draft' ? 'Edit' : 'Can only edit Draft'}>
-                            <Edit3 size={13} />
-                          </button>
-                          <button onClick={() => setViewQuote(q)}
-                            className="p-2 rounded-lg border border-border text-muted hover:text-main hover:border-brand-neonblue/40 transition-all cursor-pointer" title="View">
-                            <Eye size={13} />
-                          </button>
-                          {q.status !== 'Void' && (
+                        </td>
+                        <td className="py-4 px-6">
+                          <span className="px-2 py-0.5 bg-brand-bgbase border border-border rounded text-[9px] font-black text-muted inline-flex items-center gap-1">
+                            <Package size={10} className="text-brand-neonblue" />
+                            {w.productCount} Products
+                          </span>
+                        </td>
+                        <td className="py-4 px-6 text-xs text-muted font-bold">
+                          {new Date(w.purchaseDate).toLocaleDateString("en-PH", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric"
+                          })}
+                        </td>
+                        <td className="py-4 px-6 text-xs font-bold">
+                          <span className="block text-main">
+                            {new Date(w.validUntil).toLocaleDateString("en-PH", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric"
+                            })}
+                          </span>
+                          <span
+                            className={`text-[9px] font-semibold ${
+                              w.status === "Expired"
+                                ? "text-brand-crimson"
+                                : w.status === "Expiring Soon"
+                                  ? "text-amber-400"
+                                  : "text-emerald-400"
+                            }`}
+                          >
+                            {w.status === "Expired"
+                              ? "Expired"
+                              : `${w.daysRemaining} days left`}
+                          </span>
+                        </td>
+                        <td className="py-4 px-6 text-right font-rajdhani font-black text-main text-base">
+                          ₱{w.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-4 px-6">
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border inline-block whitespace-nowrap ${
+                              STATUS_STYLE[w.status] || STATUS_STYLE.Active
+                            }`}
+                          >
+                            {w.status}
+                          </span>
+                        </td>
+                        <td className="py-4 px-6 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
                             <button
-                              onClick={() => { setVoidQuote(q); setVoidReason(""); setVoidError(""); }}
-                              className="p-2 rounded-lg border border-border text-muted hover:text-brand-crimson hover:border-brand-crimson/40 transition-all cursor-pointer"
-                              title="Void / Cancel Warranty"
+                              onClick={() => setViewWarranty(w)}
+                              className="p-2 rounded-lg bg-brand-bgbase hover:bg-brand-surface border border-border text-muted hover:text-brand-neonblue transition-all"
+                              title="View Warranty Certificate & Covered Items"
                             >
-                              <Ban size={13} />
+                              <Eye size={14} />
                             </button>
-                          )}
-                        </div>
-                      </td>
-                    </motion.tr>
-                  ))}
+                            <button
+                              onClick={() => setPrintReceiptOrder(w.rawSale)}
+                              className="p-2 rounded-lg bg-brand-bgbase hover:bg-brand-surface border border-border text-muted hover:text-main transition-all"
+                              title="Print Thermal Receipt"
+                            >
+                              <Printer size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </motion.tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination */}
             {totalPages > 1 && (
-              <div className="border-t border-border/50 p-4 flex items-center justify-between bg-brand-bgbase/20">
-                <span className="text-[10px] font-black uppercase tracking-widest text-muted">Page {currentPage} of {totalPages}</span>
-                <div className="flex gap-2">
-                  <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1}
-                    className="p-2 rounded-lg border border-border text-muted hover:text-main disabled:opacity-40 disabled:cursor-not-allowed transition-all"><ChevronLeft size={14} /></button>
-                  <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages}
-                    className="p-2 rounded-lg border border-border text-muted hover:text-main disabled:opacity-40 disabled:cursor-not-allowed transition-all"><ChevronRight size={14} /></button>
+              <div className="p-4 border-t border-border flex items-center justify-between text-xs text-muted">
+                <span>
+                  Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
+                  {Math.min(currentPage * itemsPerPage, filtered.length)} of {filtered.length} warranties
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+                    disabled={currentPage === 1}
+                    className="p-2 rounded-lg border border-border text-muted hover:text-main disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+                  <span className="px-3 font-bold text-main">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                    className="p-2 rounded-lg border border-border text-muted hover:text-main disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  >
+                    <ChevronRight size={14} />
+                  </button>
                 </div>
               </div>
             )}
@@ -507,343 +484,182 @@ export default function QuotationsPage() {
         </div>
       </main>
 
-      {/* Create Modal */}
+      {/* ── Official Customer Warranty Certificate Modal ── */}
       <AnimatePresence>
-        {isModalOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={closeModal}
-              className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="w-full max-w-xl bg-brand-surface border border-border rounded-[32px] p-8 relative z-10 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
-              <div className="absolute top-0 right-0 w-40 h-40 bg-brand-neonblue/10 blur-[80px] pointer-events-none" />
-              <div className="mb-6">
-                <p className="text-[10px] font-black uppercase tracking-[3px] text-brand-neonblue mb-1">Create</p>
-                <h3 className="text-xl font-rajdhani font-black uppercase tracking-widest">{editingQuote ? 'Edit Warranty Record' : 'New Warranty Record'}</h3>
-              </div>
-              <form onSubmit={handleCreate} className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="relative">
-                    <label className="text-[9px] font-black uppercase tracking-[3px] text-muted ml-1">Customer Name *</label>
-                    <input type="text" value={form.customer_name}
-                      onChange={e => { setForm({ ...form, customer_name: e.target.value }); setCustomerSearch(e.target.value); setShowCustomerDropdown(true); if (errors.customer_name) setErrors(prev => { const { customer_name, ...rest } = prev; return rest; }); }}
-                      onFocus={() => customerSearch && setShowCustomerDropdown(true)}
-                      onBlur={() => setTimeout(() => setShowCustomerDropdown(false), 200)}
-                      placeholder="Search or type customer name..."
-                      className={`w-full mt-1.5 bg-brand-bgbase border rounded-2xl py-3 px-4 text-sm text-main focus:outline-none transition-all ${errors.customer_name ? 'border-brand-crimson' : 'border-border focus:border-brand-neonblue'}`} />
-                    {errors.customer_name && <p className="flex items-center gap-1 text-[9px] font-bold text-brand-crimson mt-1 ml-1"><AlertCircle size={10} />{errors.customer_name}</p>}
-                    {showCustomerDropdown && filteredCustomers.length > 0 && (
-                      <div className="absolute z-20 w-full mt-1 bg-brand-surface border border-border rounded-xl shadow-xl overflow-hidden">
-                        {filteredCustomers.map(c => (
-                          <button key={c.id} type="button" onMouseDown={() => selectCustomer(c.name || c.first_name || "")}
-                            className="w-full text-left px-4 py-2.5 text-xs text-main hover:bg-brand-bgbase transition-colors flex items-center gap-2 border-b border-border/20 last:border-0">
-                            <User size={12} className="text-muted shrink-0" />
-                            <span className="font-bold">{c.name || c.first_name || ""}</span>
-                            {(c.contact_number || c.phone) && <span className="text-muted ml-auto">{c.contact_number || c.phone}</span>}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <label className="text-[9px] font-black uppercase tracking-[3px] text-muted ml-1">Valid Until</label>
-                    <input type="date" value={form.valid_until} onChange={e => { setForm({ ...form, valid_until: e.target.value }); if (errors.valid_until) setErrors(prev => { const { valid_until, ...rest } = prev; return rest; }); }}
-                      className={`w-full mt-1.5 bg-brand-bgbase border rounded-2xl py-3 px-4 text-sm text-main focus:outline-none transition-all ${errors.valid_until ? 'border-brand-crimson' : 'border-border focus:border-brand-neonblue'}`} />
-                    {errors.valid_until && <p className="flex items-center gap-1 text-[9px] font-bold text-brand-crimson mt-1 ml-1"><AlertCircle size={10} />{errors.valid_until}</p>}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[9px] font-black uppercase tracking-[3px] text-muted ml-1 block mb-2">Items</label>
-                  <div className="space-y-2">
-                    {form.items.map((item, idx) => (
-                      <div key={idx} className="flex gap-2 items-start">
-                        <div className="flex-1">
-                          <select value={item.product_id} onChange={e => { updateItem(idx, "product_id", e.target.value); if (errors.items?.[idx]?.product_id) { const newErrors = { ...errors }; newErrors.items = [...(errors.items || [])]; delete newErrors.items[idx]; setErrors(newErrors); } }}
-                            className={`w-full bg-brand-bgbase border rounded-xl py-2.5 px-3 text-xs text-main focus:outline-none appearance-none ${errors.items?.[idx]?.product_id ? 'border-brand-crimson' : 'border-border focus:border-brand-neonblue'}`}>
-                            <option value="">Select product...</option>
-                            {products.map(p => <option key={p.id} value={p.id}>{p.name} — ₱{parseFloat(p.price).toLocaleString()}</option>)}
-                          </select>
-                          {errors.items?.[idx]?.product_id && <p className="flex items-center gap-1 text-[9px] font-bold text-brand-crimson mt-1"><AlertCircle size={10} />{errors.items[idx].product_id}</p>}
-                        </div>
-                        <div className="w-20">
-                          <input type="number" min="1" value={item.quantity} onChange={e => updateItem(idx, "quantity", parseInt(e.target.value) || "")}
-                            className={`w-full bg-brand-bgbase border rounded-xl py-2.5 px-3 text-xs text-main focus:outline-none text-center ${errors.items?.[idx]?.quantity ? 'border-brand-crimson' : 'border-border focus:border-brand-neonblue'}`} />
-                          {errors.items?.[idx]?.quantity && <p className="text-[9px] font-bold text-brand-crimson text-center mt-0.5">{errors.items[idx].quantity}</p>}
-                        </div>
-                        <span className="text-xs font-bold text-muted w-20 shrink-0 text-right pt-3">₱{(item.unit_price * item.quantity).toLocaleString()}</span>
-                        {form.items.length > 1 && (
-                          <button type="button" onClick={() => removeItem(idx)} className="p-1.5 pt-3 text-muted hover:text-brand-crimson transition-colors">
-                            <X size={14} />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  <button type="button" onClick={addItem}
-                    className="mt-2 text-[10px] font-black uppercase tracking-widest text-brand-neonblue hover:text-main flex items-center gap-1 transition-colors">
-                    <Plus size={12} /> Add Item
-                  </button>
-                </div>
-
-                <div className="flex justify-end">
-                  <div className="text-right">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-muted">Subtotal</p>
-                    <p className="text-xl font-rajdhani font-black text-main">₱{subtotal.toLocaleString()}</p>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[9px] font-black uppercase tracking-[3px] text-muted ml-1">Notes (optional)</label>
-                  <textarea value={form.note} onChange={e => setForm({ ...form, note: e.target.value })}
-                    rows={2} placeholder="Terms & conditions, delivery notes..."
-                    className="w-full mt-1.5 bg-brand-bgbase border border-border rounded-2xl py-3 px-4 text-sm text-main focus:outline-none focus:border-brand-neonblue transition-all resize-none" />
-                </div>
-                <div className="flex gap-3 pt-2">
-                  <button type="button" onClick={closeModal}
-                    className="flex-1 py-3.5 rounded-full border border-border text-[10px] font-black uppercase tracking-[3px] text-muted hover:text-main transition-all">Cancel</button>
-                  <button type="submit"
-                    className="flex-[2] py-3.5 bg-brand-neonblue/20 hover:bg-brand-neonblue text-brand-neonblue hover:text-white border border-brand-neonblue/40 rounded-full text-[10px] font-black uppercase tracking-[3px] transition-all active:scale-[0.98]">
-                    {editingQuote ? 'Save Warranty' : 'Create Warranty Record'}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* View Modal */}
-      <AnimatePresence>
-        {viewQuote && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setViewQuote(null)}
-              className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+        {viewWarranty && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setViewWarranty(null)}
+              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-lg bg-brand-surface border border-border rounded-[32px] p-6 sm:p-8 relative z-10 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
-              
-              {/* Warranty Header & Badges */}
+              className="w-full max-w-xl bg-brand-surface border border-brand-neonblue/20 rounded-[28px] p-6 sm:p-8 relative z-10 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar"
+            >
+              {/* Header & Badges */}
               <div className="flex justify-between items-start mb-5 pb-4 border-b border-border/40">
                 <div>
                   <div className="flex items-center gap-2 mb-2 flex-wrap">
                     <span className="px-2.5 py-0.5 rounded-full text-[9px] font-mono font-black uppercase tracking-wider bg-brand-neonblue/10 text-brand-neonblue border border-brand-neonblue/20">
-                      WRN-#{String(viewQuote.id).slice(-6).toUpperCase()}
+                      {viewWarranty.warrantyNumber}
                     </span>
-                    <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${STATUS_STYLE[viewQuote.status] || STATUS_STYLE.Draft}`}>
-                      {viewQuote.status}
+                    <span className="px-2.5 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase tracking-wider bg-brand-bgbase text-muted border border-border">
+                      Invoice: {viewWarranty.invoiceNumber}
                     </span>
-                    {viewQuote.valid_until && (
-                      <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${
-                        new Date(viewQuote.valid_until) < new Date()
-                          ? 'bg-red-500/10 text-red-400 border-red-500/20'
-                          : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                      }`}>
-                        {new Date(viewQuote.valid_until) < new Date() ? 'Coverage Expired' : 'Active Coverage'}
-                      </span>
-                    )}
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+                        STATUS_STYLE[viewWarranty.status] || STATUS_STYLE.Active
+                      }`}
+                    >
+                      {viewWarranty.status}
+                    </span>
                   </div>
-                  <p className="text-[9px] font-black uppercase tracking-widest text-muted/60 mb-0.5">Registered Customer</p>
-                  <h3 className="text-xl font-rajdhani font-black uppercase text-main leading-tight truncate max-w-sm" title={viewQuote.customer_name}>
-                    {viewQuote.customer_name}
+                  <p className="text-[9px] font-black uppercase tracking-widest text-muted/60 mb-0.5">
+                    Official Warranty Holder
+                  </p>
+                  <h3
+                    className="text-xl font-rajdhani font-black uppercase text-main leading-tight truncate max-w-sm"
+                    title={viewWarranty.customerName}
+                  >
+                    {viewWarranty.customerName}
                   </h3>
+                  {viewWarranty.branchName && (
+                    <p className="text-[10px] text-brand-neonblue font-bold flex items-center gap-1 mt-0.5">
+                      <Building2 size={11} /> {viewWarranty.branchName}
+                    </p>
+                  )}
                 </div>
-                <button onClick={() => setViewQuote(null)} className="p-2 text-muted hover:text-main rounded-xl hover:bg-brand-bgbase transition-colors cursor-pointer" aria-label="Close">
+                <button
+                  onClick={() => setViewWarranty(null)}
+                  className="p-2 text-muted hover:text-main rounded-xl hover:bg-brand-bgbase transition-colors cursor-pointer"
+                  aria-label="Close"
+                >
                   <X size={18} />
                 </button>
               </div>
 
-              {/* Warranty Coverage & Dates Grid */}
+              {/* Warranty Coverage Dates */}
               <div className="grid grid-cols-2 gap-3 mb-5 p-4 rounded-2xl bg-brand-bgbase/60 border border-border/40">
                 <div>
                   <p className="text-[9px] font-black uppercase tracking-wider text-muted flex items-center gap-1.5 mb-1">
                     <Calendar size={12} className="text-brand-neonblue" /> Coverage Valid Until
                   </p>
                   <p className="text-sm font-rajdhani font-black text-main">
-                    {viewQuote.valid_until
-                      ? new Date(viewQuote.valid_until).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })
-                      : "7-Day Standard Coverage"}
+                    {new Date(viewWarranty.validUntil).toLocaleDateString("en-PH", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric"
+                    })}
                   </p>
-                  {viewQuote.valid_until && (
-                    <p className={`text-[10px] font-bold mt-0.5 ${
-                      new Date(viewQuote.valid_until) < new Date() ? 'text-red-400' : 'text-emerald-400'
-                    }`}>
-                      {Math.ceil((new Date(viewQuote.valid_until) - new Date()) / (1000 * 60 * 60 * 24)) > 0
-                        ? `${Math.ceil((new Date(viewQuote.valid_until) - new Date()) / (1000 * 60 * 60 * 24))} days remaining`
-                        : 'Warranty Expired'}
-                    </p>
-                  )}
+                  <p
+                    className={`text-[10px] font-bold mt-0.5 ${
+                      viewWarranty.status === "Expired"
+                        ? "text-brand-crimson"
+                        : viewWarranty.status === "Expiring Soon"
+                          ? "text-amber-400"
+                          : "text-emerald-400"
+                    }`}
+                  >
+                    {viewWarranty.status === "Expired"
+                      ? "Coverage Expired"
+                      : `${viewWarranty.daysRemaining} days remaining`}
+                  </p>
                 </div>
 
                 <div>
                   <p className="text-[9px] font-black uppercase tracking-wider text-muted flex items-center gap-1.5 mb-1">
-                    <Clock size={12} className="text-brand-neonblue" /> Date Issued
+                    <Clock size={12} className="text-brand-neonblue" /> Date of Purchase
                   </p>
                   <p className="text-sm font-rajdhani font-bold text-main">
-                    {viewQuote.createdAt
-                      ? new Date(viewQuote.createdAt).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })
-                      : new Date().toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}
+                    {new Date(viewWarranty.purchaseDate).toLocaleDateString("en-PH", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric"
+                    })}
                   </p>
-                  <p className="text-[10px] text-muted/60 font-medium mt-0.5">PC Alley Official Record</p>
+                  <p className="text-[10px] text-muted/60 font-medium mt-0.5">
+                    1 Year Store Hardware Warranty
+                  </p>
                 </div>
               </div>
-
-              {viewQuote.status === 'Void' && (
-                <div className="mb-5 p-4 rounded-2xl bg-brand-crimson/10 border border-brand-crimson/30 text-brand-crimson">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <Ban size={16} className="shrink-0" />
-                    <span className="text-xs font-black uppercase tracking-wider">Warranty Voided</span>
-                    {viewQuote.voided_at && (
-                      <span className="text-[10px] text-muted ml-auto font-medium">
-                        {new Date(viewQuote.voided_at).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}
-                      </span>
-                    )}
-                  </div>
-                  <div className="pl-6 space-y-1">
-                    <p className="text-[9px] text-muted uppercase tracking-wider font-bold">Reason for Cancellation:</p>
-                    <p className="text-xs text-main font-medium leading-relaxed bg-brand-bgbase/60 p-2.5 rounded-xl border border-border/40">
-                      {viewQuote.void_reason || "No cancellation reason provided."}
-                    </p>
-                    {viewQuote.voided_by && (
-                      <p className="text-[10px] text-muted mt-1">Processed by: <span className="font-bold text-main">{viewQuote.voided_by}</span></p>
-                    )}
-                  </div>
-                </div>
-              )}
 
               {/* Covered Products List */}
               <div className="mb-5">
                 <p className="text-[10px] font-black uppercase tracking-[2px] text-muted/60 mb-2.5 flex items-center gap-1.5">
-                  <Package size={12} /> Covered Products ({viewQuote.items?.length || 0})
+                  <ShieldCheck size={13} className="text-brand-neonblue" /> Covered Hardware &amp; Serial Numbers ({viewWarranty.items.length})
                 </p>
-                <div className="space-y-2.5">
-                  {viewQuote.items.map((item, i) => (
-                    <div key={i} className="flex justify-between items-center p-3.5 rounded-2xl bg-brand-bgbase/50 border border-border/30 hover:border-brand-neonblue/20 transition-colors">
-                      <div className="flex items-center gap-3 min-w-0">
+                <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar pr-1">
+                  {viewWarranty.items.map((item, i) => (
+                    <div
+                      key={i}
+                      className="flex justify-between items-center p-3 rounded-xl bg-brand-bgbase/50 border border-border/30"
+                    >
+                      <div className="flex items-center gap-3 min-w-0 pr-2">
                         <div className="w-8 h-8 rounded-lg bg-brand-surface border border-border/50 flex items-center justify-center text-brand-neonblue shrink-0">
                           <Package size={14} />
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm font-bold text-main truncate" title={item.product_name}>
-                            {item.product_name || "Product"}
+                          <p className="text-xs font-bold text-main truncate" title={item.product_name}>
+                            {item.product_name}
                           </p>
-                          <p className="text-[10px] text-muted font-mono font-bold">
-                            Qty: {item.quantity} × ₱{parseFloat(item.unit_price || 0).toLocaleString()}
+                          <p className="text-[9px] text-muted font-mono font-bold">
+                            Qty: {item.quantity} • Covered under standard warranty
                           </p>
                         </div>
                       </div>
-                      <p className="font-black text-main font-rajdhani text-sm shrink-0">
-                        ₱{(item.quantity * item.unit_price).toLocaleString()}
-                      </p>
+                      <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 whitespace-nowrap">
+                        Covered
+                      </span>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Total Covered Amount */}
-              <div className="border-t border-border/50 pt-4 flex justify-between items-center">
-                <div>
-                  <span className="text-xs font-black uppercase tracking-widest text-muted block">Total Covered Value</span>
-                  <span className="text-[9px] text-muted/50">Replacement / Service Valuation</span>
-                </div>
-                <span className="text-2xl font-rajdhani font-black text-brand-neonblue">
-                  ₱{parseFloat(viewQuote.subtotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                </span>
+              {/* Warranty Policy Reminder */}
+              <div className="p-3.5 rounded-2xl bg-brand-bgbase/60 border border-border/40 text-[10px] text-muted leading-relaxed space-y-1 mb-5">
+                <p className="font-bold text-main uppercase tracking-wider text-[9px] flex items-center gap-1">
+                  <CheckCircle2 size={12} className="text-emerald-400" /> PC Alley Hardware Warranty Terms:
+                </p>
+                <p>• 1-Year store replacement / service warranty against factory defects from the invoice date.</p>
+                <p>• Physical damage, burns, water damage, or tampered warranty stickers void all warranty coverage.</p>
+                <p>• Present this warranty record or official sales invoice when requesting RMA or warranty replacement.</p>
               </div>
 
-              {/* Serial Number & Remarks Section */}
-              {viewQuote.note && (
-                <div className="mt-4 p-3.5 rounded-2xl bg-brand-bgbase/60 border border-border/40">
-                  <p className="text-[9px] font-black uppercase tracking-wider text-muted flex items-center gap-1 mb-1">
-                    <ShieldCheck size={11} className="text-brand-neonblue" /> Serial Numbers / Claim Remarks
-                  </p>
-                  <p className="text-xs font-mono text-main bg-brand-surface/70 p-2.5 rounded-xl border border-border/30 select-all">
-                    {viewQuote.note}
-                  </p>
-                </div>
-              )}
-
-              <button onClick={() => window.print()} className="mt-5 w-full py-3 bg-brand-bgbase hover:bg-brand-surface border border-border rounded-full text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 text-muted hover:text-main transition-all cursor-pointer shadow-sm">
-                <Printer size={14} /> Print Warranty Details
-              </button>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Void Reason Modal */}
-      <AnimatePresence>
-        {voidQuote && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setVoidQuote(null)}
-              className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md bg-brand-surface border border-brand-crimson/30 rounded-[32px] p-8 relative z-10 shadow-2xl">
-              <div className="flex justify-between items-start mb-6">
-                <div>
-                  <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-brand-crimson/10 border border-brand-crimson/20 text-brand-crimson text-[9px] font-black uppercase tracking-widest mb-2">
-                    <Ban size={12} /> Void Warranty
-                  </div>
-                  <h3 className="text-xl font-rajdhani font-black uppercase text-main">
-                    Cancel Warranty WR-{String(voidQuote.id).slice(-5)}
-                  </h3>
-                  <p className="text-xs text-muted mt-1">Customer: <span className="font-bold text-main">{voidQuote.customer_name}</span></p>
-                </div>
-                <button onClick={() => setVoidQuote(null)} className="p-2 text-muted hover:text-main transition-colors"><X size={18} /></button>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="text-[9px] font-black uppercase tracking-[3px] text-muted block mb-1.5">
-                    Reason for Canceling Warranty *
-                  </label>
-                  <textarea
-                    value={voidReason}
-                    onChange={e => { setVoidReason(e.target.value); if (voidError) setVoidError(""); }}
-                    rows={3}
-                    placeholder="e.g. Customer returned product for refund, physical damage/tampered seal, customer cancellation request..."
-                    className={`w-full bg-brand-bgbase border rounded-2xl py-3 px-4 text-xs text-main focus:outline-none transition-all resize-none ${
-                      voidError ? 'border-brand-crimson' : 'border-border focus:border-brand-crimson/50'
-                    }`}
-                  />
-                  {voidError && (
-                    <p className="text-[10px] font-bold text-brand-crimson mt-1 flex items-center gap-1">
-                      <AlertCircle size={12} /> {voidError}
-                    </p>
-                  )}
-                </div>
-
-                <div className="p-3 bg-brand-crimson/5 border border-brand-crimson/20 rounded-xl">
-                  <p className="text-[10px] text-muted leading-relaxed">
-                    <strong className="text-brand-crimson uppercase">Warning:</strong> Marking this warranty as <span className="text-brand-crimson font-bold">Void</span> cancels all warranty coverage for the associated items. This action will be permanently recorded.
-                  </p>
-                </div>
-
-                <div className="flex gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setVoidQuote(null)}
-                    className="flex-1 py-3 rounded-full border border-border text-[10px] font-black uppercase tracking-[2px] text-muted hover:text-main transition-all cursor-pointer"
-                  >
-                    Keep Active
-                  </button>
-                  <button
-                    type="button"
-                    onClick={confirmVoidWarranty}
-                    className="flex-1 py-3 bg-brand-crimson hover:bg-brand-crimson/90 text-white rounded-full text-[10px] font-black uppercase tracking-[2px] transition-all active:scale-[0.98] shadow-lg shadow-brand-crimson/20 cursor-pointer"
-                  >
-                    Confirm Void
-                  </button>
-                </div>
+              {/* Print Receipt / Slip CTA */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    const s = viewWarranty.rawSale;
+                    setViewWarranty(null);
+                    setPrintReceiptOrder(s);
+                  }}
+                  className="flex-1 py-3 bg-brand-neonblue hover:bg-brand-neonblue/90 text-white rounded-full text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-brand-neonblue/20"
+                >
+                  <Printer size={14} /> Print Official Receipt / Slip
+                </button>
+                <button
+                  onClick={() => window.print()}
+                  className="px-6 py-3 bg-brand-bgbase hover:bg-brand-surface border border-border rounded-full text-[10px] font-black uppercase tracking-widest text-muted hover:text-main transition-all cursor-pointer"
+                >
+                  Print Summary
+                </button>
               </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
+
+      {/* ── Thermal Receipt Modal ── */}
+      <ThermalReceiptModal
+        receipt={printReceiptOrder}
+        isOpen={!!printReceiptOrder}
+        onClose={() => setPrintReceiptOrder(null)}
+      />
     </div>
   );
 }
