@@ -54,7 +54,7 @@ router.patch('/:id', [
   param('id').isInt().withMessage('Invalid product ID.'),
   body('name').optional().notEmpty().trim().isLength({ min: 2, max: 200 }).withMessage('Product name must be between 2 and 200 characters.'),
   body('sku').optional().notEmpty().trim().isLength({ min: 2, max: 100 }).withMessage('SKU must be between 2 and 100 characters.'),
-  body('price').optional().isFloat({ min: 0.01, max: 99999999.99 }).withMessage('Price must be a positive number between ₱0.01 and ₱99,999,999.99.'),
+  body('price').optional().isFloat({ min: 0, max: 99999999.99 }).withMessage('Price must be a valid number between ₱0.00 and ₱99,999,999.99.'),
   body('last_purchase_price').optional({ checkFalsy: true }).isFloat({ min: 0, max: 99999999.99 }).withMessage('Unit price must be a valid number between ₱0.00 and ₱99,999,999.99.'),
   body('unit_price').optional({ checkFalsy: true }).isFloat({ min: 0, max: 99999999.99 }).withMessage('Unit price must be a valid number between ₱0.00 and ₱99,999,999.99.'),
   body('description').optional({ checkFalsy: true }).isString().trim().isLength({ max: 2000 }).withMessage('Description cannot exceed 2000 characters.'),

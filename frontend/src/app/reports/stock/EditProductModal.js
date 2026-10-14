@@ -258,11 +258,30 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
         body: fd,
       });
       if (res.ok) {
-        showSuccess("Product updated");
-        onUpdate(await res.json());
+        // Also sync stock / branch price if specified or branch selected
+        if (stockData.branch_id) {
+          try {
+            await fetch(apiUrl("/api/inventory/stock"), {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+              body: JSON.stringify({
+                product_id: product.id,
+                branch_id: stockData.branch_id,
+                quantity: stockData.quantity !== "" ? parseInt(stockData.quantity) : undefined,
+                price: stockData.price === "" ? null : parseFloat(stockData.price),
+                enabled: stockData.enabled,
+                low_stock_threshold: parseInt(stockData.low_stock_threshold)
+              }),
+            });
+          } catch (e) {
+            console.warn("Stock sync failed during product save:", e);
+          }
+        }
+        showSuccess("Product and pricing updated successfully");
+        if (typeof onUpdate === "function") onUpdate(await res.json());
       } else {
         const err = await res.json();
-        showError(err.error || "Failed to update product");
+        showError(err.error || err.message || "Failed to update product");
       }
     } catch (e) {
       showError("Error updating product");
@@ -288,7 +307,7 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
       });
       if (res.ok) {
         showSuccess(removeImage ? "Image removed" : "Image updated");
-        onUpdate(await res.json());
+        if (typeof onUpdate === "function") onUpdate(await res.json());
         setImageChanged(false);
       } else {
         const err = await res.json();
@@ -309,6 +328,20 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
     setUpdating(true);
     const token = localStorage.getItem("token");
     try {
+      // If global Price or other product details were changed in this modal, also save them!
+      if (formData.price !== undefined && formData.price !== "" && String(formData.price) !== String(product.global_price || product.price || "")) {
+        try {
+          const fd = buildFormData(true);
+          await fetch(apiUrl(`/api/products/${product.id}`), {
+            method: "PATCH",
+            headers: { Authorization: `Bearer ${token}` },
+            body: fd,
+          });
+        } catch (e) {
+          console.warn("Product price sync failed:", e);
+        }
+      }
+
       const res = await fetch(apiUrl("/api/inventory/stock"), {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -322,11 +355,11 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
         }),
       });
       if (res.ok) {
-        showSuccess("Stock updated");
-        onUpdate(product);
+        showSuccess(stockData.branch_id === "all" ? "Stock & prices updated for all branches" : "Stock & price updated");
+        if (typeof onUpdate === "function") onUpdate(product);
       } else {
         const err = await res.json();
-        showError(err.error || "Failed to update stock");
+        showError(err.error || err.message || "Failed to update stock");
       }
     } catch (e) {
       showError("Error updating stock");

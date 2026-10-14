@@ -1,7 +1,7 @@
 // src/app/reports/stock/page.js
 "use client";
 
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import { PackageCheck, Search, Download, Plus, RefreshCw, AlertCircle, TrendingUp, Edit, Clock, ShieldAlert, CheckCircle2, FileDown, Trash2, UploadCloud, Image as ImageIcon, ChevronDown } from "lucide-react";
@@ -49,6 +49,10 @@ export default function StockReportPage() {
   const [sortField, setSortField] = useState('id');
   const [sortDir, setSortDir] = useState('ASC');
   const [refreshKey, setRefreshKey] = useState(0);
+
+  const handleRefresh = useCallback(() => {
+    setRefreshKey(k => k + 1);
+  }, []);
 
   // Simple debounce hook
   const useDebounce = (value, delay) => {
