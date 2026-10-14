@@ -697,8 +697,9 @@ function BenchmarkContent() {
                 </div>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[10px] font-bold tracking-widest uppercase px-2 py-0.5 rounded bg-brand-neonblue/20 text-brand-neonblue">
-                      Recommended Champion
+                    <span className="text-[10px] font-black tracking-widest uppercase px-2.5 py-1 rounded-full bg-gradient-to-r from-cyan-500/20 via-blue-500/20 to-purple-500/20 text-cyan-400 border border-cyan-500/40 shadow-[0_0_12px_rgba(6,182,212,0.25)] flex items-center gap-1.5 inline-flex">
+                      <Sparkles className="w-3 h-3 text-cyan-400 animate-pulse" />
+                      Recommended Model
                     </span>
                     <span className="text-base font-black text-main">
                       {data.bestModel.modelName}
@@ -946,8 +947,9 @@ function BenchmarkContent() {
                           </td>
                           <td className="px-5 py-3.5 text-center">
                             {isBest ? (
-                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-brand-neonblue/20 text-brand-neonblue border border-brand-neonblue/40 uppercase">
-                                Recommended Champion
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-cyan-500/15 via-blue-500/20 to-indigo-500/20 text-cyan-300 border border-cyan-400/50 shadow-[0_0_15px_rgba(6,182,212,0.3)] animate-pulse">
+                                <Sparkles className="w-3 h-3 text-cyan-400" />
+                                Recommended Model
                               </span>
                             ) : m.applicable ? (
                               <span className="text-[11px] text-muted">Candidate</span>
