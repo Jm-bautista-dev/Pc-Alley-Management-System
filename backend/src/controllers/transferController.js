@@ -102,10 +102,12 @@ const createTransfer = async (req, res) => {
       }
     }
 
+    const adminFullName = [req.user.first_name, req.user.last_name].filter(Boolean).join(' ') || req.user.username;
     const transfer = await StockTransfer.create({
       fromBranchId,
       toBranchId,
       transferDate: transferDate || new Date().toISOString().split('T')[0],
+      dispatchedBy: req.body.dispatchedBy || adminFullName,
       status: 'Pending',
       notes
     });

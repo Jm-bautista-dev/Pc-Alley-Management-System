@@ -369,10 +369,15 @@ export default function StockTransfersPage() {
     setSubmitting(true);
     const token = localStorage.getItem("token");
     try {
+      const adminName = currentUser?.first_name || currentUser?.last_name
+        ? [currentUser.first_name, currentUser.last_name].filter(Boolean).join(" ")
+        : (currentUser?.username || "Branch Admin");
+
       const payload = {
         fromBranchId: parseInt(fromBranchId, 10),
         toBranchId: parseInt(toBranchId, 10),
         transferDate: transferDate || new Date().toISOString().split("T")[0],
+        dispatchedBy: adminName,
         items: itemsToSubmit.map(i => ({
           productId: i.productId,
           quantity: i.quantity
@@ -412,6 +417,9 @@ export default function StockTransfersPage() {
       }
       if (!fullRecord.transferDate) {
         fullRecord.transferDate = transferDate;
+      }
+      if (!fullRecord.dispatchedBy) {
+        fullRecord.dispatchedBy = adminName;
       }
       if (!fullRecord.StockTransferItems || fullRecord.StockTransferItems.length === 0) {
         fullRecord.StockTransferItems = itemsToSubmit.map(item => ({
@@ -1611,11 +1619,7 @@ export default function StockTransfersPage() {
                     </div>
 
                     <div className="text-right">
-                      <div className="inline-block border border-black px-3 py-1 rounded bg-gray-50">
-                        <span className="text-[9px] uppercase font-mono block text-gray-500 font-bold">Transfer Ref #</span>
-                        <span className="text-base font-black font-mono text-black">#TR-{transmittalData.id}</span>
-                      </div>
-                      <p className="text-[10px] text-gray-600 mt-1 font-mono">
+                      <p className="text-xs text-gray-700 font-mono">
                         Date: <strong>{transmittalData.transferDate || (transmittalData.createdAt ? new Date(transmittalData.createdAt).toLocaleDateString("en-PH") : new Date().toLocaleDateString("en-PH"))}</strong>
                       </p>
                     </div>
@@ -1715,30 +1719,24 @@ export default function StockTransfersPage() {
                     </p>
                   </div>
 
-                  {/* Three-Party Official Signatures Section */}
-                  <div className="pt-4 grid grid-cols-3 gap-6 text-center text-[10px]">
-                    {/* 1. Sender */}
-                    <div className="border-t border-black pt-2">
-                      <p className="font-bold text-black uppercase">DISPATCHED BY</p>
-                      <p className="text-gray-500 text-[9px] mb-4">Source Branch Staff / Manager</p>
-                      <div className="border-b border-gray-400 h-6 mb-1"></div>
-                      <p className="text-[9px] text-gray-400">Signature Over Printed Name / Date</p>
-                    </div>
-
-                    {/* 2. Courier / Logistics */}
-                    <div className="border-t border-black pt-2">
-                      <p className="font-bold text-black uppercase">CARRIER / DELIVERED BY</p>
-                      <p className="text-gray-500 text-[9px] mb-4">Driver / Transport Logistics</p>
-                      <div className="border-b border-gray-400 h-6 mb-1"></div>
-                      <p className="text-[9px] text-gray-400">Signature Over Printed Name / Date</p>
-                    </div>
-
-                    {/* 3. Recipient */}
-                    <div className="border-t border-black pt-2">
-                      <p className="font-bold text-black uppercase">RECEIVED & VERIFIED BY</p>
-                      <p className="text-gray-500 text-[9px] mb-4">Destination Branch Staff / Manager</p>
-                      <div className="border-b border-gray-400 h-6 mb-1"></div>
-                      <p className="text-[9px] text-gray-400">Signature Over Printed Name / Date</p>
+                  {/* Official Authorization & Dispatch Section */}
+                  <div className="pt-4 flex justify-start text-[10px]">
+                    <div className="border border-gray-300 rounded-lg p-3 bg-gray-50/60 min-w-[280px]">
+                      <span className="text-[9px] uppercase font-bold text-gray-500 block tracking-wider mb-1">
+                        DISPATCHED BY (BRANCH ADMIN)
+                      </span>
+                      <p className="text-sm font-bold text-black font-rajdhani uppercase tracking-wide">
+                        {transmittalData.dispatchedBy || (
+                          currentUser?.first_name || currentUser?.last_name
+                            ? [currentUser.first_name, currentUser.last_name].filter(Boolean).join(" ")
+                            : (currentUser?.username || "Branch Admin")
+                        )}
+                      </p>
+                      <p className="text-[10px] text-gray-600 font-medium">
+                        {transmittalData.SourceBranch?.name || "Source Branch"} Admin / Authorized Personnel
+                      </p>
+                      <div className="border-b border-gray-400 mt-5 mb-1 w-48"></div>
+                      <span className="text-[9px] text-gray-400 font-mono block">Signature Over Printed Name / Date</span>
                     </div>
                   </div>
                 </div>

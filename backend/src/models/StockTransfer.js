@@ -27,6 +27,10 @@ const StockTransfer = sequelize.define('StockTransfer', {
     type: DataTypes.STRING,
     allowNull: true
   },
+  dispatchedBy: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
   status: {
     type: DataTypes.ENUM('Pending', 'In-Transit', 'Completed'),
     defaultValue: 'Pending'
