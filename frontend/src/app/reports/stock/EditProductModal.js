@@ -69,6 +69,7 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
         name: product.name || "",
         sku: product.sku || "",
         price: product.global_price || product.price || "",
+        unit_price: product.last_purchase_price !== null && product.last_purchase_price !== undefined ? product.last_purchase_price : (product.unit_price || ""),
         description: product.description || "",
         category_id: product.category_id || "",
         brand_id: product.brand_id || "",
@@ -230,6 +231,13 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
       if (formData.name) fd.append("name", formData.name);
       if (formData.sku) fd.append("sku", formData.sku);
       if (formData.price !== undefined && formData.price !== "") fd.append("price", formData.price);
+      if (formData.unit_price !== undefined && formData.unit_price !== "") {
+        fd.append("last_purchase_price", formData.unit_price);
+        fd.append("unit_price", formData.unit_price);
+      } else if (formData.unit_price === "") {
+        fd.append("last_purchase_price", "");
+        fd.append("unit_price", "");
+      }
       if (formData.description !== undefined) fd.append("description", formData.description);
       if (formData.category_id) fd.append("category_id", formData.category_id);
       if (formData.brand_id) fd.append("brand_id", formData.brand_id);
@@ -329,7 +337,10 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
     const token = localStorage.getItem("token");
     try {
       // If global Price or other product details were changed in this modal, also save them!
-      if (formData.price !== undefined && formData.price !== "" && String(formData.price) !== String(product.global_price || product.price || "")) {
+      const priceChanged = formData.price !== undefined && formData.price !== "" && String(formData.price) !== String(product.global_price || product.price || "");
+      const unitPriceChanged = formData.unit_price !== undefined && String(formData.unit_price) !== String(product.last_purchase_price ?? product.unit_price ?? "");
+      const nameChanged = formData.name !== undefined && String(formData.name) !== String(product.name || "");
+      if (priceChanged || unitPriceChanged || nameChanged || imageChanged) {
         try {
           const fd = buildFormData(true);
           await fetch(apiUrl(`/api/products/${product.id}`), {
@@ -338,7 +349,7 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
             body: fd,
           });
         } catch (e) {
-          console.warn("Product price sync failed:", e);
+          console.warn("Product details sync failed:", e);
         }
       }
 
@@ -539,14 +550,30 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[10px] uppercase font-black text-muted mb-1">Price (₱)</label>
+              <label className="block text-[10px] uppercase font-black text-muted mb-1">Selling Price (₱)</label>
               <input
                 type="number"
+                step="0.01"
+                min="0"
                 value={formData.price || ""}
                 onChange={e => setFormData({ ...formData, price: e.target.value })}
                 className="w-full bg-brand-bgbase border border-border text-main rounded-lg px-3 py-2 text-sm font-bold"
               />
             </div>
+            <div>
+              <label className="block text-[10px] uppercase font-black text-muted mb-1">Unit Price (₱)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="0.00"
+                value={formData.unit_price || ""}
+                onChange={e => setFormData({ ...formData, unit_price: e.target.value })}
+                className="w-full bg-brand-bgbase border border-border text-main rounded-lg px-3 py-2 text-sm font-bold"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-[10px] uppercase font-black text-muted mb-1">Product Category</label>
               <select
@@ -560,8 +587,6 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
                 ))}
               </select>
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-[10px] uppercase font-black text-muted mb-1">Brand</label>
               <select
@@ -575,6 +600,8 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
                 ))}
               </select>
             </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-[10px] uppercase font-black text-muted mb-1">Product Barcode / SKU</label>
               <input
@@ -585,15 +612,15 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
                 className="w-full bg-brand-bgbase border border-border text-main rounded-lg px-3 py-2 text-sm font-bold"
               />
             </div>
-          </div>
-          <div>
-            <label className="block text-[10px] uppercase font-black text-muted mb-1">Product SKU</label>
-            <input
-              type="text"
-              value={formData.sku || ""}
-              readOnly
-              className="w-full bg-brand-bgbase border border-border text-muted rounded-lg px-3 py-2 text-sm font-bold cursor-not-allowed opacity-75 focus:outline-none"
-            />
+            <div>
+              <label className="block text-[10px] uppercase font-black text-muted mb-1">Product SKU</label>
+              <input
+                type="text"
+                value={formData.sku || ""}
+                readOnly
+                className="w-full bg-brand-bgbase border border-border text-muted rounded-lg px-3 py-2 text-sm font-bold cursor-not-allowed opacity-75 focus:outline-none"
+              />
+            </div>
           </div>
           <div>
             <label className="block text-[10px] uppercase font-black text-muted mb-1">Product Description</label>
