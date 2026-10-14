@@ -20,7 +20,8 @@ import {
   ChevronDown,
   Wrench,
   Package,
-  ArrowRight
+  ArrowRight,
+  Receipt
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { showSuccess, showError } from "@/context/ModalContext";
@@ -175,34 +176,76 @@ const OrderDetailsModal = ({ isOpen, onClose, order }) => {
               )}
             </div>
 
-            {/* Totals */}
-            <div className="bg-brand-bgbase/30 rounded-xl p-4 border border-border/10 flex flex-col items-end text-right">
-              {discount > 0 && (
-                <p className="flex justify-between w-64 sm:w-72 text-muted text-xs font-bold mb-1 uppercase tracking-widest">
-                  <span>Subtotal</span>
-                  <span>₱{subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                </p>
-              )}
-              {discount > 0 && (
-                <p className="flex justify-between w-64 sm:w-72 text-red-500 text-xs font-bold mb-1 uppercase tracking-widest">
-                  <span>Discount</span>
-                  <span>−₱{discount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                </p>
-              )}
-              <p className="flex justify-between w-64 sm:w-72 text-muted text-xs font-bold mb-1 uppercase tracking-widest">
-                <span>VATable Sales</span>
-                <span>₱{vatableSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-              </p>
-              <p className="flex justify-between w-64 sm:w-72 text-muted text-xs font-bold mb-1 uppercase tracking-widest">
-                <span>VAT (12%)</span>
-                <span>₱{tax.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-              </p>
-              <div className="flex justify-between items-baseline w-64 sm:w-72 text-main font-black border-t border-border/50 pt-2.5 mt-1 uppercase">
-                <div className="flex flex-col text-left">
-                  <span className="text-sm font-black text-main">Total</span>
-                  <span className="text-[9px] text-muted font-bold tracking-wider -mt-0.5">(VAT-Inclusive)</span>
+            {/* Financial Summary Card */}
+            <div className="mt-6 rounded-2xl bg-brand-bgbase/60 border border-border/50 p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-3.5 pb-2.5 border-b border-border/30">
+                <span className="text-[10px] font-black uppercase tracking-[2px] text-muted flex items-center gap-1.5">
+                  <Receipt size={13} className="text-brand-neonblue" /> Payment Breakdown
+                </span>
+                <span className="text-[9px] font-mono text-muted/60 uppercase tracking-widest bg-brand-surface px-2 py-0.5 rounded border border-border/30">
+                  BIR Tax Compliant
+                </span>
+              </div>
+
+              <div className="space-y-2.5">
+                {discount > 0 && (
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-muted font-bold uppercase tracking-wider text-[11px]">Subtotal (Gross)</span>
+                    <span className="font-mono font-bold text-main">
+                      ₱{subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                )}
+
+                {discount > 0 && (
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-red-400 font-bold uppercase tracking-wider text-[11px]">
+                      Discount Applied
+                    </span>
+                    <span className="font-mono font-bold text-red-400">
+                      −₱{discount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-muted font-bold uppercase tracking-wider text-[11px]">VATable Sales</span>
+                    <span className="text-[9px] text-muted/50 font-normal">(Net of VAT)</span>
+                  </div>
+                  <span className="font-mono font-bold text-main">
+                    ₱{vatableSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
                 </div>
-                <span className="text-brand-neonblue text-xl font-rajdhani font-black">₱{grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+
+                <div className="flex justify-between items-center text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-muted font-bold uppercase tracking-wider text-[11px]">Value Added Tax</span>
+                    <span className="px-1.5 py-0.5 rounded bg-brand-surface text-brand-neonblue text-[9px] font-mono font-bold border border-brand-neonblue/20">
+                      12% VAT
+                    </span>
+                  </div>
+                  <span className="font-mono font-bold text-main">
+                    ₱{tax.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+
+                {/* Grand Total Divider & Highlight Banner */}
+                <div className="pt-3.5 mt-2 border-t border-border/50 flex justify-between items-center bg-brand-surface/70 -mx-5 -mb-5 p-4 sm:p-5 rounded-b-2xl">
+                  <div>
+                    <span className="block text-xs font-black uppercase tracking-wider text-main">
+                      Total (VAT-Inclusive)
+                    </span>
+                    <span className="text-[9px] text-muted/70 font-bold uppercase tracking-wider">
+                      Grand Total Amount
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-2xl font-rajdhani font-black text-brand-neonblue tracking-tight">
+                      ₱{grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
