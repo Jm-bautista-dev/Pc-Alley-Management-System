@@ -75,6 +75,7 @@ const Sidebar = () => {
         { title: "Products",        icon: Package,         path: "#products",         group: "SALES", subItems: [
           { title: "Product Catalog", path: "/products" },
           { title: "Manage Stock", path: "/reports/stock" },
+          { title: "Transfer", path: "/products/transfers" },
           { title: "Product Categories", path: "/products/categories" },
           { title: "Brands", path: "/products/brands" },
           { title: "Import Products", path: "/products/import" }
@@ -119,6 +120,7 @@ const Sidebar = () => {
       { title: "Products",        icon: Package,         path: "#products",         group: "SALES", subItems: [
         { title: "Product Catalog", path: "/products" },
         { title: "Manage Stock", path: "/reports/stock" },
+        { title: "Transfer", path: "/products/transfers" },
         { title: "Product Categories", path: "/products/categories" },
         { title: "Brands", path: "/products/brands" }
       ] },

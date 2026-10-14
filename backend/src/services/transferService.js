@@ -42,15 +42,15 @@ const completeStockTransfer = async (transferId, userId, ipAddress) => {
       sourceInv.quantity -= item.quantity;
       await sourceInv.save({ transaction });
 
-      // Log StockMovement for source deduction (using ADJUSTMENT/SALE category since type is enum)
+      // Log StockMovement for source deduction
       await StockMovement.create({
         product_id: product.id,
-        type: 'SALE',
+        type: 'TRANSFER',
         quantity: -item.quantity,
         previous_stock: prevSourceStock,
         new_stock: sourceInv.quantity,
         user_id: userId,
-        note: `Stock Transfer Out (ID: ${transfer.id})`
+        note: `Stock Transfer Out to Branch #${transfer.toBranchId} (ID: ${transfer.id})`
       }, { transaction });
 
       // 2. Destination Branch stock addition
@@ -75,12 +75,12 @@ const completeStockTransfer = async (transferId, userId, ipAddress) => {
       // Log StockMovement for destination addition
       await StockMovement.create({
         product_id: product.id,
-        type: 'RESTOCK',
+        type: 'TRANSFER',
         quantity: item.quantity,
         previous_stock: prevDestStock,
         new_stock: destInv.quantity,
         user_id: userId,
-        note: `Stock Transfer In (ID: ${transfer.id})`
+        note: `Stock Transfer In from Branch #${transfer.fromBranchId} (ID: ${transfer.id})`
       }, { transaction });
     }
 
