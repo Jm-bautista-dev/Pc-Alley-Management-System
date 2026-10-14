@@ -256,7 +256,17 @@ const updateProduct = async (req, res) => {
 
     if (name) product.name = name;
     if (sku) product.sku = sku;
-    if (price !== undefined) product.price = price;
+    if (price !== undefined) {
+      product.price = price;
+      try {
+        await Inventory.update(
+          { price: parseFloat(price) },
+          { where: { product_id: product.id } }
+        );
+      } catch (invErr) {
+        console.warn('Failed to sync master price to branch inventory:', invErr);
+      }
+    }
     if (last_purchase_price !== undefined) {
       product.last_purchase_price = (last_purchase_price === '' || last_purchase_price === null) ? null : parseFloat(last_purchase_price);
     } else if (unit_price !== undefined) {

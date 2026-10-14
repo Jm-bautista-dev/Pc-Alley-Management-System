@@ -50,6 +50,10 @@ export default function StockReportPage() {
   const [sortDir, setSortDir] = useState('ASC');
   const [refreshKey, setRefreshKey] = useState(0);
 
+  const handleRefresh = () => {
+    setRefreshKey(k => k + 1);
+  };
+
   // Simple debounce hook
   const useDebounce = (value, delay) => {
     const [debounced, setDebounced] = useState(value);
@@ -754,7 +758,7 @@ export default function StockReportPage() {
           </div>
         </div>
         {/* Modals */}
-        {activeEdit && <EditProductModal product={activeEdit} isOpen={!!activeEdit} onClose={() => setActiveEdit(null)} onUpdate={handleRefresh} branches={branches} />}
+        {activeEdit && <EditProductModal product={activeEdit} isOpen={!!activeEdit} onClose={() => { setActiveEdit(null); handleRefresh(); }} onUpdate={() => { handleRefresh(); }} branches={branches} />}
         {activeHistory && <HistoryModal isOpen={!!activeHistory} onClose={() => setActiveHistory(null)} product={activeHistory} />}
         {activeDelete && <DeleteActionModal product={activeDelete} onClose={() => setActiveDelete(null)} onSuccess={() => { setPage(1); setActiveDelete(null); }} user={user} />}
         {activeRestock && <RestockRequestModal isOpen={!!activeRestock} onClose={() => setActiveRestock(null)} product={activeRestock} onSuccess={handleRefresh} />}

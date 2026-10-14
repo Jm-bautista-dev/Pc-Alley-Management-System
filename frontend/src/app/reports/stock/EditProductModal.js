@@ -77,9 +77,9 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
         specifications: product.specifications || "",
       });
       setStockData({ 
-        branch_id: storedUser?.role === "branch_admin" ? String(storedUser.branch_id) : (product.branch_id || ""), 
+        branch_id: storedUser?.role === "branch_admin" ? String(storedUser.branch_id) : (product.branch_id || "all"), 
         quantity: product.stock ?? "",
-        price: product.branch_price !== null && product.branch_price !== undefined ? product.branch_price : "",
+        price: product.price !== null && product.price !== undefined ? product.price : "",
         enabled: product.enabled !== false,
         low_stock_threshold: product.low_stock_threshold ?? 5
       });
@@ -272,6 +272,10 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
         // Also sync stock / branch price if specified or branch selected
         if (stockData.branch_id) {
           try {
+            const branchPriceToSend = (stockData.price !== "" && String(stockData.price) !== String(product.branch_price || ""))
+              ? parseFloat(stockData.price)
+              : (formData.price !== "" ? parseFloat(formData.price) : undefined);
+
             await fetch(apiUrl("/api/inventory/stock"), {
               method: "PATCH",
               headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -279,7 +283,7 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
                 product_id: product.id,
                 branch_id: stockData.branch_id,
                 quantity: stockData.quantity !== "" ? parseInt(stockData.quantity) : undefined,
-                price: stockData.price === "" ? null : parseFloat(stockData.price),
+                price: branchPriceToSend,
                 enabled: stockData.enabled,
                 low_stock_threshold: parseInt(stockData.low_stock_threshold)
               }),
@@ -357,6 +361,10 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
         }
       }
 
+      const effectiveBranchPrice = (stockData.price !== "" && String(stockData.price) !== String(product.branch_price || ""))
+        ? parseFloat(stockData.price)
+        : (formData.price !== "" ? parseFloat(formData.price) : undefined);
+
       const res = await fetch(apiUrl("/api/inventory/stock"), {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -364,7 +372,7 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
           product_id: product.id,
           branch_id: stockData.branch_id,
           quantity: stockData.quantity !== "" ? parseInt(stockData.quantity) : undefined,
-          price: stockData.price === "" ? null : parseFloat(stockData.price),
+          price: effectiveBranchPrice,
           enabled: stockData.enabled,
           low_stock_threshold: parseInt(stockData.low_stock_threshold)
         }),
@@ -560,7 +568,11 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
                 step="0.01"
                 min="0"
                 value={formData.price || ""}
-                onChange={e => setFormData({ ...formData, price: e.target.value })}
+                onChange={e => {
+                  const val = e.target.value;
+                  setFormData(prev => ({ ...prev, price: val }));
+                  setStockData(prev => ({ ...prev, price: val }));
+                }}
                 className="w-full bg-brand-bgbase border border-border text-main rounded-lg px-3 py-2 text-sm font-bold"
               />
             </div>
