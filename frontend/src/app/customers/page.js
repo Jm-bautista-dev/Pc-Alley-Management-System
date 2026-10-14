@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import { apiUrl } from "@/lib/api";
@@ -17,7 +17,15 @@ import {
   RefreshCw,
   Loader2,
   ChevronDown,
-  MapPin
+  ChevronRight,
+  MapPin,
+  Package,
+  Wrench,
+  Receipt,
+  Calendar,
+  CreditCard,
+  Tag,
+  ArrowUpRight
 } from "lucide-react";
 
 const SEGMENTS = ["ALL", "CORE", "CORPORATE", "REGULAR", "INACTIVE"];
@@ -40,16 +48,23 @@ function segmentColor(seg) {
 }
 
 export default function CustomersPage() {
-  const [customers, setCustomers]             = useState([]);
-  const [loading, setLoading]                 = useState(true);
-  const [refreshing, setRefreshing]           = useState(false);
-  const [error, setError]                     = useState(null);
-  const [user, setUser]                       = useState(null);
-  const [searchTerm, setSearchTerm]           = useState("");
-  const [filterSegment, setFilterSegment]     = useState("ALL");
-  const [filterBranch, setFilterBranch]       = useState("");
-  const [branches, setBranches]               = useState([]);
+  const [customers, setCustomers]               = useState([]);
+  const [loading, setLoading]                   = useState(true);
+  const [refreshing, setRefreshing]             = useState(false);
+  const [error, setError]                       = useState(null);
+  const [user, setUser]                         = useState(null);
+  const [searchTerm, setSearchTerm]             = useState("");
+  const [filterSegment, setFilterSegment]       = useState("ALL");
+  const [filterBranch, setFilterBranch]         = useState("");
+  const [branches, setBranches]                 = useState([]);
+
+  // Customer Details & Purchase History Modal States
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [customerHistory, setCustomerHistory]   = useState(null);
+  const [historyLoading, setHistoryLoading]     = useState(false);
+  const [historyTab, setHistoryTab]             = useState("products"); // "products" | "orders"
+  const [historySearch, setHistorySearch]       = useState("");
+  const [expandedInvoices, setExpandedInvoices] = useState({});
 
   const fetchBranches = async () => {
     const token = localStorage.getItem("token");
@@ -109,13 +124,51 @@ export default function CustomersPage() {
     }
   }, []);
 
-  // Derived stats
-  const totalRevenue   = customers.reduce((s, c) => s + parseFloat(c.totalSpent || 0), 0);
-  const totalOrders    = customers.reduce((s, c) => s + parseInt(c.totalOrders || 0), 0);
-  const activeCount    = customers.filter(c => parseFloat(c.totalSpent || 0) > 0).length;
-  const avgSpend       = activeCount > 0 ? totalRevenue / activeCount : 0;
+  // Fetch full purchase history for selected customer
+  const fetchCustomerHistory = async (customerId) => {
+    setHistoryLoading(true);
+    setCustomerHistory(null);
+    setExpandedInvoices({});
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(apiUrl(`/api/customers/${customerId}/history`), {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCustomerHistory(data);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showError(err.message || "Failed to load customer purchase history");
+      }
+    } catch (e) {
+      showError("Network error loading customer history");
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
 
-  // Filter
+  const handleOpenCustomer = (client) => {
+    setSelectedCustomer(client);
+    setHistoryTab("products");
+    setHistorySearch("");
+    fetchCustomerHistory(client.id);
+  };
+
+  const toggleInvoiceExpand = (invoiceId) => {
+    setExpandedInvoices(prev => ({
+      ...prev,
+      [invoiceId]: !prev[invoiceId]
+    }));
+  };
+
+  // Derived stats for main table
+  const totalRevenue = customers.reduce((s, c) => s + parseFloat(c.totalSpent || 0), 0);
+  const totalOrders  = customers.reduce((s, c) => s + parseInt(c.totalOrders || 0), 0);
+  const activeCount  = customers.filter(c => parseFloat(c.totalSpent || 0) > 0).length;
+  const avgSpend     = activeCount > 0 ? totalRevenue / activeCount : 0;
+
+  // Filter customers in main directory
   const filtered = customers.filter(c => {
     const seg = segmentFromSpend(c.totalSpent);
     const matchSeg = filterSegment === "ALL" || seg === filterSegment;
@@ -126,6 +179,31 @@ export default function CustomersPage() {
     const matchBranch = !filterBranch || String(c.branchId) === String(filterBranch) || String(c.Branch?.id) === String(filterBranch);
     return matchSeg && matchSearch && matchBranch;
   });
+
+  // Filtered history products
+  const filteredHistoryProducts = useMemo(() => {
+    if (!customerHistory?.products) return [];
+    if (!historySearch.trim()) return customerHistory.products;
+    const q = historySearch.toLowerCase().trim();
+    return customerHistory.products.filter(p =>
+      (p.name && p.name.toLowerCase().includes(q)) ||
+      (p.sku && p.sku.toLowerCase().includes(q)) ||
+      (p.invoices && p.invoices.some(inv => inv.toLowerCase().includes(q)))
+    );
+  }, [customerHistory, historySearch]);
+
+  // Filtered history sales/orders
+  const filteredHistorySales = useMemo(() => {
+    if (!customerHistory?.sales) return [];
+    if (!historySearch.trim()) return customerHistory.sales;
+    const q = historySearch.toLowerCase().trim();
+    return customerHistory.sales.filter(s =>
+      (s.invoiceNumber && s.invoiceNumber.toLowerCase().includes(q)) ||
+      (s.paymentMethod && s.paymentMethod.toLowerCase().includes(q)) ||
+      (s.notes && s.notes.toLowerCase().includes(q)) ||
+      (s.SaleItems && s.SaleItems.some(i => (i.productName || '').toLowerCase().includes(q)))
+    );
+  }, [customerHistory, historySearch]);
 
   return (
     <div className="flex bg-brand-bgbase min-h-screen text-main font-dmsans transition-all duration-500">
@@ -150,7 +228,7 @@ export default function CustomersPage() {
                   whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
                   onClick={() => fetchCustomers(true, filterBranch)}
                   disabled={refreshing}
-                  className="h-11 px-5 flex items-center gap-2 bg-brand-surface border border-border rounded-xl text-[10px] font-black uppercase tracking-widest text-muted hover:text-main transition-all"
+                  className="h-11 px-5 flex items-center gap-2 bg-brand-surface border border-border rounded-xl text-[10px] font-black uppercase tracking-widest text-muted hover:text-main transition-all cursor-pointer"
                 >
                   <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
                   Sync
@@ -227,7 +305,7 @@ export default function CustomersPage() {
                     <button
                       key={seg}
                       onClick={() => setFilterSegment(seg)}
-                      className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-[1px] border transition-all ${
+                      className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-[1px] border transition-all cursor-pointer ${
                         filterSegment === seg
                           ? "bg-brand-neonblue/15 border-brand-neonblue/40 text-brand-neonblue"
                           : "bg-brand-surface border-border text-muted hover:text-main"
@@ -249,13 +327,14 @@ export default function CustomersPage() {
                       <th className="pb-4 px-4">Contact</th>
                       <th className="pb-4 px-4">Total Spent</th>
                       <th className="pb-4 px-4">Orders</th>
-                      <th className="pb-4 px-4 text-right">Branch</th>
+                      <th className="pb-4 px-4">Branch</th>
+                      <th className="pb-4 pl-4 text-right">Purchase History</th>
                     </tr>
                   </thead>
                   <tbody className="text-sm divide-y divide-border/10">
                     {loading ? (
                       <tr>
-                        <td colSpan={7} className="py-20">
+                        <td colSpan={8} className="py-20">
                           <div className="flex items-center justify-center gap-3 text-muted">
                             <Loader2 size={20} className="animate-spin text-brand-neonblue" />
                             <span className="text-xs font-bold uppercase tracking-widest">Loading Customers...</span>
@@ -264,16 +343,16 @@ export default function CustomersPage() {
                       </tr>
                     ) : error ? (
                       <tr>
-                        <td colSpan={7} className="py-20 text-center">
+                        <td colSpan={8} className="py-20 text-center">
                           <p className="text-xs font-black uppercase text-brand-crimson mb-2">{error}</p>
-                          <button onClick={() => fetchCustomers(false, filterBranch)} className="px-4 py-2 border border-border rounded-lg text-xs font-bold text-muted hover:text-main">
+                          <button onClick={() => fetchCustomers(false, filterBranch)} className="px-4 py-2 border border-border rounded-lg text-xs font-bold text-muted hover:text-main cursor-pointer">
                             Retry
                           </button>
                         </td>
                       </tr>
                     ) : filtered.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="py-20 text-center text-muted">
+                        <td colSpan={8} className="py-20 text-center text-muted">
                           <Users size={32} className="mx-auto mb-2 opacity-30" />
                           <p className="text-xs font-black uppercase tracking-widest opacity-40">No matching customers found</p>
                         </td>
@@ -295,9 +374,9 @@ export default function CustomersPage() {
                             <td className="py-4 px-4">
                               <button
                                 type="button"
-                                onClick={() => setSelectedCustomer(client)}
+                                onClick={() => handleOpenCustomer(client)}
                                 className="flex items-center gap-3 text-left group/cust hover:opacity-90 transition-all cursor-pointer focus:outline-none"
-                                title={`View details for ${client.name}`}
+                                title={`View purchase history for ${client.name}`}
                               >
                                 <div className="w-8 h-8 rounded-lg bg-brand-surface border border-border flex items-center justify-center font-bold text-xs text-muted group-hover/cust:border-brand-neonblue/60 group-hover/cust:text-brand-neonblue transition-colors">
                                   {client.name?.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
@@ -328,8 +407,19 @@ export default function CustomersPage() {
                                 {parseInt(client.totalOrders || 0)}
                               </span>
                             </td>
-                            <td className="py-4 px-4 text-xs text-muted font-bold text-right">
+                            <td className="py-4 px-4 text-xs text-muted font-bold">
                               {client.Branch?.name || "—"}
+                            </td>
+                            <td className="py-4 pl-4 text-right">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenCustomer(client)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-neonblue/10 hover:bg-brand-neonblue/20 text-brand-neonblue text-[10px] font-black uppercase tracking-wider border border-brand-neonblue/30 transition-all cursor-pointer shadow-sm"
+                                title="View Customer Purchases & Products"
+                              >
+                                <ShoppingBag size={12} />
+                                <span>View History</span>
+                              </button>
                             </td>
                           </motion.tr>
                         );
@@ -347,76 +437,424 @@ export default function CustomersPage() {
         </div>
       </main>
 
-      {/* Customer Detail Centered Modal */}
+      {/* Customer Detail & Purchase History Modal */}
       <AnimatePresence>
         {selectedCustomer && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 md:p-6 overflow-hidden">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setSelectedCustomer(null)}
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
             />
             <motion.div
-              initial={{ opacity: 0, scale: 0.94, y: 15 }}
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.94, y: 15 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="relative z-10 w-full max-w-md bg-brand-surface border border-border rounded-[24px] p-6 md:p-8 shadow-2xl overflow-hidden"
+              className="relative z-10 w-full max-w-4xl bg-brand-surface border border-border/80 rounded-[24px] shadow-2xl flex flex-col max-h-[92vh] overflow-hidden"
             >
-              <button
-                onClick={() => setSelectedCustomer(null)}
-                className="absolute top-5 right-5 p-2 hover:bg-brand-bgbase rounded-xl text-muted hover:text-main transition-colors"
-                aria-label="Close modal"
-              >
-                <X size={18} />
-              </button>
+              {/* Modal Top Bar */}
+              <div className="p-6 md:p-8 border-b border-border/50 bg-brand-bgbase/40 relative">
+                <button
+                  onClick={() => setSelectedCustomer(null)}
+                  className="absolute top-6 right-6 p-2 rounded-xl text-muted hover:text-main hover:bg-brand-surface border border-transparent hover:border-border transition-all cursor-pointer"
+                  aria-label="Close modal"
+                >
+                  <X size={18} />
+                </button>
 
-              <div className="flex items-center gap-4 mb-6 pr-8">
-                <div className="w-14 h-14 rounded-2xl bg-brand-bgbase border border-border flex items-center justify-center font-black text-xl text-muted shrink-0">
-                  {selectedCustomer.name?.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
-                </div>
-                <div className="min-w-0">
-                  <h2 className="text-lg font-rajdhani font-black uppercase text-main leading-tight truncate" title={selectedCustomer.name}>
-                    {selectedCustomer.name}
-                  </h2>
-                  <span className={`mt-1.5 inline-block px-3 py-0.5 rounded-full text-[9px] font-black uppercase tracking-[2px] border ${segmentColor(segmentFromSpend(selectedCustomer.totalSpent))}`}>
-                    {segmentFromSpend(selectedCustomer.totalSpent)}
-                  </span>
-                </div>
-              </div>
-
-              <div className="space-y-3.5 bg-brand-bgbase/50 rounded-2xl p-4 border border-border/20 mb-6">
-                {[
-                  { icon: Mail,       label: "Email",   value: selectedCustomer.email   || "—" },
-                  { icon: Phone,      label: "Phone",   value: selectedCustomer.phone   || "—" },
-                  { icon: MapPin,     label: "Address", value: selectedCustomer.address || "—" },
-                  { icon: TrendingUp, label: "Branch",  value: selectedCustomer.Branch?.name || "—" }
-                ].map((row, i) => (
-                  <div key={i} className="flex items-start gap-3">
-                    <row.icon size={14} className="mt-0.5 text-muted/40 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[9px] font-black uppercase tracking-[2px] text-muted/50">{row.label}</p>
-                      <p className="text-xs font-bold text-main truncate">{row.value}</p>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 pr-12">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-2xl bg-brand-surface border border-border flex items-center justify-center font-black text-xl text-brand-neonblue shrink-0 shadow-md">
+                      {selectedCustomer.name?.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <h2 className="text-xl font-rajdhani font-black uppercase text-main leading-tight" title={selectedCustomer.name}>
+                          {selectedCustomer.name}
+                        </h2>
+                        <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-[1.5px] border ${segmentColor(segmentFromSpend(customerHistory?.totalSpent || selectedCustomer.totalSpent))}`}>
+                          {segmentFromSpend(customerHistory?.totalSpent || selectedCustomer.totalSpent)}
+                        </span>
+                      </div>
+                      <p className="text-[10px] font-mono text-muted/60 mt-1 uppercase tracking-wider">
+                        Customer ID: CU-{selectedCustomer.id?.toString?.().slice(-6).toUpperCase() || "------"}
+                      </p>
                     </div>
                   </div>
-                ))}
+
+                  {/* Contact Badges */}
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    {selectedCustomer.email && (
+                      <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-brand-surface border border-border/60 text-muted text-[11px] font-medium" title={selectedCustomer.email}>
+                        <Mail size={12} className="text-muted/60" />
+                        <span className="max-w-[160px] truncate">{selectedCustomer.email}</span>
+                      </div>
+                    )}
+                    {selectedCustomer.phone && (
+                      <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-brand-surface border border-border/60 text-muted text-[11px] font-medium" title={selectedCustomer.phone}>
+                        <Phone size={12} className="text-muted/60" />
+                        <span>{selectedCustomer.phone}</span>
+                      </div>
+                    )}
+                    {(selectedCustomer.Branch?.name || customerHistory?.customer?.Branch?.name) && (
+                      <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-brand-surface border border-border/60 text-brand-neonpurple text-[11px] font-bold">
+                        <MapPin size={12} />
+                        <span>{selectedCustomer.Branch?.name || customerHistory?.customer?.Branch?.name}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* KPI Metrics Ribbon */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6">
+                  <div className="bg-brand-surface/70 rounded-xl p-3 border border-border/40">
+                    <p className="text-[9px] font-black uppercase tracking-[2px] text-muted mb-0.5">Total Spent</p>
+                    <p className="text-lg font-rajdhani font-black text-green-500">
+                      ₱{parseFloat(customerHistory?.totalSpent ?? selectedCustomer.totalSpent ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <div className="bg-brand-surface/70 rounded-xl p-3 border border-border/40">
+                    <p className="text-[9px] font-black uppercase tracking-[2px] text-muted mb-0.5">Completed Orders</p>
+                    <p className="text-lg font-rajdhani font-black text-main">
+                      {parseInt(customerHistory?.totalOrders ?? selectedCustomer.totalOrders ?? 0)}
+                    </p>
+                  </div>
+                  <div className="bg-brand-surface/70 rounded-xl p-3 border border-border/40">
+                    <p className="text-[9px] font-black uppercase tracking-[2px] text-muted mb-0.5">Items Purchased</p>
+                    <p className="text-lg font-rajdhani font-black text-brand-neonblue">
+                      {customerHistory?.totalItemsCount ?? (customerHistory?.products?.reduce((s, p) => s + p.totalQuantity, 0) || 0)}
+                    </p>
+                  </div>
+                  <div className="bg-brand-surface/70 rounded-xl p-3 border border-border/40">
+                    <p className="text-[9px] font-black uppercase tracking-[2px] text-muted mb-0.5">Avg. Order Value</p>
+                    <p className="text-lg font-rajdhani font-black text-yellow-500">
+                      ₱{Math.round(
+                        (customerHistory?.totalOrders || selectedCustomer.totalOrders) > 0
+                          ? (parseFloat(customerHistory?.totalSpent ?? selectedCustomer.totalSpent ?? 0) / (customerHistory?.totalOrders || selectedCustomer.totalOrders))
+                          : 0
+                      ).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-brand-bgbase/60 rounded-xl p-4 border border-border/30">
-                  <p className="text-[9px] font-black uppercase tracking-[2px] text-muted/50 mb-1">Total Spent</p>
-                  <p className="text-xl font-rajdhani font-black text-green-500">
-                    ₱{parseFloat(selectedCustomer.totalSpent || 0).toLocaleString()}
-                  </p>
+              {/* Tabs Navigation & Search */}
+              <div className="px-6 md:px-8 py-3.5 border-b border-border/40 bg-brand-surface flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shrink-0">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setHistoryTab("products")}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                      historyTab === "products"
+                        ? "bg-brand-neonblue text-black shadow-md shadow-brand-neonblue/20"
+                        : "bg-brand-bgbase text-muted hover:text-main border border-border/50"
+                    }`}
+                  >
+                    <Package size={14} />
+                    <span>Purchased Products</span>
+                    {customerHistory?.products && (
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${historyTab === "products" ? "bg-black/20 text-black" : "bg-brand-surface text-muted"}`}>
+                        {customerHistory.products.length}
+                      </span>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setHistoryTab("orders")}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                      historyTab === "orders"
+                        ? "bg-brand-neonblue text-black shadow-md shadow-brand-neonblue/20"
+                        : "bg-brand-bgbase text-muted hover:text-main border border-border/50"
+                    }`}
+                  >
+                    <Receipt size={14} />
+                    <span>Invoices &amp; Receipts</span>
+                    {customerHistory?.sales && (
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${historyTab === "orders" ? "bg-black/20 text-black" : "bg-brand-surface text-muted"}`}>
+                        {customerHistory.sales.length}
+                      </span>
+                    )}
+                  </button>
                 </div>
-                <div className="bg-brand-bgbase/60 rounded-xl p-4 border border-border/30">
-                  <p className="text-[9px] font-black uppercase tracking-[2px] text-muted/50 mb-1">Orders</p>
-                  <p className="text-xl font-rajdhani font-black text-main">
-                    {parseInt(selectedCustomer.totalOrders || 0)}
-                  </p>
+
+                <div className="relative w-full sm:w-64">
+                  <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
+                  <input
+                    type="text"
+                    placeholder={historyTab === "products" ? "Search product or SKU..." : "Search invoice #..."}
+                    value={historySearch}
+                    onChange={e => setHistorySearch(e.target.value)}
+                    className="w-full bg-brand-bgbase border border-border/60 rounded-xl py-1.5 pl-9 pr-3 text-xs text-main placeholder:text-muted/40 focus:outline-none focus:border-brand-neonblue/50 transition-all font-medium"
+                  />
+                  {historySearch && (
+                    <button
+                      onClick={() => setHistorySearch("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-main"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
                 </div>
+              </div>
+
+              {/* Scrollable Content Area */}
+              <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
+                {historyLoading ? (
+                  <div className="py-24 flex flex-col items-center justify-center gap-3 text-muted">
+                    <Loader2 size={26} className="animate-spin text-brand-neonblue" />
+                    <p className="text-xs font-black uppercase tracking-widest text-muted/70">
+                      Loading Customer Purchase History...
+                    </p>
+                  </div>
+                ) : historyTab === "products" ? (
+                  /* ─── TAB 1: PURCHASED PRODUCTS ─── */
+                  filteredHistoryProducts.length === 0 ? (
+                    <div className="py-20 text-center flex flex-col items-center justify-center text-muted">
+                      <div className="w-14 h-14 rounded-2xl bg-brand-bgbase border border-border/60 flex items-center justify-center text-muted/40 mb-3">
+                        <Package size={26} />
+                      </div>
+                      <p className="text-sm font-black uppercase tracking-wider text-main mb-1">
+                        {historySearch ? "No matching products found" : "No Product Purchases Recorded"}
+                      </p>
+                      <p className="text-xs text-muted/60 max-w-sm">
+                        {historySearch ? "Try adjusting your search query." : "This customer has not completed any product transactions in the system yet."}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="text-[10px] font-black uppercase tracking-[2px] text-muted/50 mb-2 flex items-center justify-between">
+                        <span>Distinct Purchased Items ({filteredHistoryProducts.length})</span>
+                        <span>Sorted by Last Purchased</span>
+                      </div>
+
+                      {filteredHistoryProducts.map((item, idx) => (
+                        <div
+                          key={`prod-${item.id || idx}`}
+                          className="p-4 rounded-2xl bg-brand-bgbase/60 border border-border/50 hover:border-brand-neonblue/30 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                        >
+                          <div className="flex items-start gap-3.5 min-w-0">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+                              item.type === 'service'
+                                ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                                : 'bg-brand-surface text-brand-neonblue border-brand-neonblue/20'
+                            }`}>
+                              {item.type === 'service' ? <Wrench size={18} /> : <Package size={18} />}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h4 className="text-sm font-bold text-main truncate" title={item.name}>
+                                  {item.name}
+                                </h4>
+                                <span className={`px-2 py-0.2 rounded-full text-[9px] font-black uppercase tracking-wider border ${
+                                  item.type === 'service'
+                                    ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                                    : 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
+                                }`}>
+                                  {item.type === 'service' ? 'Service' : 'Physical Product'}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-3 mt-1 text-[11px] text-muted flex-wrap">
+                                {item.sku && (
+                                  <span className="font-mono text-[10px] text-muted/80 bg-brand-surface px-2 py-0.5 rounded border border-border/40">
+                                    SKU: {item.sku}
+                                  </span>
+                                )}
+                                <span className="flex items-center gap-1 text-muted/80">
+                                  <Calendar size={11} className="text-muted/50" />
+                                  Last: {new Date(item.lastPurchased).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </span>
+                                {item.invoices && item.invoices.length > 0 && (
+                                  <span className="text-[10px] text-muted/60 font-mono">
+                                    in {item.invoices.length} {item.invoices.length === 1 ? 'order' : 'orders'}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Quantities and Amounts */}
+                          <div className="flex items-center justify-between sm:justify-end gap-6 border-t sm:border-t-0 pt-2 sm:pt-0 border-border/20 shrink-0">
+                            <div className="text-left sm:text-right">
+                              <p className="text-[9px] font-black uppercase tracking-wider text-muted/60">Total Quantity</p>
+                              <p className="text-sm font-rajdhani font-black text-main">
+                                {item.totalQuantity} <span className="text-xs text-muted font-normal font-dmsans">units</span>
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-[9px] font-black uppercase tracking-wider text-muted/60">Total Spent</p>
+                              <p className="text-base font-rajdhani font-black text-green-500">
+                                ₱{item.totalSpent.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </p>
+                              {item.unitPrice > 0 && (
+                                <p className="text-[9px] text-muted/50 font-medium">
+                                  @ ₱{item.unitPrice.toLocaleString()} / unit
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                ) : (
+                  /* ─── TAB 2: INVOICES & RECEIPTS ─── */
+                  filteredHistorySales.length === 0 ? (
+                    <div className="py-20 text-center flex flex-col items-center justify-center text-muted">
+                      <div className="w-14 h-14 rounded-2xl bg-brand-bgbase border border-border/60 flex items-center justify-center text-muted/40 mb-3">
+                        <Receipt size={26} />
+                      </div>
+                      <p className="text-sm font-black uppercase tracking-wider text-main mb-1">
+                        {historySearch ? "No matching invoices found" : "No Completed Invoices"}
+                      </p>
+                      <p className="text-xs text-muted/60 max-w-sm">
+                        {historySearch ? "Try adjusting your search query." : "No transactions found under this customer."}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {filteredHistorySales.map((sale) => {
+                        const isExpanded = !!expandedInvoices[sale.id];
+                        const items = sale.SaleItems || [];
+                        const productCount = items.filter(i => (i.item_type || 'product') === 'product').length;
+                        const serviceCount = items.filter(i => i.item_type === 'service').length;
+
+                        return (
+                          <div
+                            key={sale.id}
+                            className="rounded-2xl bg-brand-bgbase/60 border border-border/50 overflow-hidden transition-all"
+                          >
+                            {/* Invoice Summary Header */}
+                            <div
+                              onClick={() => toggleInvoiceExpand(sale.id)}
+                              className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:bg-white/[0.02] transition-colors"
+                            >
+                              <div className="flex items-center gap-3.5">
+                                <div className="w-10 h-10 rounded-xl bg-brand-surface border border-border flex items-center justify-center text-muted shrink-0">
+                                  <Receipt size={18} className="text-brand-neonblue" />
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-mono font-bold text-sm text-main uppercase">
+                                      {sale.invoiceNumber}
+                                    </span>
+                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${
+                                      sale.sale_type === 'service'
+                                        ? 'bg-purple-500/10 text-purple-400 border-purple-500/30'
+                                        : sale.sale_type === 'mixed'
+                                          ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                                          : 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30'
+                                    }`}>
+                                      {sale.sale_type || 'product'} Sale
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-3 mt-1 text-[11px] text-muted">
+                                    <span className="flex items-center gap-1 font-medium">
+                                      <Calendar size={11} className="opacity-50" />
+                                      {new Date(sale.createdAt).toLocaleString()}
+                                    </span>
+                                    <span className="uppercase text-[9px] font-black tracking-wider text-muted/60 bg-brand-surface px-1.5 py-0.5 rounded border border-border/40">
+                                      {sale.paymentMethod || 'cash'}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center justify-between sm:justify-end gap-5">
+                                <div className="text-right">
+                                  <p className="text-base font-rajdhani font-black text-brand-neonblue">
+                                    ₱{parseFloat(sale.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                  </p>
+                                  <p className="text-[10px] text-muted font-bold">
+                                    {items.length} {items.length === 1 ? 'item' : 'items'}
+                                  </p>
+                                </div>
+                                <div className={`p-1.5 rounded-lg bg-brand-surface border border-border text-muted transition-transform duration-200 ${isExpanded ? 'rotate-90 text-brand-neonblue' : ''}`}>
+                                  <ChevronRight size={14} />
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Itemized breakdown when expanded */}
+                            <AnimatePresence>
+                              {isExpanded && (
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: "auto", opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  className="border-t border-border/40 bg-brand-surface/40 p-4 sm:p-5"
+                                >
+                                  <p className="text-[10px] font-black uppercase tracking-[2px] text-muted/60 mb-3 flex items-center gap-1.5">
+                                    <Package size={12} /> Itemized Invoice Products &amp; Services
+                                  </p>
+                                  <div className="space-y-2">
+                                    {items.map((item, itemIdx) => {
+                                      const isServ = item.item_type === 'service';
+                                      const name = item.productName || item.Product?.name || item.Service?.name || "Item";
+                                      const price = parseFloat(item.unitPrice || 0);
+                                      const sub = parseFloat(item.subtotal || (item.quantity * price));
+
+                                      return (
+                                        <div
+                                          key={`subitem-${itemIdx}`}
+                                          className="p-3 rounded-xl bg-brand-bgbase/60 border border-border/30 flex items-center justify-between gap-3 text-xs"
+                                        >
+                                          <div className="flex items-center gap-3 min-w-0">
+                                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border ${
+                                              isServ
+                                                ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                                                : 'bg-brand-surface text-muted border-border/40'
+                                            }`}>
+                                              {isServ ? <Wrench size={12} /> : <Package size={12} />}
+                                            </div>
+                                            <div className="min-w-0">
+                                              <p className="font-bold text-main truncate">{name}</p>
+                                              <p className="text-[10px] text-muted font-mono">
+                                                Qty: {item.quantity} × ₱{price.toLocaleString()} {item.productSku ? `• SKU: ${item.productSku}` : ''}
+                                              </p>
+                                            </div>
+                                          </div>
+                                          <div className="font-black font-rajdhani text-sm text-main shrink-0">
+                                            ₱{sub.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+
+                                  {/* Notes if any */}
+                                  {sale.notes && (
+                                    <div className="mt-3 text-[11px] text-muted/80 bg-brand-bgbase/40 p-2.5 rounded-lg border border-border/20">
+                                      <span className="font-bold uppercase tracking-wider text-[9px] text-muted">Notes:</span> {sale.notes}
+                                    </div>
+                                  )}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-4 md:px-8 border-t border-border/50 bg-brand-bgbase/50 flex items-center justify-between shrink-0">
+                <span className="text-[10px] text-muted/50 font-mono uppercase tracking-wider">
+                  PC Alley Customer Profile &amp; Purchase Intelligence
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCustomer(null)}
+                  className="px-5 py-2 rounded-xl bg-brand-surface hover:bg-brand-surface/80 border border-border text-xs font-black uppercase tracking-wider text-muted hover:text-main transition-all cursor-pointer"
+                >
+                  Close
+                </button>
               </div>
             </motion.div>
           </div>

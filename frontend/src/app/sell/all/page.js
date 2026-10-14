@@ -178,29 +178,32 @@ const OrderDetailsModal = ({ isOpen, onClose, order }) => {
             {/* Totals */}
             <div className="bg-brand-bgbase/30 rounded-xl p-4 border border-border/10 flex flex-col items-end text-right">
               {discount > 0 && (
-                <p className="flex justify-between w-56 text-muted text-xs font-bold mb-1 uppercase tracking-widest">
+                <p className="flex justify-between w-64 sm:w-72 text-muted text-xs font-bold mb-1 uppercase tracking-widest">
                   <span>Subtotal</span>
                   <span>₱{subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                 </p>
               )}
               {discount > 0 && (
-                <p className="flex justify-between w-56 text-red-500 text-xs font-bold mb-1 uppercase tracking-widest">
+                <p className="flex justify-between w-64 sm:w-72 text-red-500 text-xs font-bold mb-1 uppercase tracking-widest">
                   <span>Discount</span>
                   <span>−₱{discount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                 </p>
               )}
-              <p className="flex justify-between w-56 text-muted text-xs font-bold mb-1 uppercase tracking-widest">
+              <p className="flex justify-between w-64 sm:w-72 text-muted text-xs font-bold mb-1 uppercase tracking-widest">
                 <span>VATable Sales</span>
                 <span>₱{vatableSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
               </p>
-              <p className="flex justify-between w-56 text-muted text-xs font-bold mb-1 uppercase tracking-widest">
+              <p className="flex justify-between w-64 sm:w-72 text-muted text-xs font-bold mb-1 uppercase tracking-widest">
                 <span>VAT (12%)</span>
                 <span>₱{tax.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
               </p>
-              <p className="flex justify-between w-56 text-main font-black text-xl border-t border-border/50 pt-2 uppercase">
-                <span>Total (VAT-Inclusive)</span>
-                <span className="text-brand-neonblue">₱{grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-              </p>
+              <div className="flex justify-between items-baseline w-64 sm:w-72 text-main font-black border-t border-border/50 pt-2.5 mt-1 uppercase">
+                <div className="flex flex-col text-left">
+                  <span className="text-sm font-black text-main">Total</span>
+                  <span className="text-[9px] text-muted font-bold tracking-wider -mt-0.5">(VAT-Inclusive)</span>
+                </div>
+                <span className="text-brand-neonblue text-xl font-rajdhani font-black">₱{grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              </div>
             </div>
           </div>
 

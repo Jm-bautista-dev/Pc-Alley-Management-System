@@ -1,4 +1,5 @@
-const { Customer, Branch, Sale, SaleItem } = require('../models');
+const { Op } = require('sequelize');
+const { Customer, Branch, Sale, SaleItem, Product, Service } = require('../models');
 
 const getAllCustomers = async (req, res) => {
   try {
@@ -43,26 +44,90 @@ const getCustomerById = async (req, res) => {
 
 const getCustomerHistory = async (req, res) => {
   try {
-    const customer = await Customer.findByPk(req.params.id);
+    const customer = await Customer.findByPk(req.params.id, {
+      include: [{ model: Branch, attributes: ['id', 'name'] }]
+    });
     if (!customer) return res.status(404).json({ message: 'Customer not found.' });
 
     // Validate branch authorization
-    if (req.user.role !== 'super_admin' && customer.branchId !== req.user.branch_id) {
+    if (req.user.role !== 'super_admin' && customer.branchId && req.user.branch_id && customer.branchId !== req.user.branch_id) {
       return res.status(403).json({ message: 'Forbidden: You cannot access customers outside your branch.' });
     }
 
     const sales = await Sale.findAll({
-      where: { customerId: req.params.id },
-      include: [{ model: SaleItem }],
+      where: {
+        [Op.or]: [
+          { customerId: customer.id },
+          { customerName: customer.name }
+        ]
+      },
+      include: [
+        {
+          model: SaleItem,
+          include: [
+            { model: Product, attributes: ['id', 'name', 'sku', 'price'] },
+            { model: Service, attributes: ['id', 'name', 'price'] }
+          ]
+        }
+      ],
       order: [['createdAt', 'DESC']],
-      limit: 50
+      limit: 100
     });
+
+    // Aggregate product purchase history
+    const productsMap = {};
+    let totalItemsCount = 0;
+
+    sales.forEach(sale => {
+      const items = sale.SaleItems || [];
+      items.forEach(item => {
+        const key = item.productId ? `prod-${item.productId}` : (item.serviceId ? `serv-${item.serviceId}` : `item-${item.productName}`);
+        const qty = parseInt(item.quantity) || 1;
+        const unitPrice = parseFloat(item.unitPrice) || 0;
+        const subtotal = parseFloat(item.subtotal) || (qty * unitPrice);
+
+        totalItemsCount += qty;
+
+        if (!productsMap[key]) {
+          productsMap[key] = {
+            id: item.productId || item.serviceId || key,
+            productId: item.productId || null,
+            serviceId: item.serviceId || null,
+            name: item.productName || item.Product?.name || item.Service?.name || 'Unnamed Item',
+            sku: item.productSku || item.Product?.sku || null,
+            type: item.item_type || (item.serviceId ? 'service' : 'product'),
+            totalQuantity: 0,
+            totalSpent: 0,
+            unitPrice: unitPrice,
+            lastPurchased: sale.createdAt,
+            purchaseCount: 0,
+            invoices: []
+          };
+        }
+
+        productsMap[key].totalQuantity += qty;
+        productsMap[key].totalSpent += subtotal;
+        productsMap[key].purchaseCount += 1;
+        if (new Date(sale.createdAt) > new Date(productsMap[key].lastPurchased)) {
+          productsMap[key].lastPurchased = sale.createdAt;
+          productsMap[key].unitPrice = unitPrice;
+        }
+        if (!productsMap[key].invoices.includes(sale.invoiceNumber)) {
+          productsMap[key].invoices.push(sale.invoiceNumber);
+        }
+      });
+    });
+
+    const products = Object.values(productsMap).sort((a, b) => new Date(b.lastPurchased) - new Date(a.lastPurchased));
+    const totalSpentCalculated = sales.reduce((sum, s) => sum + parseFloat(s.totalAmount || 0), 0);
 
     res.json({
       customer,
       sales,
-      totalSpent:  parseFloat(customer.totalSpent || 0),
-      totalOrders: parseInt(customer.totalOrders || 0)
+      products,
+      totalItemsCount,
+      totalSpent: parseFloat(customer.totalSpent || totalSpentCalculated || 0),
+      totalOrders: parseInt(customer.totalOrders || sales.length || 0)
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
