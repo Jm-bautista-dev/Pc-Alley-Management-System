@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import {
@@ -30,6 +31,8 @@ const STATUS_CONFIG = {
 };
 
 export default function ShipmentsPage() {
+  const router = useRouter();
+  const [isAuthorized, setIsAuthorized] = useState(false);
   const [shipments, setShipments] = useState(() => {
     if (typeof window !== "undefined") {
       try { return JSON.parse(localStorage.getItem("pc_alley_shipments") || "[]"); } catch { return []; }
@@ -42,6 +45,25 @@ export default function ShipmentsPage() {
   const [viewShipment, setViewShipment] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [limit, setLimit] = useState(10);
+
+  useEffect(() => {
+    try {
+      const storedUser = JSON.parse(localStorage.getItem("user") || "null");
+      const storedToken = localStorage.getItem("token");
+      if (!storedUser || !storedToken) {
+        window.location.href = "/";
+        return;
+      }
+      if (storedUser.role === "super_admin") {
+        showError("Access Denied", "Shipment management is restricted to branch operations.");
+        router.replace("/dashboard");
+        return;
+      }
+      setIsAuthorized(true);
+    } catch {
+      window.location.href = "/";
+    }
+  }, [router]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -99,6 +121,20 @@ export default function ShipmentsPage() {
 
   const totalPages = Math.ceil(filtered.length / limit);
   const paginated = filtered.slice((currentPage - 1) * limit, currentPage * limit);
+
+  if (!isAuthorized) {
+    return (
+      <div className="flex bg-brand-bgbase min-h-screen text-main font-dmsans">
+        <Sidebar />
+        <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
+          <TopBar title="SHIPMENTS" />
+          <div className="flex-1 flex items-center justify-center">
+            <div className="w-8 h-8 border-2 border-brand-neonblue/20 border-t-brand-neonblue rounded-full animate-spin" />
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex bg-brand-bgbase min-h-screen text-main font-dmsans transition-colors duration-300">

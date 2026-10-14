@@ -88,7 +88,6 @@ const Sidebar = () => {
           { title: "All Sales", path: "/sell/all" },
           { title: "Customer Warranties", path: "/sell/quotations" },
           { title: "Returns", path: "/sell/returns" },
-          { title: "Shipments", path: "/sell/shipments" },
           { title: "Discounts", path: "/sell/discounts" }
         ] },
         { title: "Procurement",     icon: Download,        path: "#purchases",        group: "SALES", subItems: [
