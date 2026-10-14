@@ -32,6 +32,9 @@ export default function StockReportPage() {
   const [filterBranch, setFilterBranch] = useState("");
   const [branches, setBranches] = useState([]);
 
+  const [filterCategory, setFilterCategory] = useState("All");
+  const [categories, setCategories] = useState([]);
+
   const [activeRestock, setActiveRestock] = useState(null);
   const [activeHistory, setActiveHistory] = useState(null);
   const [activeDelete, setActiveDelete] = useState(null);
@@ -62,15 +65,22 @@ export default function StockReportPage() {
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem("user"));
     setUser(userData);
-    // Fetch branches for the filter dropdown
-    const fetchBranches = async () => {
+    // Fetch branches and categories for filter dropdowns
+    const fetchDropdowns = async () => {
       const token = localStorage.getItem("token");
       try {
-        const res = await fetch(apiUrl("/api/branches"), { headers: { Authorization: `Bearer ${token}` } });
-        if (res.ok) setBranches(await res.json());
+        const [bRes, cRes] = await Promise.all([
+          fetch(apiUrl("/api/branches"), { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(apiUrl("/api/categories"), { headers: { Authorization: `Bearer ${token}` } })
+        ]);
+        if (bRes.ok) setBranches(await bRes.json());
+        if (cRes.ok) {
+          const cData = await cRes.json();
+          setCategories(Array.isArray(cData) ? cData : (cData?.data || []));
+        }
       } catch (e) { }
     };
-    fetchBranches();
+    fetchDropdowns();
   }, []);
 
   // Auto-refresh every 30 seconds
@@ -82,7 +92,7 @@ export default function StockReportPage() {
   // Reset to first page when filters change
   useEffect(() => {
     setPage(1);
-  }, [limit, debouncedSearch, filterStatus, filterBranch, sortField, sortDir]);
+  }, [limit, debouncedSearch, filterStatus, filterBranch, filterCategory, sortField, sortDir]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -90,7 +100,8 @@ export default function StockReportPage() {
       const token = localStorage.getItem("token");
       try {
         const branchParam = filterBranch ? `&branch_id=${filterBranch}` : '';
-        const invRes = await fetch(apiUrl(`/api/inventory?page=${page}&limit=${limit}&search=${encodeURIComponent(debouncedSearch)}&sortField=${sortField}&sortDir=${sortDir}${branchParam}`), {
+        const categoryParam = filterCategory && filterCategory !== "All" ? `&category_id=${filterCategory}` : '';
+        const invRes = await fetch(apiUrl(`/api/inventory?page=${page}&limit=${limit}&search=${encodeURIComponent(debouncedSearch)}&sortField=${sortField}&sortDir=${sortDir}${branchParam}${categoryParam}`), {
           headers: { Authorization: `Bearer ${token}` }
         });
         const salesRes = await fetch(apiUrl("/api/sales/history?limit=10000"), { headers: { Authorization: `Bearer ${token}` } });
@@ -108,7 +119,7 @@ export default function StockReportPage() {
       setLoading(false);
     };
     fetchData();
-  }, [page, limit, debouncedSearch, filterBranch, sortField, sortDir, refreshKey]);
+  }, [page, limit, debouncedSearch, filterBranch, filterCategory, sortField, sortDir, refreshKey]);
 
   const processedData = useMemo(() => {
     const today = new Date();
@@ -402,6 +413,22 @@ export default function StockReportPage() {
                 <div className="relative flex-1 lg:w-64">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={16} />
                   <input type="text" placeholder="Search products..." value={search} onChange={e => setSearch(e.target.value)} className="w-full bg-brand-bgbase border border-border/50 text-main text-xs font-bold rounded-lg pl-9 pr-4 py-3 outline-none focus:border-brand-neonblue transition-colors" />
+                </div>
+
+                {/* Category Filter Dropdown */}
+                <div className="w-full sm:w-56">
+                  <select
+                    value={filterCategory}
+                    onChange={e => setFilterCategory(e.target.value)}
+                    className="w-full bg-brand-bgbase border border-border/50 text-main text-xs font-bold rounded-lg px-3 py-3 outline-none focus:border-brand-neonblue cursor-pointer transition-colors"
+                  >
+                    <option value="All">All Categories</option>
+                    {categories.map(cat => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
               </div>

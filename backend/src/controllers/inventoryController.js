@@ -162,6 +162,10 @@ const getInventory = async (req, res) => {
       };
     }
 
+    if (req.query.category_id && req.query.category_id !== 'All') {
+      productWhere.category_id = req.query.category_id;
+    }
+
     const order = sortField === 'product_name' 
       ? [[Product, 'name', sortDir]] 
       : [[sortField, sortDir]];
@@ -185,7 +189,7 @@ const getInventory = async (req, res) => {
     // Overlay branch-specific price onto Product.price if set
     const data = rows.map(row => {
       const json = row.toJSON();
-      if (json.price !== null && json.price !== undefined) {
+      if (json.Product && json.price !== null && json.price !== undefined) {
         json.Product = { ...json.Product, price: json.price };
       }
       return json;
