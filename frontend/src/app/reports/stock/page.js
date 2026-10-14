@@ -50,10 +50,6 @@ export default function StockReportPage() {
   const [sortDir, setSortDir] = useState('ASC');
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const handleRefresh = useCallback(() => {
-    setRefreshKey(k => k + 1);
-  }, []);
-
   // Simple debounce hook
   const useDebounce = (value, delay) => {
     const [debounced, setDebounced] = useState(value);
