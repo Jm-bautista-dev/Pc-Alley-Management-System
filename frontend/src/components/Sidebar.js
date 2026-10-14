@@ -80,7 +80,6 @@ const Sidebar = () => {
           { title: "Brands", path: "/products/brands" },
           { title: "Import Products", path: "/products/import" }
         ] },
-        { title: "Stock Transfers", icon: ArrowLeftRight,  path: "/products/transfers", group: "SALES" },
         { title: "Bundles",         icon: Layers,          path: "/bundles",          group: "SALES" },
         { title: "Services",        icon: Wrench,          path: "#services",         group: "SALES", subItems: [
           { title: "Service Catalog", path: "/services" },
@@ -125,7 +124,6 @@ const Sidebar = () => {
         { title: "Product Categories", path: "/products/categories" },
         { title: "Brands", path: "/products/brands" }
       ] },
-      { title: "Stock Transfers", icon: ArrowLeftRight,  path: "/products/transfers", group: "SALES" },
       { title: "Bundles",         icon: Layers,          path: "/bundles",          group: "SALES" },
       { title: "Services",        icon: Wrench,          path: "#services",         group: "SALES", subItems: [
         { title: "Service Catalog", path: "/services" },

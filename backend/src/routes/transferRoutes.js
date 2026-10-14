@@ -7,6 +7,7 @@ const {
   getAllTransfers,
   getTransferById,
   createTransfer,
+  updateTransfer,
   completeTransferRoute,
   deleteTransferRoute
 } = require('../controllers/transferController');
@@ -33,6 +34,20 @@ router.post('/', [
   body('autoReceive').optional().isBoolean(),
   validate
 ], createTransfer);
+
+router.patch('/:id', [
+  param('id').isInt().withMessage('Invalid transfer ID.'),
+  body('transferDate').optional({ checkFalsy: true }).isString().trim(),
+  body('dispatchedBy').optional({ checkFalsy: true }).isString().trim(),
+  body('status').optional().isIn(['Pending', 'In-Transit', 'Completed']).withMessage('Status must be Pending, In-Transit, or Completed.'),
+  body('notes').optional({ checkFalsy: true }).isString().trim(),
+  validate
+], updateTransfer);
+
+router.put('/:id', [
+  param('id').isInt().withMessage('Invalid transfer ID.'),
+  validate
+], updateTransfer);
 
 router.post('/:id/complete', [
   param('id').isInt().withMessage('Invalid transfer ID.'),

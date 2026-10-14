@@ -196,10 +196,67 @@ const deleteTransferRoute = async (req, res) => {
   }
 };
 
+const updateTransfer = async (req, res) => {
+  try {
+    const transfer = await StockTransfer.findByPk(req.params.id, {
+      include: [{ model: StockTransferItem }]
+    });
+    if (!transfer) return res.status(404).json({ message: 'Stock Transfer not found.' });
+
+    // Validate branch authorization
+    if (req.user.role !== 'super_admin' && transfer.fromBranchId !== req.user.branch_id && transfer.toBranchId !== req.user.branch_id) {
+      return res.status(403).json({ message: 'Forbidden: You cannot modify stock transfers outside your branch.' });
+    }
+
+    const { transferDate, dispatchedBy, status, notes, fromBranchId, toBranchId, items } = req.body;
+
+    if (transferDate !== undefined) transfer.transferDate = transferDate;
+    if (dispatchedBy !== undefined) transfer.dispatchedBy = dispatchedBy;
+    if (notes !== undefined) transfer.notes = notes;
+    if (status !== undefined && ['Pending', 'In-Transit', 'Completed'].includes(status)) {
+      transfer.status = status;
+    }
+    if (req.user.role === 'super_admin') {
+      if (fromBranchId !== undefined) transfer.fromBranchId = fromBranchId;
+      if (toBranchId !== undefined) transfer.toBranchId = toBranchId;
+    }
+
+    await transfer.save();
+
+    // If items were provided and updated
+    if (items && Array.isArray(items) && items.length > 0) {
+      await StockTransferItem.destroy({ where: { transferId: transfer.id } });
+      for (const item of items) {
+        await StockTransferItem.create({
+          transferId: transfer.id,
+          productId: item.productId,
+          quantity: item.quantity
+        });
+      }
+    }
+
+    const updated = await StockTransfer.findByPk(transfer.id, {
+      include: [
+        { model: Branch, as: 'SourceBranch', attributes: ['id', 'name', 'location'] },
+        { model: Branch, as: 'DestBranch', attributes: ['id', 'name', 'location'] },
+        {
+          model: StockTransferItem,
+          include: [{ model: Product, attributes: ['id', 'name', 'sku', 'price'] }]
+        }
+      ]
+    });
+
+    res.json({ message: 'Stock Transfer updated successfully.', transfer: updated });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   getAllTransfers,
   getTransferById,
   createTransfer,
+  updateTransfer,
   completeTransferRoute,
   deleteTransferRoute
 };

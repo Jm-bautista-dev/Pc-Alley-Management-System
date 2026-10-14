@@ -27,7 +27,8 @@ import {
   Filter,
   ShieldCheck,
   Printer,
-  Calendar
+  Calendar,
+  Pencil
 } from "lucide-react";
 import { apiUrl, handleSessionExpired } from "@/lib/api";
 import { showSuccess, showError, showWarning, showConfirm } from "@/context/ModalContext";
@@ -50,6 +51,15 @@ export default function StockTransfersPage() {
   // Modals
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedTransfer, setSelectedTransfer] = useState(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingTransfer, setEditingTransfer] = useState(null);
+  const [editForm, setEditForm] = useState({
+    status: "Pending",
+    transferDate: "",
+    dispatchedBy: "",
+    notes: "",
+    items: []
+  });
   const [submitting, setSubmitting] = useState(false);
 
   // Transmittal Slip Modal
@@ -509,6 +519,57 @@ export default function StockTransfersPage() {
     }
   };
 
+  // Open Edit Modal
+  const handleOpenEditModal = (transfer) => {
+    setEditingTransfer(transfer);
+    setEditForm({
+      status: transfer.status || "Pending",
+      transferDate: transfer.transferDate || (transfer.createdAt ? new Date(transfer.createdAt).toISOString().split("T")[0] : ""),
+      dispatchedBy: transfer.dispatchedBy || "",
+      notes: transfer.notes || "",
+      items: (transfer.StockTransferItems || []).map(i => ({
+        productId: i.productId,
+        name: i.Product?.name || `Product #${i.productId}`,
+        sku: i.Product?.sku || "N/A",
+        quantity: i.quantity
+      }))
+    });
+    setIsEditModalOpen(true);
+  };
+
+  // Save Modified Transfer
+  const handleSaveEditTransfer = async (e) => {
+    e.preventDefault();
+    if (!editingTransfer) return;
+    setSubmitting(true);
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(apiUrl(`/api/stock-transfers/${editingTransfer.id}`), {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(editForm)
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || data.error || "Failed to update stock transfer.");
+      }
+      showSuccess("Transfer Modified", `Stock transfer #TR-${editingTransfer.id} has been modified successfully.`);
+      setIsEditModalOpen(false);
+      setEditingTransfer(null);
+      if (selectedTransfer?.id === editingTransfer.id) {
+        setSelectedTransfer(data.transfer || null);
+      }
+      fetchTransfers();
+    } catch (err) {
+      showError("Modification Failed", err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // Filtered Transfers
   const filteredTransfers = useMemo(() => {
     return transfers.filter(t => {
@@ -895,6 +956,15 @@ export default function StockTransfersPage() {
                                 title="Print Transmittal Slip"
                               >
                                 <Printer size={14} />
+                              </button>
+
+                              {/* Edit Transfer */}
+                              <button
+                                onClick={() => handleOpenEditModal(transfer)}
+                                className="p-1.5 rounded-lg border border-border hover:bg-brand-neonblue/10 hover:border-brand-neonblue/30 text-main/60 hover:text-brand-neonblue transition-colors"
+                                title="Edit / Modify Transfer"
+                              >
+                                <Pencil size={14} />
                               </button>
 
                               {/* View Details */}
@@ -1403,6 +1473,171 @@ export default function StockTransfersPage() {
                       <span>{submitting ? "Dispatching..." : "Dispatch Transfer"}</span>
                     </button>
                   </div>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ======================================================== */}
+      {/* MODAL: EDIT / MODIFY STOCK TRANSFER */}
+      {/* ======================================================== */}
+      <AnimatePresence>
+        {isEditModalOpen && editingTransfer && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-brand-surface border border-border rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden"
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-main/[0.02]">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-brand-neonblue/10 border border-brand-neonblue/20 flex items-center justify-center text-brand-neonblue">
+                    <Pencil size={16} />
+                  </div>
+                  <div>
+                    <h3 className="font-rajdhani font-bold text-base uppercase text-main">
+                      Modify Stock Transfer <span className="text-brand-neonblue">#TR-{editingTransfer.id}</span>
+                    </h3>
+                    <p className="text-[10px] text-main/50 font-mono">
+                      {editingTransfer.SourceBranch?.name || "Source"} ➔ {editingTransfer.DestBranch?.name || "Destination"}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setIsEditModalOpen(false);
+                    setEditingTransfer(null);
+                  }}
+                  className="w-7 h-7 rounded-lg border border-border flex items-center justify-center text-main/50 hover:text-main hover:bg-main/5 transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <form onSubmit={handleSaveEditTransfer} className="p-6 overflow-y-auto space-y-5">
+                {/* Status & Scheduled Date */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-[2px] text-main/50 mb-1.5">
+                      Transfer Status
+                    </label>
+                    <select
+                      value={editForm.status}
+                      onChange={e => setEditForm({ ...editForm, status: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-brand-bgbase border border-border text-xs text-main font-bold focus:outline-none focus:border-brand-neonblue cursor-pointer"
+                    >
+                      <option value="Pending">Pending Receipt</option>
+                      <option value="In-Transit">In-Transit</option>
+                      <option value="Completed">Completed</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-[2px] text-main/50 mb-1.5">
+                      Scheduled Date
+                    </label>
+                    <input
+                      type="date"
+                      value={editForm.transferDate}
+                      onChange={e => setEditForm({ ...editForm, transferDate: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-brand-bgbase border border-border text-xs text-main font-mono focus:outline-none focus:border-brand-neonblue"
+                    />
+                  </div>
+                </div>
+
+                {/* Dispatched By */}
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-[2px] text-main/50 mb-1.5">
+                    Dispatched By
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.dispatchedBy}
+                    onChange={e => setEditForm({ ...editForm, dispatchedBy: e.target.value })}
+                    placeholder="Admin / Dispatcher Name"
+                    className="w-full px-3 py-2 rounded-xl bg-brand-bgbase border border-border text-xs text-main font-semibold focus:outline-none focus:border-brand-neonblue"
+                  />
+                </div>
+
+                {/* Transfer Items / Quantities */}
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-[2px] text-main/50 mb-2">
+                    Transfer Items ({editForm.items?.length || 0})
+                  </label>
+                  <div className="rounded-xl border border-border overflow-hidden bg-brand-bgbase/40">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-border text-[9px] uppercase font-black text-main/40 bg-main/[0.02]">
+                          <th className="py-2 px-3">Product</th>
+                          <th className="py-2 px-3">SKU</th>
+                          <th className="py-2 px-3 w-28 text-right">Quantity</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {(editForm.items || []).map((item, idx) => (
+                          <tr key={idx} className="hover:bg-main/[0.02]">
+                            <td className="py-2 px-3 font-semibold text-main">{item.name}</td>
+                            <td className="py-2 px-3 font-mono text-[11px] text-main/60">{item.sku}</td>
+                            <td className="py-2 px-3 text-right">
+                              <input
+                                type="number"
+                                min="1"
+                                value={item.quantity}
+                                onChange={e => {
+                                  const val = parseInt(e.target.value, 10) || 1;
+                                  const updated = [...editForm.items];
+                                  updated[idx].quantity = val;
+                                  setEditForm({ ...editForm, items: updated });
+                                }}
+                                className="w-20 px-2 py-1 rounded-lg bg-brand-bgbase border border-border text-right text-xs text-main font-bold focus:outline-none focus:border-brand-neonblue"
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Transfer Notes */}
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-[2px] text-main/50 mb-1.5">
+                    Transfer Notes & Instructions
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={editForm.notes}
+                    onChange={e => setEditForm({ ...editForm, notes: e.target.value })}
+                    placeholder="Add special instructions or delivery details..."
+                    className="w-full px-3 py-2 rounded-xl bg-brand-bgbase border border-border text-xs text-main placeholder:text-main/30 focus:outline-none focus:border-brand-neonblue resize-none"
+                  />
+                </div>
+
+                {/* Modal Footer */}
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsEditModalOpen(false);
+                      setEditingTransfer(null);
+                    }}
+                    className="px-4 py-2 rounded-xl border border-border text-xs font-semibold text-main/70 hover:text-main hover:bg-main/5 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-neonblue disabled:opacity-40 text-black font-rajdhani font-bold text-xs uppercase tracking-wider hover:opacity-90 shadow-md transition-all"
+                  >
+                    <Check size={14} className="stroke-[3]" />
+                    <span>{submitting ? "Saving..." : "Save Changes"}</span>
+                  </button>
                 </div>
               </form>
             </motion.div>
