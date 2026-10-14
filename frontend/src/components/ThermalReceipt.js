@@ -312,11 +312,11 @@ export function CashReceiptContent({ receipt, copy = "ORIGINAL" }) {
                           {name}
                         </td>
                         <td style={{ padding: "2px 5px", textAlign: "center", borderBottom: "1px solid #e5e7eb" }}>{item.quantity}</td>
-                        <td style={{ padding: "2px 5px", textAlign: "right", borderBottom: "1px solid #e5e7eb" }}>
-                          ₱{price.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                        <td style={{ padding: "2px 5px", textAlign: "right", borderBottom: "1px solid #e5e7eb", fontSize: price === 0 ? "8px" : "9px", color: price === 0 ? "#6b7280" : "inherit" }}>
+                          {price === 0 ? "INCL" : `₱${price.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`}
                         </td>
-                        <td style={{ padding: "2px 5px", textAlign: "right", fontWeight: "700", borderBottom: "1px solid #e5e7eb" }}>
-                          ₱{(item.quantity * price).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                        <td style={{ padding: "2px 5px", textAlign: "right", fontWeight: "700", borderBottom: "1px solid #e5e7eb", fontSize: price === 0 ? "8px" : "9px", color: price === 0 ? "#6b7280" : "inherit" }}>
+                          {price === 0 ? "INCL" : `₱${(item.quantity * price).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`}
                         </td>
                       </tr>
                     );

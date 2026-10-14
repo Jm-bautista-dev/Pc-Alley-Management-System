@@ -128,6 +128,7 @@ const OrderDetailsModal = ({ isOpen, onClose, order }) => {
                         const price = parseFloat(item.unitPrice || item.price_at_sale || 0);
                         const qty   = parseInt(item.quantity) || 1;
                         const lineSubtotal = parseFloat(item.subtotal || (qty * price));
+                        const isBundled = price === 0 && packageItems.length > 0;
                         return (
                           <div key={`p-${idx}`} className="flex justify-between items-center p-3 rounded-lg bg-brand-bgbase/50 border border-border/20">
                             <div className="flex items-center gap-3 min-w-0 pr-3">
@@ -136,13 +137,28 @@ const OrderDetailsModal = ({ isOpen, onClose, order }) => {
                               </div>
                               <div className="min-w-0">
                                 <p className="font-bold text-main text-xs truncate max-w-[280px] sm:max-w-md">{name}</p>
-                                <p className="text-[9px] uppercase tracking-widest font-bold text-muted">
-                                  Qty: {qty} × ₱{price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                <p className="text-[9px] uppercase tracking-widest font-bold text-muted flex items-center gap-2">
+                                  <span>Qty: {qty}</span>
+                                  {price > 0 ? (
+                                    <span>× ₱{price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                  ) : isBundled ? (
+                                    <span className="text-amber-400/90 font-semibold">• Package Component</span>
+                                  ) : (
+                                    <span>× ₱0.00</span>
+                                  )}
                                 </p>
                               </div>
                             </div>
                             <div className="font-black text-main text-xs text-right whitespace-nowrap">
-                              ₱{lineSubtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              {lineSubtotal > 0 ? (
+                                `₱${lineSubtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                              ) : isBundled ? (
+                                <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                  Included
+                                </span>
+                              ) : (
+                                "₱0.00"
+                              )}
                             </div>
                           </div>
                         );
