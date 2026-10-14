@@ -242,9 +242,7 @@ export default function ProfitLossPage() {
     const exportSummary = [
       { Metric: 'Total Revenue', Amount: summary.revenue, Notes: `Gross sales from ${summary.totalSalesCount} transactions` },
       { Metric: 'Cost of Goods Sold (COGS)', Amount: summary.cogs, Notes: 'Total product acquisition costs' },
-      { Metric: 'Gross Profit', Amount: summary.grossProfit, Notes: `Gross Margin: ${summary.grossMargin}%` },
-      { Metric: 'Operating Expenses', Amount: summary.operatingExpenses, Notes: 'Operating expenditures & overhead' },
-      { Metric: 'Net Income', Amount: summary.netIncome, Notes: `Net Margin: ${summary.netMargin}%` }
+      { Metric: 'Gross Profit', Amount: summary.grossProfit, Notes: `Gross Margin: ${summary.grossMargin}%` }
     ];
 
     const exportMonthly = displayedMonthly.map(m => ({
@@ -260,11 +258,11 @@ export default function ProfitLossPage() {
     }));
 
     try {
-      exportToExcel(exportMonthly, 'PCA_Profit_Loss_Report', 'Monthly Breakdown', {
-        title: 'PC ALLEY - PROFIT & LOSS STATEMENT',
+      exportToExcel(exportMonthly, 'PCA_Sales_Gross_Report', 'Monthly Breakdown', {
+        title: 'PC ALLEY - SALES & GROSS REPORT',
         subtitle: `Branch: ${selectedBranch ? `Branch #${selectedBranch}` : 'All Branches'} | Range: ${periodFilter === 'all' ? 'All Time' : `${periodFilter} Days`}`
       });
-      showSuccess("Excel Financial Intelligence Report Exported");
+      showSuccess("Excel Sales & Gross Report Exported");
     } catch (e) {
       showError("Export Error");
     }
@@ -274,7 +272,7 @@ export default function ProfitLossPage() {
     <div className="flex bg-brand-bgbase min-h-screen text-main font-dmsans transition-colors duration-300">
       <Sidebar />
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        <TopBar title="PROFIT & LOSS REPORT" />
+        <TopBar title="SALES & GROSS REPORT" />
         <div className="flex-1 overflow-y-auto custom-scrollbar relative z-10 bg-brand-bgbase text-main p-4">
           <div className="responsive-container">
           
@@ -282,7 +280,7 @@ export default function ProfitLossPage() {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-6">
               <div>
                 <h1 className="text-2xl font-rajdhani font-black uppercase mb-0">
-                  FINANCIAL <span className="text-brand-neonblue">STATUS</span>
+                  SALES & GROSS <span className="text-brand-neonblue">REPORT</span>
                 </h1>
                 <div className="flex flex-wrap items-center gap-3 mt-1.5">
                   <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-black text-emerald-400 uppercase tracking-widest">
@@ -356,7 +354,7 @@ export default function ProfitLossPage() {
             </div>
 
             {/* Key Financial Metrics */}
-            <div className="responsive-grid mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
               <StatCard 
                 title="Total Revenue" 
                 value={`₱${Number(summary.revenue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} 
@@ -377,13 +375,6 @@ export default function ProfitLossPage() {
                 trend={`${summary.grossMargin}% Margin`} 
                 subtext="Revenue - COGS" 
                 icon={Layers} 
-              />
-              <StatCard 
-                title="Net Income" 
-                value={`₱${Number(summary.netIncome).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} 
-                trend={`${summary.netMargin}% Margin`} 
-                subtext={`After ₱${Number(summary.operatingExpenses).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Operating Expenses`} 
-                icon={Activity} 
               />
             </div>
 

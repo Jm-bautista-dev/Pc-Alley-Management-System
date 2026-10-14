@@ -97,7 +97,7 @@ const Sidebar = () => {
         ] },
 
         { title: "Reports",         icon: ClipboardList,   path: "#reports",          group: "SYSTEM", subItems: [
-          { title: "Profit & Loss", path: "/reports/profit-loss" },
+          { title: "Sales and Gross Report", path: "/reports/profit-loss" },
           { title: "Brand Reports", path: "/reports/brands" }
         ] },
         { title: "Analytics",       icon: Activity,        path: "#analytics",        group: "SYSTEM", subItems: [
@@ -147,7 +147,7 @@ const Sidebar = () => {
         { title: "Roles & Permissions", path: "/roles" }
       ] },
       { title: "Reports",         icon: ClipboardList,   path: "#reports",          group: "SYSTEM", subItems: [
-        { title: "Profit & Loss", path: "/reports/profit-loss" }
+        { title: "Sales and Gross Report", path: "/reports/profit-loss" }
       ] },
     ];
   };
