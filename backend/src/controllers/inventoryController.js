@@ -169,7 +169,7 @@ const updateStock = async (req, res) => {
 
 const getInventory = async (req, res) => {
   try {
-    const { branch_id, search, sortField = 'id', sortDir = 'ASC', page = 1, limit = 20 } = req.query;
+    const { branch_id, search, sortField = 'id', sortDir = 'ASC', page = 1, limit = 20, consolidated } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
     let where = {};
     let productWhere = {};
@@ -180,7 +180,7 @@ const getInventory = async (req, res) => {
       if (req.user.role === 'employee') {
         where.enabled = true;
       }
-    } else if (branch_id) {
+    } else if (branch_id && branch_id !== 'all' && branch_id !== 'All') {
       where.branch_id = branch_id;
     }
 
@@ -195,6 +195,71 @@ const getInventory = async (req, res) => {
 
     if (req.query.category_id && req.query.category_id !== 'All') {
       productWhere.category_id = req.query.category_id;
+    }
+
+    // Consolidated view: when no specific branch_id is selected (e.g. Super Admin viewing all branches)
+    // or when consolidated=true is explicitly requested.
+    // Each product appears ONCE with aggregated stock and branch breakdown, completely eliminating duplicate rows.
+    const isConsolidated = !where.branch_id || consolidated === 'true' || branch_id === 'all';
+
+    if (isConsolidated) {
+      const order = sortField === 'product_name' || sortField === 'name'
+        ? [['name', sortDir]]
+        : sortField === 'price'
+        ? [['price', sortDir]]
+        : [['id', sortDir]];
+
+      const { count, rows } = await Product.findAndCountAll({
+        where: productWhere,
+        limit: parseInt(limit),
+        offset: offset,
+        order,
+        distinct: true,
+        include: [
+          { model: Category },
+          { model: Supplier },
+          { model: Brand },
+          {
+            model: BranchProduct,
+            include: [{ model: Branch }]
+          }
+        ]
+      });
+
+      const data = rows.map(row => {
+        const p = row.get ? row.get({ plain: true }) : row;
+        const branchProducts = p.BranchProducts || [];
+        const totalStock = branchProducts.reduce((sum, bp) => sum + (Number(bp.stock) || 0), 0);
+        const minThreshold = branchProducts.length > 0
+          ? Math.max(...branchProducts.map(bp => bp.low_stock_threshold || 10))
+          : 10;
+
+        return {
+          id: p.id,
+          product_id: p.id,
+          stock: totalStock,
+          quantity: totalStock,
+          price: p.price,
+          last_purchase_price: p.last_purchase_price,
+          low_stock_threshold: minThreshold,
+          enabled: branchProducts.some(bp => bp.enabled !== false),
+          Product: p,
+          Branch: { name: 'All Branches (Consolidated)' },
+          branchStocks: branchProducts.map(bp => ({
+            branch_id: bp.branch_id,
+            branch_name: bp.Branch?.name || `Branch #${bp.branch_id}`,
+            stock: Number(bp.stock) || 0
+          })),
+          isConsolidated: true
+        };
+      });
+
+      return res.json({
+        totalItems: count,
+        totalPages: Math.ceil(count / limit),
+        currentPage: parseInt(page),
+        data
+      });
     }
 
     const order = sortField === 'product_name' 

@@ -232,7 +232,7 @@ export default function StockReportPage() {
         category: item.Product?.Category?.name || 'Uncategorized',
         category_id: item.Product?.category_id || '',
         brand_id: item.Product?.brand_id || '',
-        sku: item.Product?.sku || '',
+        sku: item.Product?.sku || item.sku || '',
         description: item.Product?.description || '',
         specifications: item.Product?.specifications || '',
         last_purchase_price: item.Product?.last_purchase_price,
@@ -251,7 +251,10 @@ export default function StockReportPage() {
         daysRemaining: daysRem > 500 ? '∞' : daysRem,
         statusGroup,
         statusColor,
-        badge
+        badge,
+        branchStocks: item.branchStocks || [],
+        isConsolidated: item.isConsolidated || false,
+        branchName: item.Branch?.name || ''
       };
     });
   }, [inventory, salesData]);
@@ -489,11 +492,29 @@ export default function StockReportPage() {
             </div>
             {/* Filter & Action Bar */}
             <div className="bg-brand-surface border border-border/50 rounded-xl p-4 mb-6 flex flex-col lg:flex-row justify-between items-center gap-4">
-              <div className="flex w-full lg:w-auto gap-4">
-                <div className="relative flex-1 lg:w-64">
+              <div className="flex flex-wrap w-full lg:w-auto gap-4 items-center">
+                <div className="relative flex-1 min-w-[200px] lg:w-64">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={16} />
-                  <input type="text" placeholder="Search products..." value={search} onChange={e => setSearch(e.target.value)} className="w-full bg-brand-bgbase border border-border/50 text-main text-xs font-bold rounded-lg pl-9 pr-4 py-3 outline-none focus:border-brand-neonblue transition-colors" />
+                  <input type="text" placeholder="Search products or SKU..." value={search} onChange={e => setSearch(e.target.value)} className="w-full bg-brand-bgbase border border-border/50 text-main text-xs font-bold rounded-lg pl-9 pr-4 py-3 outline-none focus:border-brand-neonblue transition-colors" />
                 </div>
+
+                {/* Branch Scope Selector */}
+                {user?.role === 'super_admin' && (
+                  <div className="w-full sm:w-56">
+                    <select
+                      value={filterBranch}
+                      onChange={e => setFilterBranch(e.target.value)}
+                      className="w-full bg-brand-bgbase border border-border/50 text-main text-xs font-bold rounded-lg px-3 py-3 outline-none focus:border-brand-neonblue cursor-pointer transition-colors"
+                    >
+                      <option value="">All Branches (Consolidated)</option>
+                      {branches.map(b => (
+                        <option key={b.id} value={b.id}>
+                          {b.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 {/* Category Filter Dropdown */}
                 <div className="w-full sm:w-56">
@@ -548,8 +569,8 @@ export default function StockReportPage() {
                       <th className="py-4 px-6 cursor-pointer" onClick={() => setSort('name')}>Product</th>
                       <th className="py-4 px-6 cursor-pointer" onClick={() => setSort('category')}>Category</th>
                       <th className="py-4 px-4 text-right cursor-pointer" onClick={() => setSort('quantity')}>Current Stock</th>
-                      <th className="py-4 px-4 text-right">Price</th>
-                      <th className="py-4 px-4">Status</th>
+                      <th className="py-4 px-4 text-right cursor-pointer" onClick={() => setSort('price')}>Price</th>
+                      <th className="py-4 px-4 text-center">Status</th>
                       <th className="py-4 px-6 text-center">Actions</th>
                     </tr>
                   </thead>
@@ -561,7 +582,14 @@ export default function StockReportPage() {
                     ) : (
                       filteredData.map((item, idx) => (
                         <motion.tr initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }} key={idx} className="border-b border-border/20 text-sm hover:bg-brand-bgbase/30 transition-colors group">
-                          <td className="py-4 px-6 font-bold text-main">{item.name}</td>
+                          <td className="py-4 px-6 font-bold text-main">
+                            <div className="flex flex-col">
+                              <span>{item.name}</span>
+                              {item.sku && (
+                                <span className="text-[10px] font-mono text-muted/60 tracking-wider">SKU: {item.sku}</span>
+                              )}
+                            </div>
+                          </td>
                           <td className="py-4 px-6 text-xs text-muted/80 font-bold uppercase tracking-wider">{item.category}</td>
                           <td className="py-4 px-4 text-right">
                             <div className="font-black text-main text-lg leading-tight">{item.stock}</div>
@@ -571,9 +599,35 @@ export default function StockReportPage() {
                               </span>
                               <span className="text-muted/60"> of {item.minTarget} min</span>
                             </div>
+                            {item.branchStocks && item.branchStocks.length > 0 && (
+                              <div className="flex flex-wrap gap-1 justify-end mt-1.5">
+                                {item.branchStocks.map(bs => (
+                                  <span key={bs.branch_id} className="text-[9px] px-1.5 py-0.5 rounded bg-brand-bgbase border border-border/40 text-muted font-bold whitespace-nowrap">
+                                    {bs.branch_name?.replace(/Sector\s*\d+\s*-?\s*/i, '').trim() || `B${bs.branch_id}`}: <span className="text-main">{bs.stock}</span>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </td>
-                          <td className="py-4 px-4 text-right font-bold text-brand-crimson">₱{Number(item.price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                          <td className="py-4 px-4"><span className={`px-2.5 py-1 text-[9px] font-black uppercase tracking-widest border rounded w-full inline-block text-center ${item.badge} ${item.statusColor}`}>{item.statusGroup}</span></td>
+                          <td className="py-4 px-4 text-right font-bold">
+                            {Number(item.price) > 0 ? (
+                              <span className="text-emerald-400">₱{Number(item.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                            ) : (
+                              <div className="flex flex-col items-end">
+                                <span className="text-xs font-bold text-brand-crimson/80">₱0.00</span>
+                                {user?.role === 'super_admin' && (
+                                  <button
+                                    onClick={() => setActiveEdit(item)}
+                                    className="text-[9px] font-black text-brand-neonblue hover:underline uppercase tracking-wider mt-0.5"
+                                    title="Set price"
+                                  >
+                                    + Set Price
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-4 px-4 text-center"><span className={`px-2.5 py-1 text-[9px] font-black uppercase tracking-widest border rounded w-full inline-block text-center ${item.badge} ${item.statusColor}`}>{item.statusGroup}</span></td>
                           <td className="py-4 px-6"><div className="flex items-center justify-end gap-2 transition-opacity">
                             {(user?.role === 'employee' || user?.role === 'branch_admin') && (
                               <button
