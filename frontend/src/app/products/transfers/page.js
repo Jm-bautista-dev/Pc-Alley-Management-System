@@ -60,6 +60,7 @@ export default function StockTransfersPage() {
   const [sourceInventory, setSourceInventory] = useState([]);
   const [loadingSourceInv, setLoadingSourceInv] = useState(false);
   const [productSearch, setProductSearch] = useState("");
+  const [isProductPickerOpen, setIsProductPickerOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [itemQuantity, setItemQuantity] = useState(1);
   const [transferItems, setTransferItems] = useState([]); // [{ productId, name, sku, available, quantity }]
@@ -150,7 +151,7 @@ export default function StockTransfersPage() {
       setLoadingSourceInv(true);
       const token = localStorage.getItem("token");
       try {
-        const res = await fetch(apiUrl(`/api/inventory?branch_id=${fromBranchId}&limit=500`), {
+        const res = await fetch(apiUrl(`/api/inventory?branch_id=${fromBranchId}&limit=1000`), {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (res.ok) {
@@ -189,6 +190,54 @@ export default function StockTransfersPage() {
     setTransferItems([]);
   }, [fromBranchId]);
 
+  // Debounced server-assisted live search
+  useEffect(() => {
+    if (!fromBranchId || !productSearch.trim()) return;
+
+    const timer = setTimeout(async () => {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      try {
+        const res = await fetch(
+          apiUrl(`/api/inventory?branch_id=${fromBranchId}&search=${encodeURIComponent(productSearch.trim())}&limit=100`),
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (res.ok) {
+          const raw = await res.json();
+          const searchedItems = (raw.data || []).map(row => {
+            const available = row.quantity || 0;
+            const threshold = (row.low_stock_threshold !== undefined && row.low_stock_threshold !== null && row.low_stock_threshold > 0)
+              ? row.low_stock_threshold
+              : 10;
+            const reserveBuffer = Math.max(1, threshold);
+            const maxTransferable = Math.max(0, available - reserveBuffer);
+
+            return {
+              id: row.Product?.id || row.product_id,
+              name: row.Product?.name || `Product #${row.product_id}`,
+              sku: row.Product?.sku || "N/A",
+              available,
+              reserveBuffer,
+              maxTransferable,
+              image: row.Product?.image_url || row.Product?.product_image || null
+            };
+          }).filter(i => i.available > 0);
+
+          setSourceInventory(prev => {
+            const map = new Map();
+            prev.forEach(item => map.set(item.id, item));
+            searchedItems.forEach(item => map.set(item.id, item));
+            return Array.from(map.values());
+          });
+        }
+      } catch (err) {
+        console.error("Live search failed:", err);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [productSearch, fromBranchId]);
+
   // Open Create Modal helper
   const handleOpenCreateModal = () => {
     if (currentUser?.role === "branch_admin") {
@@ -212,6 +261,7 @@ export default function StockTransfersPage() {
     setSelectedProduct(null);
     setItemQuantity(1);
     setProductSearch("");
+    setIsProductPickerOpen(false);
     setIsCreateModalOpen(true);
   };
 
@@ -449,11 +499,11 @@ export default function StockTransfersPage() {
 
   // Products available to choose from in source branch (filtered by search)
   const availableProductOptions = useMemo(() => {
-    if (!productSearch) return sourceInventory.slice(0, 50);
-    const q = productSearch.toLowerCase();
+    if (!productSearch.trim()) return sourceInventory.slice(0, 100);
+    const q = productSearch.toLowerCase().trim();
     return sourceInventory.filter(
       p => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)
-    ).slice(0, 50);
+    ).slice(0, 200);
   }, [sourceInventory, productSearch]);
 
   if (!isAuthorized) {
@@ -899,19 +949,105 @@ export default function StockTransfersPage() {
                     </p>
                   ) : (
                     <div className="space-y-3">
-                      {/* Search Filter Box */}
-                      <div className="relative">
-                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-main/40" />
-                        <input
-                          type="text"
-                          value={productSearch}
-                          onChange={e => setProductSearch(e.target.value)}
-                          placeholder="Search product name or SKU to filter dropdown..."
-                          className="w-full pl-9 pr-3 py-2 bg-brand-surface border border-border rounded-xl text-xs text-main placeholder:text-main/30 focus:outline-none focus:border-brand-neonblue transition-colors"
-                        />
+                      {/* Search Filter Box & Interactive Product Picker */}
+                      <div>
+                        <div className="relative">
+                          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-main/40" />
+                          <input
+                            type="text"
+                            value={productSearch}
+                            onFocus={() => setIsProductPickerOpen(true)}
+                            onChange={e => {
+                              setProductSearch(e.target.value);
+                              setIsProductPickerOpen(true);
+                            }}
+                            placeholder="Type product name or SKU (e.g. 'mouse', 'ssd', 'ram')..."
+                            className="w-full pl-9 pr-24 py-2.5 bg-brand-surface border border-border rounded-xl text-xs text-main placeholder:text-main/30 focus:outline-none focus:border-brand-neonblue transition-colors"
+                          />
+                          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                            {productSearch && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setProductSearch("");
+                                  setIsProductPickerOpen(false);
+                                }}
+                                className="p-1 rounded text-main/40 hover:text-main hover:bg-main/5"
+                                title="Clear search"
+                              >
+                                <X size={13} />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setIsProductPickerOpen(prev => !prev)}
+                              className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-main/5 hover:bg-main/10 text-main/70 border border-border/50 transition-colors"
+                            >
+                              {isProductPickerOpen ? "Hide" : "Browse"}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Interactive Floating / Expandable Product Picker */}
+                        {isProductPickerOpen && (
+                          <div className="mt-2 rounded-xl border border-brand-neonblue/30 bg-brand-surface p-2 shadow-2xl max-h-60 overflow-y-auto custom-scrollbar space-y-1.5">
+                            <div className="flex items-center justify-between px-2 py-1 border-b border-border/50 text-[10px] font-mono text-main/50">
+                              <span>
+                                {availableProductOptions.length} PRODUCTS FOUND IN {getSelectedSourceBranchName().toUpperCase()}
+                              </span>
+                              <span className="text-brand-neonblue font-bold">CLICK ITEM TO SELECT</span>
+                            </div>
+
+                            {availableProductOptions.length === 0 ? (
+                              <div className="p-4 text-center text-xs text-main/40 italic">
+                                No products found matching "{productSearch}" in {getSelectedSourceBranchName()}
+                              </div>
+                            ) : (
+                              availableProductOptions.map(prod => {
+                                const isSelected = selectedProduct?.id === prod.id;
+                                return (
+                                  <div
+                                    key={prod.id}
+                                    onClick={() => {
+                                      setSelectedProduct(prod);
+                                      setItemQuantity(prod.maxTransferable > 0 ? 1 : 0);
+                                      setIsProductPickerOpen(false);
+                                    }}
+                                    className={`p-2.5 rounded-lg border cursor-pointer transition-all flex items-center justify-between gap-3 ${
+                                      isSelected
+                                        ? "bg-brand-neonblue/10 border-brand-neonblue/40"
+                                        : "bg-brand-bgbase/60 border-border hover:border-brand-neonblue/40 hover:bg-main/5"
+                                    }`}
+                                  >
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-xs font-bold text-main truncate">{prod.name}</p>
+                                      <p className="text-[10px] font-mono text-main/50">SKU: {prod.sku}</p>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-main/5 border border-border text-main/70">
+                                        Stock: <strong className="text-main">{prod.available}</strong>
+                                      </span>
+                                      {prod.maxTransferable > 0 ? (
+                                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-brand-neonblue/10 border border-brand-neonblue/30 text-brand-neonblue">
+                                          Transferable: {prod.maxTransferable}
+                                        </span>
+                                      ) : (
+                                        <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-yellow-500/10 border border-yellow-500/30 text-yellow-500">
+                                          Reserve Limit (0)
+                                        </span>
+                                      )}
+                                      {isSelected && <Check size={14} className="text-brand-neonblue shrink-0" />}
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        )}
                       </div>
 
-                      {/* Product Selector Dropdown */}
+                      {/* Product Selector Dropdown (Quick alternative) */}
                       <div>
                         <select
                           value={selectedProduct ? String(selectedProduct.id) : ""}
@@ -924,7 +1060,9 @@ export default function StockTransfersPage() {
                           }}
                           className="w-full px-3 py-2.5 rounded-xl bg-brand-surface border border-border text-xs text-main focus:outline-none focus:border-brand-neonblue transition-colors cursor-pointer"
                         >
-                          <option value="">-- Choose product to transfer ({availableProductOptions.length} products listed) --</option>
+                          <option value="">
+                            -- {selectedProduct ? `Selected: ${selectedProduct.name}` : `Or choose from dropdown (${availableProductOptions.length} products listed)`} --
+                          </option>
                           {availableProductOptions.map(prod => (
                             <option key={prod.id} value={String(prod.id)}>
                               [{prod.sku}] {prod.name} — Stock: {prod.available} | Max Transfer: {prod.maxTransferable} {prod.maxTransferable === 0 ? "(Zero Transferable - Below Reserve)" : ""}
