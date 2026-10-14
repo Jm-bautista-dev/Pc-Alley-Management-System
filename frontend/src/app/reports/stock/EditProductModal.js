@@ -229,7 +229,10 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
 
     if (includeFields) {
       if (formData.name) fd.append("name", formData.name);
-      if (formData.sku) fd.append("sku", formData.sku);
+      if (formData.sku) {
+        fd.append("sku", formData.sku);
+        fd.append("barcode", formData.sku);
+      }
       if (formData.price !== undefined && formData.price !== "") fd.append("price", formData.price);
       if (formData.unit_price !== undefined && formData.unit_price !== "") {
         fd.append("last_purchase_price", formData.unit_price);
@@ -340,7 +343,8 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
       const priceChanged = formData.price !== undefined && formData.price !== "" && String(formData.price) !== String(product.global_price || product.price || "");
       const unitPriceChanged = formData.unit_price !== undefined && String(formData.unit_price) !== String(product.last_purchase_price ?? product.unit_price ?? "");
       const nameChanged = formData.name !== undefined && String(formData.name) !== String(product.name || "");
-      if (priceChanged || unitPriceChanged || nameChanged || imageChanged) {
+      const skuChanged = formData.sku !== undefined && String(formData.sku) !== String(product.sku || "");
+      if (priceChanged || unitPriceChanged || nameChanged || skuChanged || imageChanged) {
         try {
           const fd = buildFormData(true);
           await fetch(apiUrl(`/api/products/${product.id}`), {
@@ -601,26 +605,15 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[10px] uppercase font-black text-muted mb-1">Product Barcode / SKU</label>
-              <input
-                type="text"
-                value={formData.barcode || ""}
-                onChange={e => setFormData({ ...formData, barcode: e.target.value })}
-                placeholder="Barcode"
-                className="w-full bg-brand-bgbase border border-border text-main rounded-lg px-3 py-2 text-sm font-bold"
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] uppercase font-black text-muted mb-1">Product SKU</label>
-              <input
-                type="text"
-                value={formData.sku || ""}
-                readOnly
-                className="w-full bg-brand-bgbase border border-border text-muted rounded-lg px-3 py-2 text-sm font-bold cursor-not-allowed opacity-75 focus:outline-none"
-              />
-            </div>
+          <div>
+            <label className="block text-[10px] uppercase font-black text-muted mb-1">SKU</label>
+            <input
+              type="text"
+              value={formData.sku || ""}
+              onChange={e => setFormData({ ...formData, sku: e.target.value })}
+              placeholder="SKU"
+              className="w-full bg-brand-bgbase border border-border text-main rounded-lg px-3 py-2 text-sm font-bold"
+            />
           </div>
           <div>
             <label className="block text-[10px] uppercase font-black text-muted mb-1">Product Description</label>
