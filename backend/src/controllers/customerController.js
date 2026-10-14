@@ -66,7 +66,7 @@ const getCustomerHistory = async (req, res) => {
           model: SaleItem,
           include: [
             { model: Product, attributes: ['id', 'name', 'sku', 'price'] },
-            { model: Service, attributes: ['id', 'name', 'price'] }
+            { model: Service, attributes: ['id', 'name', 'category', 'base_price'] }
           ]
         }
       ],
