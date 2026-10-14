@@ -45,7 +45,7 @@ const BranchProduct = sequelize.define('BranchProduct', {
 
 // Virtual quantity field and JSON representation to maintain compatibility with existing Inventory model usage
 BranchProduct.prototype.toJSON = function () {
-  const values = Object.assign({}, this.get());
+  const values = Object.assign({}, this.get({ plain: true }));
   values.quantity = values.stock;
   return values;
 };

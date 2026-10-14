@@ -475,7 +475,9 @@ export default function StockReportPage() {
                   </thead>
                   <tbody>
                     {loading ? (
-                      <tr><td colSpan={7} className="py-8 text-center text-muted">Loading...</td></tr>
+                      <tr><td colSpan={6} className="py-12 text-center text-muted font-semibold text-sm">Loading inventory data...</td></tr>
+                    ) : filteredData.length === 0 ? (
+                      <tr><td colSpan={6} className="py-16 text-center text-muted font-bold text-sm">No products found matching the selected filters.</td></tr>
                     ) : (
                       filteredData.map((item, idx) => (
                         <motion.tr initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }} key={idx} className="border-b border-border/20 text-sm hover:bg-brand-bgbase/30 transition-colors group">
