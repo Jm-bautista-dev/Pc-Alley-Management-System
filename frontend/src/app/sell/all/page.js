@@ -44,8 +44,9 @@ const OrderDetailsModal = ({ isOpen, onClose, order }) => {
   const saleType = (order.sale_type || order.saleType || "product").toLowerCase();
 
   const items    = order.SaleItems || order.OrderItems || [];
-  const productItems = items.filter(i => (i.item_type || i.itemType) !== 'service' && !i.Service && !i.serviceId);
+  const productItems = items.filter(i => (i.item_type || i.itemType) !== 'service' && (i.item_type || i.itemType) !== 'package_charge' && !i.Service && !i.serviceId);
   const serviceItems = items.filter(i => (i.item_type || i.itemType) === 'service' || i.Service || i.serviceId);
+  const packageItems = items.filter(i => (i.item_type || i.itemType) === 'package_charge');
 
   const subtotal = items.reduce((sum, item) => {
     const price = parseFloat(item.unitPrice || item.price_at_sale || 0);
@@ -103,75 +104,118 @@ const OrderDetailsModal = ({ isOpen, onClose, order }) => {
                   <Calendar size={12} /> {new Date(order.createdAt).toLocaleString()}
                 </p>
               </div>
-              <div className="text-right">
-                <span className="block text-[10px] uppercase font-black tracking-widest text-muted">Customer</span>
-                <span className="font-bold text-main">{customerName}</span>
-              </div>
-            </div>
-
-            {/* Itemized list */}
-            <div className="mb-6 text-left space-y-4">
-              {productItems.length > 0 && (
-                <div>
-                  <h3 className="text-[10px] font-black uppercase tracking-[3px] text-cyan-400 mb-2 flex items-center gap-1.5">
-                    <Package size={12} /> Physical Products ({productItems.length})
-                  </h3>
-                  <div className="space-y-2">
-                    {productItems.map((item, idx) => {
-                      const name  = item.productName || item.Product?.name || "Product Item";
-                      const price = parseFloat(item.unitPrice || item.price_at_sale || 0);
-                      return (
-                        <div key={`p-${idx}`} className="flex justify-between items-center p-3 rounded-lg bg-brand-bgbase/50 border border-border/20">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded bg-brand-surface flex items-center justify-center text-muted border border-border/50">
-                              <Package size={14} />
-                            </div>
-                            <div>
-                              <p className="font-bold text-main text-xs">{name}</p>
-                              <p className="text-[9px] uppercase tracking-widest font-bold text-muted">
-                                Qty: {item.quantity} × ₱{price.toLocaleString()}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="font-black text-main text-xs">
-                            ₱{(item.quantity * price).toLocaleString()}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                <div className="text-right">
+                  <span className="block text-[10px] uppercase font-black tracking-widest text-muted">Customer</span>
+                  <span className="font-bold text-main">{customerName}</span>
+                  {order.Branch?.name && (
+                    <span className="block text-[9px] uppercase font-bold tracking-wider text-cyan-400 mt-1">
+                      📍 {order.Branch.name}
+                    </span>
+                  )}
                 </div>
-              )}
+              </div>
+
+              {/* Itemized list */}
+              <div className="mb-6 text-left space-y-4">
+                {productItems.length > 0 && (
+                  <div>
+                    <h3 className="text-[10px] font-black uppercase tracking-[3px] text-cyan-400 mb-2 flex items-center gap-1.5">
+                      <Package size={12} /> Physical Products ({productItems.length})
+                    </h3>
+                    <div className="space-y-2">
+                      {productItems.map((item, idx) => {
+                        const name  = item.productName || item.Product?.name || "Product Item";
+                        const price = parseFloat(item.unitPrice || item.price_at_sale || 0);
+                        const qty   = parseInt(item.quantity) || 1;
+                        const lineSubtotal = parseFloat(item.subtotal || (qty * price));
+                        return (
+                          <div key={`p-${idx}`} className="flex justify-between items-center p-3 rounded-lg bg-brand-bgbase/50 border border-border/20">
+                            <div className="flex items-center gap-3 min-w-0 pr-3">
+                              <div className="w-8 h-8 rounded bg-brand-surface flex items-center justify-center text-muted border border-border/50 shrink-0">
+                                <Package size={14} />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-bold text-main text-xs truncate max-w-[280px] sm:max-w-md">{name}</p>
+                                <p className="text-[9px] uppercase tracking-widest font-bold text-muted">
+                                  Qty: {qty} × ₱{price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="font-black text-main text-xs text-right whitespace-nowrap">
+                              ₱{lineSubtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
               {serviceItems.length > 0 && (
                 <div>
                   <h3 className="text-[10px] font-black uppercase tracking-[3px] text-purple-400 mb-2 flex items-center gap-1.5">
                     <Wrench size={12} /> Technical Services ({serviceItems.length})
                   </h3>
-                  <div className="space-y-2">
-                    {serviceItems.map((item, idx) => {
-                      const name  = item.serviceName || item.Service?.name || item.productName || item.Product?.name || "Technical Service";
-                      const price = parseFloat(item.unitPrice || item.price_at_sale || 0);
-                      return (
-                        <div key={`s-${idx}`} className="flex justify-between items-center p-3 rounded-lg bg-purple-500/5 border border-purple-500/20">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded bg-purple-500/10 text-purple-400 flex items-center justify-center border border-purple-500/20">
-                              <Wrench size={14} />
+                    <div className="space-y-2">
+                      {serviceItems.map((item, idx) => {
+                        const name  = item.serviceName || item.Service?.name || item.productName || item.Product?.name || "Technical Service";
+                        const price = parseFloat(item.unitPrice || item.price_at_sale || 0);
+                        const qty   = parseInt(item.quantity) || 1;
+                        const lineSubtotal = parseFloat(item.subtotal || (qty * price));
+                        return (
+                          <div key={`s-${idx}`} className="flex justify-between items-center p-3 rounded-lg bg-purple-500/5 border border-purple-500/20">
+                            <div className="flex items-center gap-3 min-w-0 pr-3">
+                              <div className="w-8 h-8 rounded bg-purple-500/10 text-purple-400 flex items-center justify-center border border-purple-500/20 shrink-0">
+                                <Wrench size={14} />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-bold text-main text-xs truncate max-w-[280px] sm:max-w-md">{name}</p>
+                                <p className="text-[9px] uppercase tracking-widest font-bold text-purple-400/80">
+                                  Labor Fee: {qty} × ₱{price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {item.priceOverrideReason ? `(${item.priceOverrideReason})` : ''}
+                                </p>
+                              </div>
                             </div>
-                            <div>
-                              <p className="font-bold text-main text-xs">{name}</p>
-                              <p className="text-[9px] uppercase tracking-widest font-bold text-purple-400/80">
-                                Labor Fee: {item.quantity} × ₱{price.toLocaleString()} {item.priceOverrideReason ? `(${item.priceOverrideReason})` : ''}
-                              </p>
+                            <div className="font-black text-purple-400 text-xs text-right whitespace-nowrap">
+                              ₱{lineSubtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </div>
                           </div>
-                          <div className="font-black text-purple-400 text-xs">
-                            ₱{(item.quantity * price).toLocaleString()}
+                        );
+                      })}
+                    </div>
+                </div>
+              )}
+
+              {packageItems.length > 0 && (
+                <div>
+                  <h3 className="text-[10px] font-black uppercase tracking-[3px] text-amber-400 mb-2 flex items-center gap-1.5">
+                    <Package size={12} /> Package & Bundle Charges ({packageItems.length})
+                  </h3>
+                    <div className="space-y-2">
+                      {packageItems.map((item, idx) => {
+                        const name  = item.productName || "Package Charge";
+                        const price = parseFloat(item.unitPrice || item.price_at_sale || 0);
+                        const qty   = parseInt(item.quantity) || 1;
+                        const lineSubtotal = parseFloat(item.subtotal || (qty * price));
+                        return (
+                          <div key={`pkg-${idx}`} className="flex justify-between items-center p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                            <div className="flex items-center gap-3 min-w-0 pr-3">
+                              <div className="w-8 h-8 rounded bg-amber-500/10 text-amber-400 flex items-center justify-center border border-amber-500/20 shrink-0">
+                                <Package size={14} />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-bold text-main text-xs truncate max-w-[280px] sm:max-w-md">{name}</p>
+                                <p className="text-[9px] uppercase tracking-widest font-bold text-amber-400/80">
+                                  Package Total: {qty} × ₱{price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="font-black text-amber-400 text-xs text-right whitespace-nowrap">
+                              ₱{lineSubtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
                 </div>
               )}
             </div>
@@ -397,12 +441,19 @@ export default function SalesLedgerPage() {
   };
 
   const filteredSales = sales.filter(s => {
+    const q            = search.toLowerCase();
     const invoiceNum   = s.invoiceNumber || "";
     const customer     = s.customerName  || s.customer_name || "";
+    const branchName   = s.Branch?.name || "";
+    const items        = s.SaleItems || s.OrderItems || [];
+    const hasItemMatch = items.some(i => (i.productName || i.Product?.name || "").toLowerCase().includes(q));
+
     return (
       s.id.toString().includes(search) ||
-      invoiceNum.toLowerCase().includes(search.toLowerCase()) ||
-      customer.toLowerCase().includes(search.toLowerCase())
+      invoiceNum.toLowerCase().includes(q) ||
+      customer.toLowerCase().includes(q) ||
+      branchName.toLowerCase().includes(q) ||
+      hasItemMatch
     );
   });
 
@@ -609,8 +660,9 @@ export default function SalesLedgerPage() {
                     const totalAmount   = parseFloat(order.totalAmount || order.total_amount || 0);
                     const saleType      = (order.sale_type || order.saleType || "product").toLowerCase();
                     const items         = order.SaleItems || order.OrderItems || [];
-                    const pCount        = items.filter(i => (i.item_type || i.itemType) !== 'service' && !i.Service && !i.serviceId).length;
+                    const pCount        = items.filter(i => (i.item_type || i.itemType) !== 'service' && (i.item_type || i.itemType) !== 'package_charge' && !i.Service && !i.serviceId).length;
                     const sCount        = items.filter(i => (i.item_type || i.itemType) === 'service' || i.Service || i.serviceId).length;
+                    const pkgCount      = items.filter(i => (i.item_type || i.itemType) === 'package_charge').length;
 
                     return (
                       <motion.tr
@@ -644,7 +696,8 @@ export default function SalesLedgerPage() {
                         <td className="py-4 px-6">
                           <span className="px-2.5 py-1 bg-brand-bgbase border border-border/50 rounded text-[9px] font-black text-muted">
                             {pCount > 0 && `${pCount} Prod `}
-                            {sCount > 0 && `${sCount} Svc`}
+                            {sCount > 0 && `${sCount} Svc `}
+                            {pkgCount > 0 && `${pkgCount} Pkg`}
                             {items.length === 0 && '0 Items'}
                           </span>
                         </td>

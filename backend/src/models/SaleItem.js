@@ -16,7 +16,7 @@ const SaleItem = sequelize.define('SaleItem', {
     }
   },
   item_type: {
-    type: DataTypes.ENUM('product', 'service'),
+    type: DataTypes.ENUM('product', 'service', 'package_charge'),
     allowNull: false,
     defaultValue: 'product'
   },

@@ -145,23 +145,73 @@ export default function StockReportPage() {
       const daily = sold / 30;
       const daysRem = daily > 0 ? Math.floor(stock / daily) : (stock === 0 ? 0 : 999);
 
-      const threshold = item.low_stock_threshold || 10;
+      // ── Percentage & Category-based Minimum Stock Baseline ──
+      // Default baseline: GPUs (and high-value components) = 10 pcs minimum
+      // Fast-moving peripherals (monitors, keyboards, mice, headsets, cables) = 50 pcs minimum
+      const catName = (item.Product?.Category?.name || item.category || '').toLowerCase();
+      const prodName = (item.Product?.name || item.name || '').toLowerCase();
+
+      let targetMinStock = item.low_stock_threshold || 10;
+      const isFastMoving = 
+        catName.includes('monitor') || 
+        catName.includes('keyboard') || 
+        catName.includes('mouse') || 
+        catName.includes('headset') || 
+        catName.includes('accessory') || 
+        catName.includes('accessories') || 
+        catName.includes('peripheral') || 
+        catName.includes('peripherals') ||
+        prodName.includes('monitor') || 
+        prodName.includes('keyboard') || 
+        prodName.includes('mouse') || 
+        prodName.includes('headset') || 
+        prodName.includes('earbuds') || 
+        prodName.includes('cable') || 
+        prodName.includes('mousepad');
+
+      const isGPU = 
+        catName.includes('gpu') || 
+        catName.includes('graphics card') || 
+        catName.includes('nvidia') || 
+        prodName.includes('rtx') || 
+        prodName.includes('gtx') || 
+        prodName.includes('radeon') || 
+        prodName.includes('rx ');
+
+      if (isFastMoving) {
+        targetMinStock = item.low_stock_threshold && item.low_stock_threshold > 10 ? item.low_stock_threshold : 50;
+      } else if (isGPU) {
+        targetMinStock = item.low_stock_threshold && item.low_stock_threshold > 0 ? item.low_stock_threshold : 10;
+      } else {
+        targetMinStock = item.low_stock_threshold || 15;
+      }
+
+      // Percentage calculation relative to minimum stock target (100% capacity)
+      const stockPercent = targetMinStock > 0 ? Math.round((stock / targetMinStock) * 100) : 100;
+
       const createdAtDate = item.Product?.createdAt || item.createdAt;
       const ageDays = createdAtDate ? (today - new Date(createdAtDate)) / 86400000 : 90;
 
       let statusGroup = 'In Stock', statusColor = 'text-green-500', badge = 'bg-green-500/10 border-green-500/20';
-      if (stock === 0) {
+      if (stock === 0 || stockPercent === 0) {
+        // 0% -> Out of Stock
         statusGroup = 'Out of Stock';
         statusColor = 'text-brand-crimson';
         badge = 'bg-red-500/10 border-red-500/20';
+      } else if (stockPercent <= 15) {
+        // <= 15% -> Critical Stock
+        statusGroup = 'Critical Stock';
+        statusColor = 'text-red-400 font-black';
+        badge = 'bg-red-500/15 border-red-500/30 animate-pulse';
+      } else if (stockPercent <= 30) {
+        // <= 30% -> Low Stock
+        statusGroup = 'Low Stock';
+        statusColor = 'text-orange-500';
+        badge = 'bg-orange-500/10 border-orange-500/20';
       } else if (sold === 0 && ageDays >= 30) {
         statusGroup = 'Dead Stock';
         statusColor = 'text-yellow-500';
         badge = 'bg-yellow-500/10 border-yellow-500/20';
-      } else if (stock <= threshold) {
-        statusGroup = 'Low Stock';
-        statusColor = 'text-orange-500';
-        badge = 'bg-orange-500/10 border-orange-500/20';
       }
       return {
         id: pId,
@@ -181,6 +231,8 @@ export default function StockReportPage() {
         global_price: item.Product?.price,
         enabled: item.enabled !== false,
         low_stock_threshold: item.low_stock_threshold,
+        minTarget: targetMinStock,
+        stockPercent,
         stock,
         sold30: sold,
         dailySales: daily.toFixed(1),
@@ -196,8 +248,10 @@ export default function StockReportPage() {
     return processedData.filter(i => {
       const matchesSearch = i.name.toLowerCase().includes(search.toLowerCase()) || i.sku.toLowerCase().includes(search.toLowerCase());
       let matchesFilter = true;
-      if (filterStatus === "Low Stock") {
-        matchesFilter = i.statusGroup === "Low Stock";
+      if (filterStatus === "Critical Stock") {
+        matchesFilter = i.statusGroup === "Critical Stock";
+      } else if (filterStatus === "Low Stock") {
+        matchesFilter = i.statusGroup === "Low Stock" || i.statusGroup === "Critical Stock";
       } else if (filterStatus === "Dead Stock") {
         matchesFilter = i.statusGroup === "Dead Stock";
       } else if (filterStatus === "Out of Stock") {
@@ -211,7 +265,8 @@ export default function StockReportPage() {
 
   const kpis = {
     total: processedData.length,
-    low: processedData.filter(i => i.statusGroup === 'Low Stock').length,
+    critical: processedData.filter(i => i.statusGroup === 'Critical Stock').length,
+    low: processedData.filter(i => i.statusGroup === 'Low Stock' || i.statusGroup === 'Critical Stock').length,
     dead: processedData.filter(i => i.statusGroup === 'Dead Stock').length,
     outOfStock: processedData.filter(i => i.statusGroup === 'Out of Stock').length,
     incoming: 0
@@ -376,12 +431,18 @@ export default function StockReportPage() {
                   INVENTORY <span className="text-brand-neonblue">SUMMARY</span>
                 </h1>
               </div>
-              <div className="flex gap-2">
-                {['All', 'Low Stock', 'Dead Stock', 'Out of Stock'].map(status => (
+              <div className="flex flex-wrap gap-2">
+                {['All', 'Low Stock', 'Critical Stock', 'Dead Stock', 'Out of Stock'].map(status => (
                   <button
                     key={status}
                     onClick={() => setFilterStatus(status)}
-                    className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border ${filterStatus === status ? 'bg-brand-neonblue/10 border-brand-neonblue/40 text-brand-neonblue' : 'bg-brand-surface border-border text-muted hover:text-main'}`}
+                    className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border ${
+                      filterStatus === status 
+                        ? status === 'Critical Stock'
+                          ? 'bg-red-500/15 border-red-500/50 text-red-400 shadow-sm shadow-red-500/20'
+                          : 'bg-brand-neonblue/10 border-brand-neonblue/40 text-brand-neonblue' 
+                        : 'bg-brand-surface border-border text-muted hover:text-main'
+                    }`}
                   >
                     {status}
                   </button>
@@ -395,8 +456,12 @@ export default function StockReportPage() {
                 <div className="w-10 h-10 rounded-xl bg-brand-neonblue/10 flex items-center justify-center text-brand-neonblue"><PackageCheck size={20} /></div>
               </div>
               <div className="glass-card p-4 md:p-6 flex items-center justify-between border-l-2 border-orange-500">
-                <div><p className="text-[10px] uppercase font-black tracking-widest text-muted mb-1">Low Stock</p><h3 className="text-2xl font-black text-orange-500">{kpis.low}</h3></div>
+                <div><p className="text-[10px] uppercase font-black tracking-widest text-muted mb-1">Low Stock (≤30%)</p><h3 className="text-2xl font-black text-orange-500">{kpis.low}</h3></div>
                 <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-500"><TrendingUp size={20} /></div>
+              </div>
+              <div className="glass-card p-4 md:p-6 flex items-center justify-between border-l-2 border-red-500">
+                <div><p className="text-[10px] uppercase font-black tracking-widest text-muted mb-1">Critical (≤15%)</p><h3 className="text-2xl font-black text-red-500">{kpis.critical}</h3></div>
+                <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center text-red-500"><AlertCircle size={20} /></div>
               </div>
               <div className="glass-card p-4 md:p-6 flex items-center justify-between border-l-2 border-yellow-500">
                 <div><p className="text-[10px] uppercase font-black tracking-widest text-muted mb-1">Dead Stock</p><h3 className="text-2xl font-black text-yellow-500">{kpis.dead}</h3></div>
@@ -483,7 +548,15 @@ export default function StockReportPage() {
                         <motion.tr initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }} key={idx} className="border-b border-border/20 text-sm hover:bg-brand-bgbase/30 transition-colors group">
                           <td className="py-4 px-6 font-bold text-main">{item.name}</td>
                           <td className="py-4 px-6 text-xs text-muted/80 font-bold uppercase tracking-wider">{item.category}</td>
-                          <td className="py-4 px-4 text-right font-black text-main text-lg">{item.stock}</td>
+                          <td className="py-4 px-4 text-right">
+                            <div className="font-black text-main text-lg leading-tight">{item.stock}</div>
+                            <div className="text-[10px] font-bold text-muted mt-0.5">
+                              <span className={item.stockPercent <= 15 ? 'text-red-400 font-black' : item.stockPercent <= 30 ? 'text-orange-400 font-black' : 'text-green-400'}>
+                                {item.stockPercent}%
+                              </span>
+                              <span className="text-muted/60"> of {item.minTarget} min</span>
+                            </div>
+                          </td>
                           <td className="py-4 px-4 text-right font-bold text-brand-crimson">₱{Number(item.price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                           <td className="py-4 px-4"><span className={`px-2.5 py-1 text-[9px] font-black uppercase tracking-widest border rounded w-full inline-block text-center ${item.badge} ${item.statusColor}`}>{item.statusGroup}</span></td>
                           <td className="py-4 px-6"><div className="flex items-center justify-end gap-2 transition-opacity">
