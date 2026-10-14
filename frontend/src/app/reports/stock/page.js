@@ -235,7 +235,12 @@ export default function StockReportPage() {
         sku: item.Product?.sku || item.sku || '',
         description: item.Product?.description || '',
         specifications: item.Product?.specifications || '',
-        last_purchase_price: item.Product?.last_purchase_price,
+        last_purchase_price: (item.last_purchase_price !== undefined && item.last_purchase_price !== null) 
+          ? item.last_purchase_price 
+          : (item.Product?.last_purchase_price !== undefined && item.Product?.last_purchase_price !== null ? item.Product.last_purchase_price : 0),
+        unit_price: (item.last_purchase_price !== undefined && item.last_purchase_price !== null) 
+          ? item.last_purchase_price 
+          : (item.Product?.last_purchase_price !== undefined && item.Product?.last_purchase_price !== null ? item.Product.last_purchase_price : 0),
         image_url: item.Product?.image_url || null,
         product_image: item.Product?.product_image || null,
         price: item.price !== null && item.price !== undefined ? item.price : item.Product?.price,
@@ -569,16 +574,17 @@ export default function StockReportPage() {
                       <th className="py-4 px-6 cursor-pointer" onClick={() => setSort('name')}>Product</th>
                       <th className="py-4 px-6 cursor-pointer" onClick={() => setSort('category')}>Category</th>
                       <th className="py-4 px-4 text-right cursor-pointer" onClick={() => setSort('quantity')}>Current Stock</th>
-                      <th className="py-4 px-4 text-right cursor-pointer" onClick={() => setSort('price')}>Price</th>
+                      <th className="py-4 px-4 text-right">Unit Price</th>
+                      <th className="py-4 px-4 text-right cursor-pointer" onClick={() => setSort('price')}>Selling Price</th>
                       <th className="py-4 px-4 text-center">Status</th>
                       <th className="py-4 px-6 text-center">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {loading ? (
-                      <tr><td colSpan={6} className="py-12 text-center text-muted font-semibold text-sm">Loading inventory data...</td></tr>
+                      <tr><td colSpan={7} className="py-12 text-center text-muted font-semibold text-sm">Loading inventory data...</td></tr>
                     ) : filteredData.length === 0 ? (
-                      <tr><td colSpan={6} className="py-16 text-center text-muted font-bold text-sm">No products found matching the selected filters.</td></tr>
+                      <tr><td colSpan={7} className="py-16 text-center text-muted font-bold text-sm">No products found matching the selected filters.</td></tr>
                     ) : (
                       filteredData.map((item, idx) => (
                         <motion.tr initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }} key={idx} className="border-b border-border/20 text-sm hover:bg-brand-bgbase/30 transition-colors group">
@@ -607,6 +613,13 @@ export default function StockReportPage() {
                                   </span>
                                 ))}
                               </div>
+                            )}
+                          </td>
+                          <td className="py-4 px-4 text-right font-medium">
+                            {Number(item.last_purchase_price) > 0 ? (
+                              <span className="text-muted/90 font-bold">₱{Number(item.last_purchase_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                            ) : (
+                              <span className="text-muted/40 text-xs">₱0.00</span>
                             )}
                           </td>
                           <td className="py-4 px-4 text-right font-bold">

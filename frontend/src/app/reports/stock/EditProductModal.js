@@ -229,10 +229,7 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
 
     if (includeFields) {
       if (formData.name) fd.append("name", formData.name);
-      if (formData.sku) {
-        fd.append("sku", formData.sku);
-        fd.append("barcode", formData.sku);
-      }
+      if (formData.sku) fd.append("sku", formData.sku);
       if (formData.price !== undefined && formData.price !== "") fd.append("price", formData.price);
       if (formData.unit_price !== undefined && formData.unit_price !== "") {
         fd.append("last_purchase_price", formData.unit_price);
@@ -244,7 +241,12 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
       if (formData.description !== undefined) fd.append("description", formData.description);
       if (formData.category_id) fd.append("category_id", formData.category_id);
       if (formData.brand_id) fd.append("brand_id", formData.brand_id);
-      if (formData.barcode !== undefined) fd.append("barcode", formData.barcode);
+      
+      const resolvedBarcode = formData.barcode !== undefined && formData.barcode !== "" 
+        ? formData.barcode 
+        : (formData.sku || "");
+      if (resolvedBarcode) fd.append("barcode", resolvedBarcode);
+      
       if (formData.specifications !== undefined) fd.append("specifications", formData.specifications);
     }
 

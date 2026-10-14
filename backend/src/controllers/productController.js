@@ -274,7 +274,12 @@ const updateProduct = async (req, res) => {
     }
     if (category_id !== undefined) product.category_id = (category_id === '' || category_id === null) ? null : parseInt(category_id);
     if (brand_id !== undefined) product.brand_id = (brand_id === '' || brand_id === null) ? null : parseInt(brand_id);
-    if (barcode !== undefined) product.barcode = barcode ? barcode.trim() : null;
+    if (barcode !== undefined) {
+      const rawBarcode = Array.isArray(barcode) ? barcode[0] : barcode;
+      product.barcode = (rawBarcode !== null && rawBarcode !== undefined && String(rawBarcode).trim() !== '')
+        ? String(rawBarcode).trim()
+        : null;
+    }
     if (specifications !== undefined) {
       product.specifications = validateAndSanitizeSpecifications(specifications).sanitizedData;
     }
