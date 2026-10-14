@@ -1464,8 +1464,9 @@ const getProfitLossAnalytics = async (req, res) => {
       whereSale.createdAt = { [Op.between]: [start, end] };
       whereExpense.expenseDate = { [Op.between]: [start, end] };
     } else if (days && !isNaN(parseInt(days, 10))) {
+      const limitDays = parseInt(days, 10);
       const limitDate = new Date();
-      limitDate.setDate(limitDate.getDate() - parseInt(days, 10));
+      limitDate.setDate(limitDate.getDate() - (limitDays - 1));
       limitDate.setHours(0, 0, 0, 0);
       whereSale.createdAt = { [Op.gte]: limitDate };
       whereExpense.expenseDate = { [Op.gte]: limitDate };
@@ -1564,7 +1565,7 @@ const getProfitLossAnalytics = async (req, res) => {
     };
 
     const trendCutoff = new Date();
-    trendCutoff.setDate(trendCutoff.getDate() - trendDays);
+    trendCutoff.setDate(trendCutoff.getDate() - (trendDays - 1));
     trendCutoff.setHours(0, 0, 0, 0);
 
     const dailyMap = {};
@@ -1580,19 +1581,17 @@ const getProfitLossAnalytics = async (req, res) => {
       const saleDate = new Date(sale.createdAt);
       if (saleDate >= trendCutoff) {
         const key = toLocalDateKey(saleDate);
-        if (!dailyMap[key]) {
-          const label = saleDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
-          dailyMap[key] = { date: key, label, revenue: 0, expenses: 0, cogs: 0, grossProfit: 0, netIncome: 0 };
+        if (dailyMap[key]) {
+          const rev = parseFloat(sale.totalAmount || 0);
+          dailyMap[key].revenue += rev;
+          let cogs = 0;
+          if (sale.SaleItems) {
+            sale.SaleItems.forEach(item => {
+              cogs += computeItemCogs(item);
+            });
+          }
+          dailyMap[key].cogs += cogs;
         }
-        const rev = parseFloat(sale.totalAmount || 0);
-        dailyMap[key].revenue += rev;
-        let cogs = 0;
-        if (sale.SaleItems) {
-          sale.SaleItems.forEach(item => {
-            cogs += computeItemCogs(item);
-          });
-        }
-        dailyMap[key].cogs += cogs;
       }
     });
 
@@ -1600,29 +1599,31 @@ const getProfitLossAnalytics = async (req, res) => {
       const expDate = new Date(exp.expenseDate || exp.createdAt);
       if (expDate >= trendCutoff) {
         const key = toLocalDateKey(expDate);
-        if (!dailyMap[key]) {
-          const label = expDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
-          dailyMap[key] = { date: key, label, revenue: 0, expenses: 0, cogs: 0, grossProfit: 0, netIncome: 0 };
+        if (dailyMap[key]) {
+          dailyMap[key].expenses += parseFloat(exp.amount || 0);
         }
-        dailyMap[key].expenses += parseFloat(exp.amount || 0);
       }
     });
-    const trends = Object.values(dailyMap).map(d => {
-      const rev = parseFloat(d.revenue.toFixed(2));
-      const exp = parseFloat(d.expenses.toFixed(2));
-      const cogs = parseFloat(d.cogs.toFixed(2));
-      const gross = parseFloat((rev - cogs).toFixed(2));
-      const net = parseFloat((rev - cogs - exp).toFixed(2));
-      return {
-        date: d.date,
-        label: d.label,
-        revenue: rev,
-        expenses: exp,
-        cogs,
-        grossProfit: gross,
-        netIncome: net
-      };
-    });
+
+    const trends = Object.keys(dailyMap)
+      .sort()
+      .map(key => {
+        const d = dailyMap[key];
+        const rev = parseFloat(d.revenue.toFixed(2));
+        const exp = parseFloat(d.expenses.toFixed(2));
+        const cogs = parseFloat(d.cogs.toFixed(2));
+        const gross = parseFloat((rev - cogs).toFixed(2));
+        const net = parseFloat((rev - cogs - exp).toFixed(2));
+        return {
+          date: d.date,
+          label: d.label,
+          revenue: rev,
+          expenses: exp,
+          cogs,
+          grossProfit: gross,
+          netIncome: net
+        };
+      });
 
     // Monthly breakdown across the last 12 calendar months (latest month first)
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
