@@ -170,7 +170,7 @@ export default function PrescriptiveAnalyticsPage() {
       title: "Reduce Overstock",
       shortTitle: "Surplus & Holding Capital",
       description: "Excess inventory detected. Bundle or promote to clear surplus holdings and free up working capital.",
-      strategyGuide: "Items exceeding 45-day sales turnover velocity. Bundling with fast-moving complementary components or offering clearance incentives will prevent dead-stock depreciation.",
+      strategyGuide: "Items exceeding 45-day sales turnover velocity. Bundling with fast-moving complementary components or offering clearance incentives will prevent surplus holding depreciation.",
       icon: TrendingDown,
       color: "#F59E0B",
       count: medCount,

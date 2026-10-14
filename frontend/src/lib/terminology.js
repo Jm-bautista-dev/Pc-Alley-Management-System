@@ -142,7 +142,6 @@ export const LABELS = {
     inStock: "In Stock",
     lowStock: "Low Stock",
     outOfStock: "Out of Stock",
-    deadStock: "Dead Stock",
     resync: "Resync Branch Inventory",
     repair: "Repair Inventory Records"
   },

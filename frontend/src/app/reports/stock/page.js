@@ -224,10 +224,6 @@ export default function StockReportPage() {
         statusGroup = 'Low Stock';
         statusColor = 'text-orange-500';
         badge = 'bg-orange-500/10 border-orange-500/20';
-      } else if (sold === 0 && ageDays >= 30) {
-        statusGroup = 'Dead Stock';
-        statusColor = 'text-yellow-500';
-        badge = 'bg-yellow-500/10 border-yellow-500/20';
       }
       return {
         id: pId,
@@ -268,8 +264,8 @@ export default function StockReportPage() {
         matchesFilter = i.statusGroup === "Critical Stock";
       } else if (filterStatus === "Low Stock") {
         matchesFilter = i.statusGroup === "Low Stock" || i.statusGroup === "Critical Stock";
-      } else if (filterStatus === "Dead Stock") {
-        matchesFilter = i.statusGroup === "Dead Stock";
+      } else if (filterStatus === "In Stock") {
+        matchesFilter = i.statusGroup === "In Stock";
       } else if (filterStatus === "Out of Stock") {
         matchesFilter = i.statusGroup === "Out of Stock";
       } else if (filterStatus !== "All") {
@@ -281,9 +277,9 @@ export default function StockReportPage() {
 
   const kpis = {
     total: processedData.length,
+    inStock: processedData.filter(i => i.statusGroup === 'In Stock').length,
     critical: processedData.filter(i => i.statusGroup === 'Critical Stock').length,
     low: processedData.filter(i => i.statusGroup === 'Low Stock' || i.statusGroup === 'Critical Stock').length,
-    dead: processedData.filter(i => i.statusGroup === 'Dead Stock').length,
     outOfStock: processedData.filter(i => i.statusGroup === 'Out of Stock').length,
     incoming: 0
   };
@@ -303,8 +299,9 @@ export default function StockReportPage() {
       subtitle: `Target Branch: All Branches | Filter: ${filterStatus}`,
       summary: {
         'Total Unique SKUs': kpis.total,
+        'In Stock Items': kpis.inStock,
         'Stock Alert Count': kpis.low,
-        'Dead Stock Items': kpis.dead,
+        'Critical Stock Items': kpis.critical,
         'Out of Stock Items': kpis.outOfStock,
         'Report Accuracy': 'High (Live System Data)'
       }
@@ -448,7 +445,7 @@ export default function StockReportPage() {
                 </h1>
               </div>
               <div className="flex flex-wrap gap-2">
-                {['All', 'Low Stock', 'Critical Stock', 'Dead Stock', 'Out of Stock'].map(status => (
+                {['All', 'In Stock', 'Low Stock', 'Critical Stock', 'Out of Stock'].map(status => (
                   <button
                     key={status}
                     onClick={() => setFilterStatus(status)}
@@ -456,6 +453,8 @@ export default function StockReportPage() {
                       filterStatus === status 
                         ? status === 'Critical Stock'
                           ? 'bg-red-500/15 border-red-500/50 text-red-400 shadow-sm shadow-red-500/20'
+                          : status === 'In Stock'
+                          ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-400 shadow-sm'
                           : 'bg-brand-neonblue/10 border-brand-neonblue/40 text-brand-neonblue' 
                         : 'bg-brand-surface border-border text-muted hover:text-main'
                     }`}
@@ -471,6 +470,10 @@ export default function StockReportPage() {
                 <div><p className="text-[10px] uppercase font-black tracking-widest text-muted mb-1">Total Products</p><h3 className="text-2xl font-black text-main">{kpis.total}</h3></div>
                 <div className="w-10 h-10 rounded-xl bg-brand-neonblue/10 flex items-center justify-center text-brand-neonblue"><PackageCheck size={20} /></div>
               </div>
+              <div className="glass-card p-4 md:p-6 flex items-center justify-between border-l-2 border-emerald-500">
+                <div><p className="text-[10px] uppercase font-black tracking-widest text-muted mb-1">In Stock</p><h3 className="text-2xl font-black text-emerald-500">{kpis.inStock}</h3></div>
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500"><CheckCircle2 size={20} /></div>
+              </div>
               <div className="glass-card p-4 md:p-6 flex items-center justify-between border-l-2 border-orange-500">
                 <div><p className="text-[10px] uppercase font-black tracking-widest text-muted mb-1">Low Stock (≤30%)</p><h3 className="text-2xl font-black text-orange-500">{kpis.low}</h3></div>
                 <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-500"><TrendingUp size={20} /></div>
@@ -478,10 +481,6 @@ export default function StockReportPage() {
               <div className="glass-card p-4 md:p-6 flex items-center justify-between border-l-2 border-red-500">
                 <div><p className="text-[10px] uppercase font-black tracking-widest text-muted mb-1">Critical (≤15%)</p><h3 className="text-2xl font-black text-red-500">{kpis.critical}</h3></div>
                 <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center text-red-500"><AlertCircle size={20} /></div>
-              </div>
-              <div className="glass-card p-4 md:p-6 flex items-center justify-between border-l-2 border-yellow-500">
-                <div><p className="text-[10px] uppercase font-black tracking-widest text-muted mb-1">Dead Stock</p><h3 className="text-2xl font-black text-yellow-500">{kpis.dead}</h3></div>
-                <div className="w-10 h-10 rounded-xl bg-yellow-500/10 flex items-center justify-center text-yellow-500"><Clock size={20} /></div>
               </div>
               <div className="glass-card p-4 md:p-6 flex items-center justify-between border-l-2 border-brand-crimson">
                 <div><p className="text-[10px] uppercase font-black tracking-widest text-muted mb-1">Out of Stock</p><h3 className="text-2xl font-black text-brand-crimson">{kpis.outOfStock}</h3></div>

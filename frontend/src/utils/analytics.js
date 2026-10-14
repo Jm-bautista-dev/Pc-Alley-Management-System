@@ -397,47 +397,5 @@ export const getProductPerformance = (salesHistory, inventory, correlations) => 
     .sort((a, b) => b.sold - a.sold)
     .slice(0, 3);
 
-  // Dead stock: Only products with stock > 0, 0 sales in the last 30 days, and catalog age >= 30 days
-  const deadStock = inventory
-    .filter(item => {
-      const pId = item.product_id || (item.Product && item.Product.id) || item.id;
-      const stock = item.stock !== undefined && item.stock !== null ? Number(item.stock) : Number(item.quantity || 0);
-      const sold = productSales[pId]?.sold30 || 0;
-      const createdAtDate = item.Product?.createdAt || item.createdAt;
-      const ageDays = createdAtDate ? (today - new Date(createdAtDate)) / 86400000 : 90;
-      return sold === 0 && stock > 0 && ageDays >= 30;
-    })
-    .map(item => {
-      const pId = item.product_id || (item.Product && item.Product.id) || item.id;
-      const stock = item.stock !== undefined && item.stock !== null ? Number(item.stock) : Number(item.quantity || 0);
-      const lastSold    = productLastSold[pId];
-      const daysStagnant = lastSold
-        ? Math.floor((today - lastSold) / 86400000)
-        : 90;
-
-      let severity = 'Slow Moving';
-      let tagColor = 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20';
-      if (daysStagnant >= 60) {
-        severity = 'Dead Stock';
-        tagColor = 'bg-red-500/10 text-red-500 border-red-500/20';
-      } else if (daysStagnant >= 30) {
-        severity = 'At Risk';
-        tagColor = 'bg-orange-500/10 text-orange-500 border-orange-500/20';
-      }
-
-      const confidence = Math.min(99, 60 + daysStagnant * 0.4);
-      return {
-        id:    pId,
-        name:  item.Product?.name || item.name || 'Unknown',
-        stock,
-        daysStagnant,
-        severity,
-        tagColor,
-        insight: `Confidence: ${Math.round(confidence)}% based on ${daysStagnant}d static holding.`
-      };
-    })
-    .sort((a, b) => b.daysStagnant - a.daysStagnant)
-    .slice(0, 5);
-
-  return { starProducts, deadStock };
+  return { starProducts, deadStock: [] };
 };

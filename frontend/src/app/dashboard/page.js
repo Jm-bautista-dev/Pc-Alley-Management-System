@@ -293,20 +293,6 @@ export default function Dashboard() {
     ? fastBurnItems
     : burnRates;
 
-  // Dead stock calculation
-  const deadStock = inventory
-    .filter(i => {
-      const soldQty = performance.find(p => p.productId === i.product_id)?.quantitySold || 0;
-      return (i.quantity ?? 0) > 10 && soldQty === 0;
-    })
-    .map(i => ({
-      name: i.Product?.name || `Item #${i.product_id}`,
-      stock: i.quantity,
-      severity: 'Low Movement',
-      tagColor: 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20'
-    }))
-    .slice(0, 5);
-
   // Chart data
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
