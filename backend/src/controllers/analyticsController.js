@@ -708,7 +708,7 @@ const getForecastingAnalytics = async (req, res) => {
   };
 
   try {
-    const { startDate, endDate, groupBy = 'monthly', horizon = '3m', branchId } = req.query;
+    const { startDate, endDate, groupBy = 'monthly', horizon = '3m', branchId, modelType = 'hybrid' } = req.query;
 
     const where = { status: 'completed' };
     if (branchId) where.branchId = branchId;
@@ -889,8 +889,20 @@ const getForecastingAnalytics = async (req, res) => {
       return { slope, intercept };
     };
 
-    // 5. Validation Split
-    let mae = 0, rmse = 0, accuracy = 100.0, confidence = "High";
+    // 5. Validation Split & Zero-Streak Detection
+    let mae = 0, rmse = 0, accuracy = 85.0, confidence = "High";
+    let zeroStreakWarning = null;
+
+    // Detect recent consecutive zero periods at the tail of the timeline
+    let recentZeros = 0;
+    for (let i = preparedData.length - 1; i >= 0; i--) {
+      if (preparedData[i].revenue <= 0) recentZeros++;
+      else break;
+    }
+    if (recentZeros >= 3) {
+      zeroStreakWarning = `Recent ${recentZeros}-period transaction lull detected. Adaptive baseline stabilization applied to prevent ₱0 false demand collapse.`;
+    }
+
     if (preparedData.length >= 3) {
       const splitIdx = Math.round(preparedData.length * 0.8);
       const trainSet = preparedData.slice(0, splitIdx);
@@ -908,15 +920,56 @@ const getForecastingAnalytics = async (req, res) => {
         mae = parseFloat((errorSum / testSet.length).toFixed(2));
         rmse = parseFloat(Math.sqrt(squaredErrorSum / testSet.length).toFixed(2));
         const meanActual = actualSum / testSet.length;
-        accuracy = meanActual > 0 ? parseFloat((Math.max(0, 1 - (mae / meanActual)) * 100).toFixed(1)) : 100.0;
-        confidence = accuracy < 70 ? "Low" : (accuracy <= 85 ? "Medium" : "High");
+        if (meanActual > 0) {
+          accuracy = parseFloat((Math.max(0, 1 - (mae / meanActual)) * 100).toFixed(1));
+          confidence = accuracy < 70 ? "Low" : (accuracy <= 85 ? "Medium" : "High");
+        } else {
+          // If actual test set has 0 sales, accuracy is uncertain / low rather than false 100%
+          accuracy = 55.0;
+          confidence = "Low";
+        }
       }
     }
 
-    // 6. Train final model on 100% data
+    // 6. Train final model & Baseline Statistics
     const finalRevReg = calculateRegression(preparedData, 'revenue');
     const finalDemReg = calculateRegression(preparedData, 'transactions');
     const finalInvReg = calculateRegression(preparedData, 'quantitySold');
+
+    // Calculate baseline metrics across historical data
+    const nonZeroRevs = preparedData.map(d => d.revenue).filter(r => r > 0);
+    const nonZeroDems = preparedData.map(d => d.transactions).filter(t => t > 0);
+    const nonZeroInvs = preparedData.map(d => d.quantitySold).filter(q => q > 0);
+
+    const avgNonZeroRev = nonZeroRevs.length > 0 ? (nonZeroRevs.reduce((a, b) => a + b, 0) / nonZeroRevs.length) : 0;
+    const avgNonZeroDem = nonZeroDems.length > 0 ? (nonZeroDems.reduce((a, b) => a + b, 0) / nonZeroDems.length) : 0;
+    const avgNonZeroInv = nonZeroInvs.length > 0 ? (nonZeroInvs.reduce((a, b) => a + b, 0) / nonZeroInvs.length) : 0;
+
+    // Moving average of recent active periods (last 14 periods)
+    const recentWindow = preparedData.slice(-Math.min(14, preparedData.length));
+    const recentMeanRev = recentWindow.reduce((a, b) => a + b.revenue, 0) / (recentWindow.length || 1);
+    const recentMeanDem = recentWindow.reduce((a, b) => a + b.transactions, 0) / (recentWindow.length || 1);
+    const recentMeanInv = recentWindow.reduce((a, b) => a + b.quantitySold, 0) / (recentWindow.length || 1);
+
+    // Simple Exponential Smoothing (SES) level
+    const computeSES = (arr, key, alpha = 0.3) => {
+      if (!arr || arr.length === 0) return 0;
+      let s = parseFloat(arr[0][key]) || 0;
+      for (let i = 1; i < arr.length; i++) {
+        const y = parseFloat(arr[i][key]) || 0;
+        s = alpha * y + (1 - alpha) * s;
+      }
+      return s;
+    };
+
+    const sesRev = computeSES(preparedData, 'revenue', 0.25);
+    const sesDem = computeSES(preparedData, 'transactions', 0.25);
+    const sesInv = computeSES(preparedData, 'quantitySold', 0.25);
+
+    // Baseline stabilization floor (prevents straight-line plunge into ₱0)
+    const baselineFloorRev = Math.max(recentMeanRev * 0.5, avgNonZeroRev * 0.25, sesRev * 0.4);
+    const baselineFloorDem = Math.max(recentMeanDem * 0.5, avgNonZeroDem * 0.25, sesDem * 0.4);
+    const baselineFloorInv = Math.max(recentMeanInv * 0.5, avgNonZeroInv * 0.25, sesInv * 0.4);
 
     const lastMonthStr = preparedData.length > 0 ? preparedData[preparedData.length - 1].month : computedEnd;
 
@@ -939,12 +992,39 @@ const getForecastingAnalytics = async (req, res) => {
       const xIdx = preparedData.length + s;
       
       let predRev = finalRevReg.slope * xIdx + finalRevReg.intercept;
-      if (predRev < 0) predRev = 0;
-
       let predDem = finalDemReg.slope * xIdx + finalDemReg.intercept;
-      if (predDem < 0) predDem = 0;
-
       let predInv = finalInvReg.slope * xIdx + finalInvReg.intercept;
+
+      if (modelType === 'moving_average') {
+        predRev = recentMeanRev > 0 ? recentMeanRev : avgNonZeroRev;
+        predDem = recentMeanDem > 0 ? recentMeanDem : avgNonZeroDem;
+        predInv = recentMeanInv > 0 ? recentMeanInv : avgNonZeroInv;
+      } else if (modelType === 'exponential_smoothing') {
+        predRev = sesRev > 0 ? sesRev : avgNonZeroRev;
+        predDem = sesDem > 0 ? sesDem : avgNonZeroDem;
+        predInv = sesInv > 0 ? sesInv : avgNonZeroInv;
+      } else if (modelType === 'linear_regression') {
+        // Pure unconstrained linear regression (clamped to 0)
+        if (predRev < 0) predRev = 0;
+        if (predDem < 0) predDem = 0;
+        if (predInv < 0) predInv = 0;
+      } else {
+        // Hybrid / Adaptive trend (default):
+        // If linear regression plunges below baseline floor due to a temporary zero streak,
+        // blend with the business baseline floor so projections remain realistic.
+        if (predRev < baselineFloorRev) {
+          predRev = Math.max(baselineFloorRev, predRev > 0 ? (predRev * 0.35 + baselineFloorRev * 0.65) : baselineFloorRev);
+        }
+        if (predDem < baselineFloorDem) {
+          predDem = Math.max(baselineFloorDem, predDem > 0 ? (predDem * 0.35 + baselineFloorDem * 0.65) : baselineFloorDem);
+        }
+        if (predInv < baselineFloorInv) {
+          predInv = Math.max(baselineFloorInv, predInv > 0 ? (predInv * 0.35 + baselineFloorInv * 0.65) : baselineFloorInv);
+        }
+      }
+
+      if (predRev < 0) predRev = 0;
+      if (predDem < 0) predDem = 0;
       if (predInv < 0) predInv = 0;
 
       projections.push({
@@ -956,7 +1036,11 @@ const getForecastingAnalytics = async (req, res) => {
     }
 
     const accuracyComparison = preparedData.map((d, i) => {
-      const predictedVal = Math.max(0, finalRevReg.slope * (i + 1) + finalRevReg.intercept);
+      let predictedVal = finalRevReg.slope * (i + 1) + finalRevReg.intercept;
+      if (modelType === 'hybrid' && predictedVal < baselineFloorRev) {
+        predictedVal = Math.max(baselineFloorRev, predictedVal > 0 ? (predictedVal * 0.35 + baselineFloorRev * 0.65) : baselineFloorRev);
+      }
+      predictedVal = Math.max(0, predictedVal);
       return {
         month: d.month,
         actual: d.revenue,
@@ -965,7 +1049,11 @@ const getForecastingAnalytics = async (req, res) => {
     });
 
     const tableData = preparedData.map((d, i) => {
-      const predictedVal = Math.max(0, finalRevReg.slope * (i + 1) + finalRevReg.intercept);
+      let predictedVal = finalRevReg.slope * (i + 1) + finalRevReg.intercept;
+      if (modelType === 'hybrid' && predictedVal < baselineFloorRev) {
+        predictedVal = Math.max(baselineFloorRev, predictedVal > 0 ? (predictedVal * 0.35 + baselineFloorRev * 0.65) : baselineFloorRev);
+      }
+      predictedVal = Math.max(0, predictedVal);
       return {
         period: d.month,
         actual: d.revenue,
@@ -1071,6 +1159,8 @@ const getForecastingAnalytics = async (req, res) => {
       rmse,
       accuracy,
       confidence,
+      zeroStreakWarning,
+      modelUsed: modelType,
       predictedSales: nextMonthProj.predictedRevenue,
       predictedInventoryUsage: nextMonthProj.predictedInventory,
       predictedDemand: nextMonthProj.predictedDemand,

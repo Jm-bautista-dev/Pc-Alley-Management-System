@@ -18,7 +18,9 @@ import {
   Layers,
   FileDown,
   RefreshCw,
-  Building2
+  Building2,
+  Scale,
+  BarChart3
 } from "lucide-react";
 
 const PesoSign = ({ size }) => <span style={{ fontSize: size }} className="font-bold">₱</span>;
@@ -27,14 +29,16 @@ import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
+  LogarithmicScale,
   PointElement,
   LineElement,
+  BarElement,
   Title as ChartTitle,
   Tooltip,
   Legend,
   Filler
 } from 'chart.js';
-import { Line } from 'react-chartjs-2';
+import { Line, Bar } from 'react-chartjs-2';
 import { apiUrl } from "@/lib/api";
 import { getChartTheme } from "@/lib/chartTheme";
 import { exportToExcel } from "@/lib/excelExport";
@@ -43,8 +47,10 @@ import { showSuccess, showError } from "@/context/ModalContext";
 ChartJS.register(
   CategoryScale,
   LinearScale,
+  LogarithmicScale,
   PointElement,
   LineElement,
+  BarElement,
   ChartTitle,
   Tooltip,
   Legend,
@@ -59,6 +65,9 @@ export default function ProfitLossPage() {
   const [periodFilter, setPeriodFilter] = useState("all");
   const [lastUpdated, setLastUpdated] = useState(null);
   const [hideInactiveMonths, setHideInactiveMonths] = useState(false);
+  const [viewGranularity, setViewGranularity] = useState("daily"); // "daily" | "monthly"
+  const [scaleType, setScaleType] = useState("linear"); // "linear" | "logarithmic"
+  const [chartType, setChartType] = useState("line"); // "line" | "bar" (for monthly view)
 
   const [pnlData, setPnlData] = useState({
     summary: {
@@ -142,44 +151,131 @@ export default function ProfitLossPage() {
 
   const { summary, trends, monthly } = pnlData;
 
-  const trendData = {
+  const chronologicalMonthly = [...monthly]
+    .sort((a, b) => a.monthKey.localeCompare(b.monthKey))
+    .filter(m => hideInactiveMonths ? m.hasActivity : true);
+
+  const displayedMonthly = hideInactiveMonths ? monthly.filter(m => m.hasActivity) : monthly;
+
+  const isMonthly = viewGranularity === 'monthly';
+
+  // Helper to sanitize positive values if in log scale so log(0) does not crash or clip
+  const toScaleValue = (val) => {
+    const num = Number(val || 0);
+    if (scaleType === 'logarithmic') {
+      return num > 0 ? num : null;
+    }
+    return num;
+  };
+
+  const activeDailyPoints = trends.filter(t => (t.revenue || 0) > 0).length;
+
+  const chartData = isMonthly ? {
+    labels: chronologicalMonthly.map(m => `${m.month.slice(0, 3)} '${String(m.year).slice(2)}`),
+    datasets: [
+      {
+        label: 'Total Revenue',
+        data: chronologicalMonthly.map(m => toScaleValue(m.revenue)),
+        borderColor: '#00F2FF',
+        backgroundColor: chartType === 'bar' ? 'rgba(0, 242, 255, 0.7)' : 'rgba(0, 242, 255, 0.08)',
+        borderRadius: 4,
+        borderWidth: 2,
+        tension: 0.35,
+        fill: chartType !== 'bar',
+        pointBackgroundColor: '#00F2FF',
+        pointRadius: 4.5,
+        pointHoverRadius: 7,
+      },
+      {
+        label: 'Cost of Goods (COGS)',
+        data: chronologicalMonthly.map(m => toScaleValue(m.cogs)),
+        borderColor: '#F59E0B',
+        backgroundColor: chartType === 'bar' ? 'rgba(245, 158, 11, 0.7)' : 'rgba(245, 158, 11, 0.05)',
+        borderRadius: 4,
+        borderWidth: 2,
+        tension: 0.35,
+        fill: false,
+        pointBackgroundColor: '#F59E0B',
+        pointRadius: 4,
+        pointHoverRadius: 7,
+      },
+      {
+        label: 'Gross Profit',
+        data: chronologicalMonthly.map(m => {
+          const gp = m.grossProfit !== undefined ? m.grossProfit : ((m.revenue || 0) - (m.cogs || 0));
+          return toScaleValue(gp);
+        }),
+        borderColor: '#10B981',
+        backgroundColor: chartType === 'bar' ? 'rgba(16, 185, 129, 0.7)' : 'rgba(16, 185, 129, 0.05)',
+        borderRadius: 4,
+        borderWidth: 2,
+        tension: 0.35,
+        fill: false,
+        pointBackgroundColor: '#10B981',
+        pointRadius: 4,
+        pointHoverRadius: 7,
+      }
+    ]
+  } : {
     labels: trends.map(t => t.label || t.date),
     datasets: [
       {
         label: 'Total Revenue',
-        data: trends.map(t => Number(t.revenue || 0)),
+        data: trends.map(t => toScaleValue(t.revenue)),
         borderColor: '#00F2FF',
         backgroundColor: 'rgba(0, 242, 255, 0.08)',
         borderWidth: 2.5,
         tension: 0.35,
         fill: true,
-        pointBackgroundColor: '#00F2FF',
-        pointRadius: 2.5,
-        pointHoverRadius: 6,
+        spanGaps: scaleType === 'logarithmic',
+        // Distinct beacon marker for small sales days (< ₱5,000) like Jan & Mar!
+        pointRadius: (ctx) => {
+          const val = Number(ctx.raw || 0);
+          if (val <= 0) return 0; // Clean baseline without point clutter
+          if (val < 5000) return 6; // Beacon dot for small sales
+          return 3.5;
+        },
+        pointHoverRadius: 8,
+        pointBackgroundColor: (ctx) => {
+          const val = Number(ctx.raw || 0);
+          if (val > 0 && val < 5000) return '#FFFFFF';
+          return '#00F2FF';
+        },
+        pointBorderColor: '#00F2FF',
+        pointBorderWidth: (ctx) => {
+          const val = Number(ctx.raw || 0);
+          if (val > 0 && val < 5000) return 3;
+          return 1.5;
+        }
       },
       {
         label: 'Cost of Goods (COGS)',
-        data: trends.map(t => Number(t.cogs || 0)),
+        data: trends.map(t => toScaleValue(t.cogs)),
         borderColor: '#F59E0B',
         backgroundColor: 'rgba(245, 158, 11, 0.05)',
         borderWidth: 2,
         tension: 0.35,
         fill: false,
+        spanGaps: scaleType === 'logarithmic',
+        pointRadius: (ctx) => (Number(ctx.raw || 0) > 0 ? 3 : 0),
+        pointHoverRadius: 6,
         pointBackgroundColor: '#F59E0B',
-        pointRadius: 2,
-        pointHoverRadius: 5,
       },
       {
         label: 'Gross Profit',
-        data: trends.map(t => Number(t.grossProfit !== undefined ? t.grossProfit : ((t.revenue || 0) - (t.cogs || 0)))),
+        data: trends.map(t => {
+          const gp = t.grossProfit !== undefined ? t.grossProfit : ((t.revenue || 0) - (t.cogs || 0));
+          return toScaleValue(gp);
+        }),
         borderColor: '#10B981',
         backgroundColor: 'rgba(16, 185, 129, 0.05)',
         borderWidth: 2,
         tension: 0.35,
         fill: false,
+        spanGaps: scaleType === 'logarithmic',
+        pointRadius: (ctx) => (Number(ctx.raw || 0) > 0 ? 3 : 0),
+        pointHoverRadius: 6,
         pointBackgroundColor: '#10B981',
-        pointRadius: 2,
-        pointHoverRadius: 5,
       }
     ]
   };
@@ -187,6 +283,10 @@ export default function ProfitLossPage() {
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    interaction: {
+      mode: 'index',
+      intersect: false,
+    },
     plugins: {
       legend: { 
         display: true,
@@ -207,17 +307,27 @@ export default function ProfitLossPage() {
         padding: 12,
         borderRadius: 8,
         callbacks: {
-          label: (c) => ` ${c.dataset.label}: ₱${Number(c.parsed.y || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+          label: (c) => {
+            const val = c.parsed.y;
+            const formatted = val !== null && val !== undefined ? Number(val).toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00';
+            return ` ${c.dataset.label}: ₱${formatted}`;
+          }
         }
       }
     },
     scales: {
       y: {
+        type: scaleType === 'logarithmic' ? 'logarithmic' : 'linear',
+        min: scaleType === 'logarithmic' ? 50 : undefined,
         grid: { color: 'rgba(255, 255, 255, 0.05)', drawBorder: false },
         ticks: { 
           color: 'rgba(255, 255, 255, 0.4)', 
           font: { size: 10, family: 'DM Sans' },
-          callback: (value) => `₱${(value / 1000).toFixed(0)}k`
+          callback: (value) => {
+            if (value >= 1000000) return `₱${(value / 1000000).toFixed(1)}M`;
+            if (value >= 1000) return `₱${(value / 1000).toFixed(0)}k`;
+            return `₱${value}`;
+          }
         }
       },
       x: {
@@ -227,14 +337,14 @@ export default function ProfitLossPage() {
     }
   };
 
-  const displayedMonthly = hideInactiveMonths ? monthly.filter(m => m.hasActivity) : monthly;
-
   const getChartTitle = () => {
+    const scaleLabel = scaleType === 'logarithmic' ? ' [LOG SCALE]' : '';
+    const modeLabel = viewGranularity === 'monthly' ? 'MONTHLY' : 'DAILY';
     switch (periodFilter) {
-      case '30': return 'REVENUE, COGS & GROSS PROFIT FLOW (30-DAY TELEMETRY)';
-      case '90': return 'REVENUE, COGS & GROSS PROFIT FLOW (90-DAY TELEMETRY)';
-      case '365': return 'REVENUE, COGS & GROSS PROFIT FLOW (365-DAY ANNUAL TELEMETRY)';
-      default: return 'REVENUE, COGS & GROSS PROFIT FLOW (ALL-TIME TELEMETRY)';
+      case '30': return `REVENUE, COGS & GROSS PROFIT (${modeLabel} - 30-DAY TELEMETRY)${scaleLabel}`;
+      case '90': return `REVENUE, COGS & GROSS PROFIT (${modeLabel} - 90-DAY TELEMETRY)${scaleLabel}`;
+      case '365': return `REVENUE, COGS & GROSS PROFIT (${modeLabel} - 365-DAY ANNUAL TELEMETRY)${scaleLabel}`;
+      default: return `REVENUE, COGS & GROSS PROFIT (${modeLabel} - ALL-TIME TELEMETRY)${scaleLabel}`;
     }
   };
 
@@ -386,22 +496,128 @@ export default function ProfitLossPage() {
                 animate={{ opacity: 1, y: 0 }}
                 className="bg-brand-surface border border-border rounded-2xl p-6 shadow-sm"
               >
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-1.5 h-6 bg-brand-neonblue rounded-full" />
-                    <h3 className="text-sm font-rajdhani font-black uppercase text-main tracking-widest">{getChartTitle()}</h3>
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-5">
+                  <div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-1.5 h-6 bg-brand-neonblue rounded-full" />
+                      <h3 className="text-sm font-rajdhani font-black uppercase text-main tracking-widest">{getChartTitle()}</h3>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1.5 ml-4.5">
+                      <span className="text-[10px] font-bold text-muted">
+                        {viewGranularity === 'daily' 
+                          ? `${activeDailyPoints} active sales days out of ${trends.length} days recorded` 
+                          : `${chronologicalMonthly.filter(m => m.hasActivity).length} active months displayed`}
+                      </span>
+                      {scaleType === 'logarithmic' && (
+                        <span className="px-2 py-0.5 rounded-full bg-brand-neonpurple/15 border border-brand-neonpurple/30 text-[9px] font-black text-brand-neonpurple uppercase tracking-wider">
+                          Log Scale Active
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-muted">
-                    {trends.length} Active Days
-                  </span>
+
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    {/* Daily vs Monthly Toggle */}
+                    <div className="flex bg-brand-bgbase border border-border rounded-lg p-0.5 shadow-inner">
+                      <button
+                        onClick={() => setViewGranularity("daily")}
+                        className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md transition-all ${
+                          viewGranularity === "daily"
+                            ? "bg-brand-neonblue text-white shadow-sm"
+                            : "text-muted hover:text-main"
+                        }`}
+                      >
+                        Daily Flow
+                      </button>
+                      <button
+                        onClick={() => setViewGranularity("monthly")}
+                        className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md transition-all ${
+                          viewGranularity === "monthly"
+                            ? "bg-brand-neonblue text-white shadow-sm"
+                            : "text-muted hover:text-main"
+                        }`}
+                      >
+                        Monthly Aggregate
+                      </button>
+                    </div>
+
+                    {/* Chart Type (Line vs Bar) for Monthly */}
+                    {viewGranularity === "monthly" && (
+                      <div className="flex bg-brand-bgbase border border-border rounded-lg p-0.5">
+                        <button
+                          onClick={() => setChartType("line")}
+                          className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-md transition-all ${
+                            chartType === "line"
+                              ? "bg-brand-surface text-brand-neonblue border border-brand-neonblue/30 shadow-sm"
+                              : "text-muted hover:text-main"
+                          }`}
+                        >
+                          Line
+                        </button>
+                        <button
+                          onClick={() => setChartType("bar")}
+                          className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-md transition-all ${
+                            chartType === "bar"
+                              ? "bg-brand-surface text-brand-neonblue border border-brand-neonblue/30 shadow-sm"
+                              : "text-muted hover:text-main"
+                          }`}
+                        >
+                          Bar
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Scale Toggle: Linear vs Logarithmic */}
+                    <div className="flex bg-brand-bgbase border border-border rounded-lg p-0.5">
+                      <button
+                        onClick={() => setScaleType("linear")}
+                        title="Linear Scale (standard currency scale)"
+                        className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-md transition-all ${
+                          scaleType === "linear"
+                            ? "bg-brand-surface text-main border border-border shadow-sm font-bold"
+                            : "text-muted hover:text-main"
+                        }`}
+                      >
+                        Linear (₱)
+                      </button>
+                      <button
+                        onClick={() => setScaleType("logarithmic")}
+                        title="Logarithmic Scale: Amplifies small sales like ₱300 and ₱1,050 so they are visible alongside multi-million peaks"
+                        className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-md transition-all flex items-center gap-1 ${
+                          scaleType === "logarithmic"
+                            ? "bg-brand-neonpurple/20 text-brand-neonpurple border border-brand-neonpurple/40 shadow-sm font-bold"
+                            : "text-muted hover:text-main"
+                        }`}
+                      >
+                        <Scale size={11} />
+                        Log Scale
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <div className="h-64 w-full">
+
+                {/* Beacon & Scale Notice Banner */}
+                <div className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-2 bg-brand-bgbase/60 border border-border/40 rounded-xl mb-4 text-[11px]">
+                  <div className="flex items-center gap-2 text-muted">
+                    <span className="flex h-2.5 w-2.5 rounded-full bg-white border-2 border-brand-neonblue shadow-sm"></span>
+                    <span className="text-[10px] font-bold">
+                      Beacon points mark low-volume sales (&lt; ₱5,000) so days like Jan &amp; Mar stand out.
+                    </span>
+                  </div>
+                  <div className="text-[10px] font-bold text-muted">
+                    Toggle <span className="text-brand-neonblue font-black">Monthly Aggregate</span> or <span className="text-brand-neonpurple font-black">Log Scale</span> to compare low months against peak months without flatlines.
+                  </div>
+                </div>
+
+                <div className="h-72 w-full">
                   {loading ? (
                     <div className="h-full flex items-center justify-center">
                       <div className="w-8 h-8 border-2 border-border border-t-brand-neonblue rounded-full animate-spin" />
                     </div>
+                  ) : chartType === 'bar' && isMonthly ? (
+                    <Bar data={chartData} options={chartOptions} />
                   ) : (
-                    <Line data={trendData} options={chartOptions} />
+                    <Line data={chartData} options={chartOptions} />
                   )}
                 </div>
               </motion.div>

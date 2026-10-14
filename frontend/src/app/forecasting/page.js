@@ -79,6 +79,7 @@ function ForecastingPageContent() {
   const [groupBy, setGroupBy] = useState("daily");
   const [horizon, setHorizon] = useState("3m");
   const [forecastType, setForecastType] = useState("sales");
+  const [modelType, setModelType] = useState("hybrid");
 
   // Helper to calculate start/end/grouping based on selected date preset
   const calculateDateRange = (rangeKey) => {
@@ -217,7 +218,8 @@ function ForecastingPageContent() {
       endDate: currentFilters.endDate,
       groupBy: currentFilters.groupBy,
       horizon: currentFilters.horizon,
-      forecastType: currentFilters.forecastType
+      forecastType: currentFilters.forecastType,
+      modelType: currentFilters.modelType || modelType
     };
     if (currentFilters.branch !== "all") {
       queryParams.branchId = currentFilters.branch;
@@ -239,6 +241,22 @@ function ForecastingPageContent() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleModelTypeChange = (newModel) => {
+    setModelType(newModel);
+    const calculated = calculateDateRange(dateRange);
+    const updated = {
+      branch,
+      forecastType: "sales",
+      startDate: calculated.startDate,
+      endDate: calculated.endDate,
+      groupBy: calculated.groupBy,
+      horizon: calculated.horizon,
+      dateRange,
+      modelType: newModel
+    };
+    fetchForecastData(updated);
   };
 
   // ── AUTO-APPLY FILTER ACTIONS ──────────────────────────────────────────────
@@ -429,6 +447,15 @@ function ForecastingPageContent() {
     ...projections.map(p => p.predictedRevenue)
   ] : projections.map(p => p.predictedRevenue);
 
+  const getModelLabel = () => {
+    switch (modelType) {
+      case 'moving_average': return 'Forecast Data (Moving Average)';
+      case 'exponential_smoothing': return 'Forecast Data (Exp. Smoothing)';
+      case 'linear_regression': return 'Forecast Data (Linear Regression)';
+      default: return 'Forecast Data (Adaptive Trend)';
+    }
+  };
+
   const lineChartData = {
     labels: combinedLabels,
     datasets: [
@@ -443,7 +470,7 @@ function ForecastingPageContent() {
         pointBackgroundColor: '#00F2FF',
       },
       {
-        label: 'Forecast Data (Linear Regression)',
+        label: getModelLabel(),
         data: combinedProj,
         borderColor: '#A855F7',
         backgroundColor: 'transparent',
@@ -488,20 +515,42 @@ function ForecastingPageContent() {
     plugins: {
       legend: {
         labels: { color: 'rgba(255, 255, 255, 0.7)', font: { family: 'DM Sans', size: 10 } }
+      },
+      tooltip: {
+        callbacks: {
+          label: (c) => {
+            if (c.dataset.yAxisID === 'ySales') {
+              return ` ${c.dataset.label}: ₱${Number(c.parsed.y || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+            }
+            return ` ${c.dataset.label}: ${Number(c.parsed.y || 0).toFixed(0)} units`;
+          }
+        }
       }
     },
     scales: {
       ySales: {
         type: 'linear',
         position: 'left',
+        min: 0,
+        suggestedMax: 1000,
         grid: { color: 'rgba(255, 255, 255, 0.05)' },
-        ticks: { color: '#00F2FF', font: { size: 9 } }
+        ticks: { 
+          color: '#00F2FF', 
+          font: { size: 9 },
+          callback: (value) => `₱${Number(value).toLocaleString()}`
+        }
       },
       yDemand: {
         type: 'linear',
         position: 'right',
+        min: 0,
+        suggestedMax: 5,
         grid: { display: false },
-        ticks: { color: '#A855F7', font: { size: 9 } }
+        ticks: { 
+          color: '#A855F7', 
+          font: { size: 9 },
+          callback: (value) => `${Number(value).toFixed(0)} units`
+        }
       },
       x: {
         grid: { display: false },
@@ -557,6 +606,7 @@ function ForecastingPageContent() {
         ticks: { color: 'rgba(255, 255, 255, 0.7)', font: { size: 10 } }
       },
       x: {
+        min: 0,
         grid: { color: 'rgba(255, 255, 255, 0.05)' },
         ticks: { color: 'rgba(255, 255, 255, 0.4)', font: { size: 9 } }
       }
@@ -569,12 +619,22 @@ function ForecastingPageContent() {
     plugins: {
       legend: {
         labels: { color: 'rgba(255, 255, 255, 0.7)', font: { family: 'DM Sans', size: 10 } }
+      },
+      tooltip: {
+        callbacks: {
+          label: (c) => ` ${c.dataset.label}: ₱${Number(c.parsed.y || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+        }
       }
     },
     scales: {
       y: {
+        min: 0,
         grid: { color: 'rgba(255, 255, 255, 0.05)' },
-        ticks: { color: 'rgba(255, 255, 255, 0.4)', font: { size: 9 } }
+        ticks: { 
+          color: 'rgba(255, 255, 255, 0.4)', 
+          font: { size: 9 },
+          callback: (value) => `₱${(value / 1000).toFixed(0)}k`
+        }
       },
       x: {
         grid: { display: false },
@@ -683,7 +743,7 @@ function ForecastingPageContent() {
             )}
 
             {/* ── STICKY COMPACT FILTER PILL (no-print) ──────────────── */}
-            <div className="mb-6 flex items-center no-print">
+            <div className="mb-6 flex flex-wrap items-center gap-3 no-print">
               <div className="inline-flex items-center gap-2 p-1.5 rounded-full bg-brand-surface/90 backdrop-blur-md border border-border/80 shadow-sm filter-bar">
                 
                 {/* Branch dropdown */}
@@ -711,8 +771,32 @@ function ForecastingPageContent() {
                   <option value="1year" className="bg-brand-surface text-main">1 Year</option>
                 </select>
 
+                {/* Forecasting Model Selector */}
+                <select
+                  value={modelType}
+                  onChange={(e) => handleModelTypeChange(e.target.value)}
+                  className="bg-brand-bgbase border border-brand-neonblue/40 rounded-full text-xs font-bold px-3.5 h-8 text-brand-neonblue focus:outline-none focus:border-brand-neonblue transition-all cursor-pointer"
+                  title="Choose Forecasting Engine Algorithm"
+                >
+                  <option value="hybrid" className="bg-brand-surface text-main">Adaptive Trend (Recommended)</option>
+                  <option value="moving_average" className="bg-brand-surface text-main">Moving Average</option>
+                  <option value="exponential_smoothing" className="bg-brand-surface text-main">Exponential Smoothing</option>
+                  <option value="linear_regression" className="bg-brand-surface text-main">Pure Linear Regression</option>
+                </select>
+
               </div>
             </div>
+
+            {/* Zero Streak / Lull Notice */}
+            {data?.zeroStreakWarning && (
+              <div className="mb-6 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-300 flex items-center gap-3.5 text-xs shadow-sm no-print">
+                <AlertTriangle size={18} className="shrink-0 text-amber-400" />
+                <div>
+                  <span className="font-black uppercase tracking-wider block text-[10px] text-amber-400">Transaction Lull Detected</span>
+                  <span className="text-muted/90 font-medium">{data.zeroStreakWarning}</span>
+                </div>
+              </div>
+            )}
 
             {/* ── MAIN DASHBOARD VIEW ───────────────────────────────── */}
             {loading ? (
