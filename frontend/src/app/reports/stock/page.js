@@ -446,26 +446,34 @@ export default function StockReportPage() {
         <TopBar title="MANAGE STOCK" />
         <div className="flex-1 overflow-y-auto custom-scrollbar relative z-10 text-main p-4">
           <div className="responsive-container">
-            <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+            {/* Header & Status Filter */}
+            <div className="mb-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
               <div>
-                <h2 className="text-[10px] font-black tracking-[4px] uppercase text-main/40 mb-2">Stock Status</h2>
-                <h1 className="text-2xl font-rajdhani font-black uppercase mb-0">
-                  INVENTORY <span className="text-brand-neonblue">SUMMARY</span>
-                </h1>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl font-rajdhani font-black uppercase tracking-wider mb-0">
+                    MANAGE <span className="text-brand-neonblue">STOCK</span>
+                  </h1>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-neonblue/10 border border-brand-neonblue/20 text-brand-neonblue font-bold uppercase tracking-widest">
+                    Inventory
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted font-bold mt-0.5">Real-time multi-branch stock levels, thresholds & pricing</p>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1 bg-brand-surface border border-border/50 p-1 rounded-xl">
                 {['All', 'In Stock', 'Low Stock', 'Critical Stock', 'Out of Stock'].map(status => (
                   <button
                     key={status}
                     onClick={() => setFilterStatus(status)}
-                    className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border ${
+                    className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
                       filterStatus === status 
                         ? status === 'Critical Stock'
-                          ? 'bg-red-500/15 border-red-500/50 text-red-400 shadow-sm shadow-red-500/20'
+                          ? 'bg-red-500/20 text-red-400 border border-red-500/40 shadow-sm'
                           : status === 'In Stock'
-                          ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-400 shadow-sm'
-                          : 'bg-brand-neonblue/10 border-brand-neonblue/40 text-brand-neonblue' 
-                        : 'bg-brand-surface border-border text-muted hover:text-main'
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-sm'
+                          : status === 'Low Stock'
+                          ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40 shadow-sm'
+                          : 'bg-brand-neonblue text-white shadow-sm' 
+                        : 'text-muted hover:text-main hover:bg-brand-bgbase/50'
                     }`}
                   >
                     {status}
@@ -473,192 +481,272 @@ export default function StockReportPage() {
                 ))}
               </div>
             </div>
-            {/* KPI Strip */}
-            <div className="responsive-grid mb-8">
-              <div className="glass-card p-4 md:p-6 flex items-center justify-between">
-                <div><p className="text-[10px] uppercase font-black tracking-widest text-muted mb-1">Total Products</p><h3 className="text-2xl font-black text-main">{kpis.total}</h3></div>
-                <div className="w-10 h-10 rounded-xl bg-brand-neonblue/10 flex items-center justify-center text-brand-neonblue"><PackageCheck size={20} /></div>
+
+            {/* KPI Ribbon */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
+              <div className="bg-brand-surface border border-border/50 rounded-xl p-3 flex items-center justify-between">
+                <div>
+                  <p className="text-[9px] uppercase font-black tracking-widest text-muted mb-0.5">Total SKUs</p>
+                  <h3 className="text-lg font-rajdhani font-black text-main leading-tight">{kpis.total}</h3>
+                </div>
+                <div className="w-8 h-8 rounded-lg bg-brand-neonblue/10 flex items-center justify-center text-brand-neonblue shrink-0">
+                  <PackageCheck size={16} />
+                </div>
               </div>
-              <div className="glass-card p-4 md:p-6 flex items-center justify-between border-l-2 border-emerald-500">
-                <div><p className="text-[10px] uppercase font-black tracking-widest text-muted mb-1">In Stock</p><h3 className="text-2xl font-black text-emerald-500">{kpis.inStock}</h3></div>
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500"><CheckCircle2 size={20} /></div>
+              <div className="bg-brand-surface border border-border/50 border-l-2 border-l-emerald-500 rounded-xl p-3 flex items-center justify-between">
+                <div>
+                  <p className="text-[9px] uppercase font-black tracking-widest text-muted mb-0.5">In Stock</p>
+                  <h3 className="text-lg font-rajdhani font-black text-emerald-400 leading-tight">{kpis.inStock}</h3>
+                </div>
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 shrink-0">
+                  <CheckCircle2 size={16} />
+                </div>
               </div>
-              <div className="glass-card p-4 md:p-6 flex items-center justify-between border-l-2 border-orange-500">
-                <div><p className="text-[10px] uppercase font-black tracking-widest text-muted mb-1">Low Stock (≤30%)</p><h3 className="text-2xl font-black text-orange-500">{kpis.low}</h3></div>
-                <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-500"><TrendingUp size={20} /></div>
+              <div className="bg-brand-surface border border-border/50 border-l-2 border-l-orange-500 rounded-xl p-3 flex items-center justify-between">
+                <div>
+                  <p className="text-[9px] uppercase font-black tracking-widest text-muted mb-0.5">Low Stock</p>
+                  <h3 className="text-lg font-rajdhani font-black text-orange-400 leading-tight">{kpis.low}</h3>
+                </div>
+                <div className="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center text-orange-400 shrink-0">
+                  <TrendingUp size={16} />
+                </div>
               </div>
-              <div className="glass-card p-4 md:p-6 flex items-center justify-between border-l-2 border-red-500">
-                <div><p className="text-[10px] uppercase font-black tracking-widest text-muted mb-1">Critical (≤15%)</p><h3 className="text-2xl font-black text-red-500">{kpis.critical}</h3></div>
-                <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center text-red-500"><AlertCircle size={20} /></div>
+              <div className="bg-brand-surface border border-border/50 border-l-2 border-l-red-500 rounded-xl p-3 flex items-center justify-between">
+                <div>
+                  <p className="text-[9px] uppercase font-black tracking-widest text-muted mb-0.5">Critical (≤15%)</p>
+                  <h3 className="text-lg font-rajdhani font-black text-red-400 leading-tight">{kpis.critical}</h3>
+                </div>
+                <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center text-red-400 shrink-0">
+                  <AlertCircle size={16} />
+                </div>
               </div>
-              <div className="glass-card p-4 md:p-6 flex items-center justify-between border-l-2 border-brand-crimson">
-                <div><p className="text-[10px] uppercase font-black tracking-widest text-muted mb-1">Out of Stock</p><h3 className="text-2xl font-black text-brand-crimson">{kpis.outOfStock}</h3></div>
-                <div className="w-10 h-10 rounded-xl bg-brand-crimson/10 flex items-center justify-center text-brand-crimson"><AlertCircle size={20} /></div>
+              <div className="bg-brand-surface border border-border/50 border-l-2 border-l-brand-crimson rounded-xl p-3 flex items-center justify-between col-span-2 sm:col-span-1">
+                <div>
+                  <p className="text-[9px] uppercase font-black tracking-widest text-muted mb-0.5">Out of Stock</p>
+                  <h3 className="text-lg font-rajdhani font-black text-brand-crimson leading-tight">{kpis.outOfStock}</h3>
+                </div>
+                <div className="w-8 h-8 rounded-lg bg-brand-crimson/10 flex items-center justify-center text-brand-crimson shrink-0">
+                  <AlertCircle size={16} />
+                </div>
               </div>
             </div>
-            {/* Filter & Action Bar */}
-            <div className="bg-brand-surface border border-border/50 rounded-xl p-4 mb-6 flex flex-col lg:flex-row justify-between items-center gap-4">
-              <div className="flex flex-wrap w-full lg:w-auto gap-4 items-center">
-                <div className="relative flex-1 min-w-[200px] lg:w-64">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={16} />
-                  <input type="text" placeholder="Search products or SKU..." value={search} onChange={e => setSearch(e.target.value)} className="w-full bg-brand-bgbase border border-border/50 text-main text-xs font-bold rounded-lg pl-9 pr-4 py-3 outline-none focus:border-brand-neonblue transition-colors" />
+
+            {/* Consolidated Filter & Toolbar */}
+            <div className="bg-brand-surface border border-border/50 rounded-xl p-3 mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2.5 flex-1 min-w-[280px]">
+                <div className="relative flex-1 min-w-[200px] max-w-xs">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={14} />
+                  <input 
+                    type="text" 
+                    placeholder="Search products or SKU..." 
+                    value={search} 
+                    onChange={e => setSearch(e.target.value)} 
+                    className="w-full bg-brand-bgbase border border-border/50 text-main text-xs font-bold rounded-lg pl-8 pr-3 py-2 outline-none focus:border-brand-neonblue transition-colors h-9" 
+                  />
                 </div>
 
-                {/* Branch Scope Selector */}
                 {user?.role === 'super_admin' && (
-                  <div className="w-full sm:w-56">
+                  <div className="w-48">
                     <select
                       value={filterBranch}
                       onChange={e => setFilterBranch(e.target.value)}
-                      className="w-full bg-brand-bgbase border border-border/50 text-main text-xs font-bold rounded-lg px-3 py-3 outline-none focus:border-brand-neonblue cursor-pointer transition-colors"
+                      className="w-full bg-brand-bgbase border border-border/50 text-main text-xs font-bold rounded-lg px-2.5 py-2 outline-none focus:border-brand-neonblue cursor-pointer transition-colors h-9"
                     >
-                      <option value="">All Branches (Consolidated)</option>
+                      <option value="">All Branches</option>
                       {branches.map(b => (
-                        <option key={b.id} value={b.id}>
-                          {b.name}
-                        </option>
+                        <option key={b.id} value={b.id}>{b.name}</option>
                       ))}
                     </select>
                   </div>
                 )}
 
-                {/* Category Filter Dropdown */}
-                <div className="w-full sm:w-56">
+                <div className="w-44">
                   <select
                     value={filterCategory}
                     onChange={e => setFilterCategory(e.target.value)}
-                    className="w-full bg-brand-bgbase border border-border/50 text-main text-xs font-bold rounded-lg px-3 py-3 outline-none focus:border-brand-neonblue cursor-pointer transition-colors"
+                    className="w-full bg-brand-bgbase border border-border/50 text-main text-xs font-bold rounded-lg px-2.5 py-2 outline-none focus:border-brand-neonblue cursor-pointer transition-colors h-9"
                   >
                     <option value="All">All Categories</option>
                     {categories.map(cat => (
-                      <option key={cat.id} value={cat.id}>
-                        {cat.name}
-                      </option>
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
                     ))}
                   </select>
                 </div>
-
               </div>
-              <div className="flex w-full lg:w-auto gap-3">
+
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1.5 bg-brand-bgbase border border-border/50 rounded-lg px-2.5 h-9 text-xs font-bold text-muted">
+                  <span>Show</span>
+                  <select
+                    value={limit}
+                    onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}
+                    className="bg-transparent text-main font-bold outline-none cursor-pointer"
+                  >
+                    <option value={10} className="bg-brand-surface text-main">10</option>
+                    <option value={25} className="bg-brand-surface text-main">25</option>
+                    <option value={50} className="bg-brand-surface text-main">50</option>
+                    <option value={100} className="bg-brand-surface text-main">100</option>
+                  </select>
+                </div>
+
                 {user?.role === 'super_admin' && (
-                  <button onClick={handleResync} className="bg-brand-neonblue/10 border border-brand-neonblue/25 text-brand-neonblue hover:bg-brand-neonblue/20 px-5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all">
-                    <RefreshCw size={14} /> Resync Branches
+                  <button 
+                    onClick={handleResync} 
+                    className="bg-brand-neonblue/10 border border-brand-neonblue/25 text-brand-neonblue hover:bg-brand-neonblue/20 h-9 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all"
+                    title="Resync product catalog to all branches"
+                  >
+                    <RefreshCw size={13} />
+                    <span className="hidden sm:inline">Resync</span>
                   </button>
                 )}
-                <button onClick={handleExport} className="bg-brand-bgbase border border-border text-muted hover:text-main px-5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all hover:bg-brand-surface">
-                  <FileDown size={16} className="text-brand-neonblue" /> Export Excel
-                </button>
 
+                <button 
+                  onClick={handleExport} 
+                  className="bg-brand-bgbase border border-border text-muted hover:text-main h-9 px-3.5 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all hover:bg-brand-surface"
+                >
+                  <FileDown size={14} className="text-brand-neonblue" /> 
+                  <span>Export</span>
+                </button>
               </div>
             </div>
-            {/* Rows‑per‑page selector */}
-            <div className="flex items-center gap-2 mb-4">
-              <span className="text-sm font-medium text-main">Show</span>
-              <select
-                value={limit}
-                onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}
-                className="border border-border rounded-lg px-2.5 py-1 text-sm bg-brand-surface text-main font-semibold outline-none focus:border-brand-neonblue cursor-pointer transition-colors"
-              >
-                <option value={10} className="bg-brand-surface text-main">10</option>
-                <option value={25} className="bg-brand-surface text-main">25</option>
-                <option value={50} className="bg-brand-surface text-main">50</option>
-                <option value={100} className="bg-brand-surface text-main">100</option>
-              </select>
-              <span className="text-sm font-medium text-main">entries</span>
-            </div>
+
             {/* Main Table */}
-            <div className="bg-brand-surface border border-border/50 rounded-xl shadow-sm overflow-hidden min-h-[400px]" style={{ minHeight: '400px' }}>
+            <div className="bg-brand-surface border border-border/50 rounded-xl shadow-sm overflow-hidden min-h-[400px]">
               <div className="overflow-x-auto custom-scrollbar">
-                <table className="w-full text-left border-collapse whitespace-nowrap min-w-[1000px]">
+                <table className="w-full text-left border-collapse whitespace-nowrap min-w-[950px]">
                   <thead>
-                    <tr className="bg-brand-bgbase/50 text-[10px] uppercase font-black tracking-widest text-muted border-b border-border/50">
-                      <th className="py-4 px-6 cursor-pointer" onClick={() => setSort('name')}>Product</th>
-                      <th className="py-4 px-6 cursor-pointer" onClick={() => setSort('category')}>Category</th>
-                      <th className="py-4 px-4 text-right cursor-pointer" onClick={() => setSort('quantity')}>Current Stock</th>
-                      <th className="py-4 px-4 text-right">Unit Price</th>
-                      <th className="py-4 px-4 text-right cursor-pointer" onClick={() => setSort('price')}>Selling Price</th>
-                      <th className="py-4 px-4 text-center">Status</th>
-                      <th className="py-4 px-6 text-center">Actions</th>
+                    <tr className="bg-brand-bgbase/60 text-[9px] uppercase font-black tracking-widest text-muted border-b border-border/50">
+                      <th className="py-2.5 px-3.5 cursor-pointer w-[30%]" onClick={() => setSort('name')}>Product</th>
+                      <th className="py-2.5 px-3.5 cursor-pointer w-[12%]" onClick={() => setSort('category')}>Category</th>
+                      <th className="py-2.5 px-3.5 text-right cursor-pointer w-[20%]" onClick={() => setSort('quantity')}>Current Stock</th>
+                      <th className="py-2.5 px-3.5 text-right w-[11%]">Unit Price</th>
+                      <th className="py-2.5 px-3.5 text-right cursor-pointer w-[12%]" onClick={() => setSort('price')}>Selling Price</th>
+                      <th className="py-2.5 px-3.5 text-center w-[9%]">Status</th>
+                      <th className="py-2.5 px-3.5 text-right w-[6%]">Actions</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-border/20">
                     {loading ? (
-                      <tr><td colSpan={7} className="py-12 text-center text-muted font-semibold text-sm">Loading inventory data...</td></tr>
+                      <tr><td colSpan={7} className="py-12 text-center text-muted font-semibold text-xs">Loading inventory data...</td></tr>
                     ) : filteredData.length === 0 ? (
-                      <tr><td colSpan={7} className="py-16 text-center text-muted font-bold text-sm">No products found matching the selected filters.</td></tr>
+                      <tr><td colSpan={7} className="py-12 text-center text-muted font-bold text-xs">No products found matching the selected filters.</td></tr>
                     ) : (
                       filteredData.map((item, idx) => (
-                        <motion.tr initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }} key={idx} className="border-b border-border/20 text-sm hover:bg-brand-bgbase/30 transition-colors group">
-                          <td className="py-4 px-6 font-bold text-main">
-                            <div className="flex flex-col">
-                              <span>{item.name}</span>
-                              {item.sku && (
-                                <span className="text-[10px] font-mono text-muted/60 tracking-wider">SKU: {item.sku}</span>
-                              )}
+                        <motion.tr 
+                          initial={{ opacity: 0, y: 3 }} 
+                          animate={{ opacity: 1, y: 0 }} 
+                          transition={{ delay: Math.min(idx * 0.02, 0.3) }} 
+                          key={item.id || idx} 
+                          className="hover:bg-brand-bgbase/40 transition-colors group"
+                        >
+                          {/* Product */}
+                          <td className="py-2.5 px-3.5 align-middle">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-7 h-7 rounded-lg bg-brand-bgbase border border-border/40 flex items-center justify-center shrink-0 overflow-hidden text-muted">
+                                {item.image_url || item.product_image ? (
+                                  <img src={item.image_url || item.product_image} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  <PackageCheck size={14} className="text-brand-neonblue/70" />
+                                )}
+                              </div>
+                              <div className="flex flex-col min-w-0 max-w-xs sm:max-w-sm">
+                                <span className="font-bold text-main text-xs truncate leading-tight" title={item.name}>{item.name}</span>
+                                {item.sku && (
+                                  <span className="text-[10px] font-mono text-muted/60 tracking-wider">SKU: {item.sku}</span>
+                                )}
+                              </div>
                             </div>
                           </td>
-                          <td className="py-4 px-6 text-xs text-muted/80 font-bold uppercase tracking-wider">{item.category}</td>
-                          <td className="py-4 px-4 text-right">
-                            <div className="font-black text-main text-lg leading-tight">{item.stock}</div>
-                            <div className="text-[10px] font-bold text-muted mt-0.5">
-                              <span className={item.stockPercent <= 15 ? 'text-red-400 font-black' : item.stockPercent <= 30 ? 'text-orange-400 font-black' : 'text-green-400'}>
-                                {item.stockPercent}%
+
+                          {/* Category */}
+                          <td className="py-2.5 px-3.5 align-middle">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-brand-bgbase border border-border/40 text-muted/90 inline-block">
+                              {item.category}
+                            </span>
+                          </td>
+
+                          {/* Current Stock */}
+                          <td className="py-2.5 px-3.5 align-middle text-right">
+                            <div className="flex items-baseline justify-end gap-1.5">
+                              <span className={`text-sm font-black font-rajdhani ${item.stock === 0 ? 'text-brand-crimson' : item.stockPercent <= 15 ? 'text-red-400' : item.stockPercent <= 30 ? 'text-orange-400' : 'text-main'}`}>
+                                {item.stock}
                               </span>
-                              <span className="text-muted/60"> of {item.minTarget} min</span>
+                              <span className="text-[10px] font-bold text-muted/70">
+                                ({item.stockPercent}% of {item.minTarget} min)
+                              </span>
                             </div>
                             {item.branchStocks && item.branchStocks.length > 0 && (
-                              <div className="flex flex-wrap gap-1 justify-end mt-1.5">
+                              <div className="flex items-center justify-end gap-1 mt-0.5 flex-wrap">
                                 {item.branchStocks.map(bs => (
-                                  <span key={bs.branch_id} className="text-[9px] px-1.5 py-0.5 rounded bg-brand-bgbase border border-border/40 text-muted font-bold whitespace-nowrap">
-                                    {bs.branch_name?.replace(/Sector\s*\d+\s*-?\s*/i, '').trim() || `B${bs.branch_id}`}: <span className="text-main">{bs.stock}</span>
+                                  <span 
+                                    key={bs.branch_id} 
+                                    className="text-[9px] px-1.5 py-0.2 rounded bg-brand-bgbase border border-border/30 text-muted font-medium whitespace-nowrap"
+                                    title={`${bs.branch_name}: ${bs.stock} in stock`}
+                                  >
+                                    <span className="text-muted/60 font-bold">{bs.branch_name?.replace(/Sector\s*\d+\s*-?\s*/i, '').replace(/Branch/i, '').trim().slice(0, 8)}:</span>{' '}
+                                    <b className="text-main">{bs.stock}</b>
                                   </span>
                                 ))}
                               </div>
                             )}
                           </td>
-                          <td className="py-4 px-4 text-right font-medium">
+
+                          {/* Unit Price (Cost) */}
+                          <td className="py-2.5 px-3.5 align-middle text-right font-medium">
                             {Number(item.last_purchase_price) > 0 ? (
-                              <span className="text-muted/90 font-bold">₱{Number(item.last_purchase_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                              <span className="text-muted/90 text-xs font-bold">₱{Number(item.last_purchase_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                             ) : (
                               <span className="text-muted/40 text-xs">₱0.00</span>
                             )}
                           </td>
-                          <td className="py-4 px-4 text-right font-bold">
+
+                          {/* Selling Price */}
+                          <td className="py-2.5 px-3.5 align-middle text-right font-bold">
                             {Number(item.price) > 0 ? (
-                              <span className="text-emerald-400">₱{Number(item.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                              <span className="text-emerald-400 text-xs font-bold">₱{Number(item.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                             ) : (
-                              <div className="flex flex-col items-end">
+                              <div className="flex items-center justify-end gap-1">
                                 <span className="text-xs font-bold text-brand-crimson/80">₱0.00</span>
                                 {user?.role === 'super_admin' && (
                                   <button
                                     onClick={() => setActiveEdit(item)}
-                                    className="text-[9px] font-black text-brand-neonblue hover:underline uppercase tracking-wider mt-0.5"
+                                    className="text-[9px] font-black text-brand-neonblue hover:underline uppercase"
                                     title="Set price"
                                   >
-                                    + Set Price
+                                    + Set
                                   </button>
                                 )}
                               </div>
                             )}
                           </td>
-                          <td className="py-4 px-4 text-center"><span className={`px-2.5 py-1 text-[9px] font-black uppercase tracking-widest border rounded w-full inline-block text-center ${item.badge} ${item.statusColor}`}>{item.statusGroup}</span></td>
-                          <td className="py-4 px-6"><div className="flex items-center justify-end gap-2 transition-opacity">
-                            {(user?.role === 'employee' || user?.role === 'branch_admin') && (
-                              <button
-                                onClick={() => setActiveRestock(item)}
-                                className="px-3 py-1.5 bg-brand-neonblue/10 border border-brand-neonblue/20 rounded-lg text-[10px] font-black uppercase tracking-widest text-brand-neonblue hover:bg-brand-neonblue/20 transition-all"
-                              >
-                                Request Restock
-                              </button>
-                            )}
-                            {(user?.role !== 'employee' && user?.role !== 'staff') && (
-                              <button onClick={() => setActiveEdit(item)} className="w-8 h-8 rounded-lg border border-border/50 flex items-center justify-center text-muted hover:text-main hover:bg-border/20 transition-all" title="Edit"><Edit size={14} /></button>
-                            )}
-                            <button onClick={() => setActiveHistory(item)} className="w-8 h-8 rounded-lg border border-border/50 flex items-center justify-center text-muted hover:text-main hover:bg-border/20 transition-all" title="History"><Clock size={14} /></button>
-                            {user?.role === 'super_admin' && (
-                              <button onClick={() => handleDeleteProduct(item)} className="w-8 h-8 rounded-lg border border-border/50 flex items-center justify-center text-muted hover:text-main hover:bg-border/20 transition-all" title="Delete"><Trash2 size={14} /></button>
-                            )}
-                          </div></td>
+
+                          {/* Status */}
+                          <td className="py-2.5 px-3.5 align-middle text-center">
+                            <span className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-wider border rounded-md inline-block ${item.badge} ${item.statusColor}`}>
+                              {item.statusGroup}
+                            </span>
+                          </td>
+
+                          {/* Actions */}
+                          <td className="py-2.5 px-3.5 align-middle text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              {(user?.role === 'employee' || user?.role === 'branch_admin') && (
+                                <button
+                                  onClick={() => setActiveRestock(item)}
+                                  className="px-2.5 py-1 bg-brand-neonblue/10 border border-brand-neonblue/20 rounded-md text-[9px] font-black uppercase tracking-wider text-brand-neonblue hover:bg-brand-neonblue/20 transition-all"
+                                >
+                                  Restock
+                                </button>
+                              )}
+                              {(user?.role !== 'employee' && user?.role !== 'staff') && (
+                                <button onClick={() => setActiveEdit(item)} className="w-7 h-7 rounded-md border border-border/50 flex items-center justify-center text-muted hover:text-main hover:bg-border/20 transition-all" title="Edit Product"><Edit size={13} /></button>
+                              )}
+                              <button onClick={() => setActiveHistory(item)} className="w-7 h-7 rounded-md border border-border/50 flex items-center justify-center text-muted hover:text-main hover:bg-border/20 transition-all" title="Stock History"><Clock size={13} /></button>
+                              {user?.role === 'super_admin' && (
+                                <button onClick={() => handleDeleteProduct(item)} className="w-7 h-7 rounded-md border border-border/50 flex items-center justify-center text-muted hover:text-red-400 hover:bg-red-500/10 transition-all" title="Delete Product"><Trash2 size={13} /></button>
+                              )}
+                            </div>
+                          </td>
                         </motion.tr>
                       ))
                     )}
