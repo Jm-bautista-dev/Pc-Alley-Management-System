@@ -245,17 +245,18 @@ export default function ProfitLossPage() {
       { Metric: 'Gross Profit', Amount: summary.grossProfit, Notes: `Gross Margin: ${summary.grossMargin}%` }
     ];
 
-    const exportMonthly = displayedMonthly.map(m => ({
-      Month: m.month,
-      Year: m.year,
-      Revenue: m.revenue,
-      COGS: m.cogs,
-      'Gross Profit': m.grossProfit,
-      Expenses: m.expenses,
-      'Net Profit': m.profit,
-      'Margin %': m.revenue > 0 ? `${m.margin}%` : 'N/A',
-      Status: m.status === 'positive' ? 'Profitable' : m.status === 'negative' ? 'Deficit' : m.status === 'breakeven' ? 'Break-Even' : 'No Activity'
-    }));
+    const exportMonthly = displayedMonthly.map(m => {
+      const gp = m.grossProfit !== undefined ? m.grossProfit : (m.revenue - m.cogs);
+      return {
+        Month: m.month,
+        Year: m.year,
+        Revenue: m.revenue,
+        COGS: m.cogs,
+        'Gross Profit': gp,
+        'Margin %': m.revenue > 0 ? `${((gp / m.revenue) * 100).toFixed(1)}%` : 'N/A',
+        Status: gp > 0 ? 'Profitable' : gp < 0 ? 'Deficit' : (m.revenue > 0 ? 'Break-Even' : 'No Activity')
+      };
+    });
 
     try {
       exportToExcel(exportMonthly, 'PCA_Sales_Gross_Report', 'Monthly Breakdown', {
@@ -443,68 +444,68 @@ export default function ProfitLossPage() {
                       <th className="px-6 py-4">Month / Year</th>
                       <th className="px-6 py-4 text-right">Revenue</th>
                       <th className="px-6 py-4 text-right">COGS</th>
-                      <th className="px-6 py-4 text-right">Operating Expenses</th>
-                      <th className="px-6 py-4 text-right">Net Profit</th>
-                      <th className="px-6 py-4 text-center">Net Margin</th>
+                      <th className="px-6 py-4 text-right">Gross Profit</th>
+                      <th className="px-6 py-4 text-center">Gross Margin</th>
                       <th className="px-6 py-4 text-center">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/40">
                     {loading ? (
                       <tr>
-                        <td colSpan={7} className="px-6 py-8 text-center text-muted text-xs font-bold">
+                        <td colSpan={6} className="px-6 py-8 text-center text-muted text-xs font-bold">
                           Loading monthly financial records...
                         </td>
                       </tr>
                     ) : displayedMonthly.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="px-6 py-8 text-center text-muted text-xs font-bold">
+                        <td colSpan={6} className="px-6 py-8 text-center text-muted text-xs font-bold">
                           No financial transactions recorded for this period.
                         </td>
                       </tr>
                     ) : (
-                      displayedMonthly.map((row, i) => (
-                        <tr key={i} className="hover:bg-white/[0.02] transition-colors text-xs font-bold">
-                          <td className="px-6 py-4 font-black text-main">{row.month} {row.year}</td>
-                          <td className="px-6 py-4 text-right font-rajdhani font-black text-main">
-                            ₱{Number(row.revenue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </td>
-                          <td className="px-6 py-4 text-right font-rajdhani font-bold text-muted">
-                            ₱{Number(row.cogs).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </td>
-                          <td className="px-6 py-4 text-right font-rajdhani font-bold text-muted">
-                            ₱{Number(row.expenses).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </td>
-                          <td className={`px-6 py-4 text-right font-rajdhani font-black ${row.profit > 0 ? 'text-brand-neonblue' : row.profit < 0 ? 'text-brand-crimson' : 'text-muted'}`}>
-                            ₱{Number(row.profit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </td>
-                          <td className="px-6 py-4 text-center text-xs font-bold">
-                            {row.revenue > 0 ? `${row.margin}%` : '—'}
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            {row.status === 'positive' && (
-                              <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
-                                Profitable
-                              </span>
-                            )}
-                            {row.status === 'negative' && (
-                              <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border bg-rose-500/10 text-rose-400 border-rose-500/20">
-                                Deficit
-                              </span>
-                            )}
-                            {row.status === 'breakeven' && (
-                              <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border bg-amber-500/10 text-amber-400 border-amber-500/20">
-                                Break-Even
-                              </span>
-                            )}
-                            {row.status === 'neutral' && (
-                              <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border bg-slate-500/10 text-slate-400 border-slate-500/20">
-                                No Activity
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      ))
+                      displayedMonthly.map((row, i) => {
+                        const profitVal = row.grossProfit !== undefined ? Number(row.grossProfit) : (Number(row.revenue) - Number(row.cogs));
+                        const marginVal = Number(row.revenue) > 0 ? ((profitVal / Number(row.revenue)) * 100).toFixed(1) : null;
+                        return (
+                          <tr key={i} className="hover:bg-white/[0.02] transition-colors text-xs font-bold">
+                            <td className="px-6 py-4 font-black text-main">{row.month} {row.year}</td>
+                            <td className="px-6 py-4 text-right font-rajdhani font-black text-main">
+                              ₱{Number(row.revenue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td className="px-6 py-4 text-right font-rajdhani font-bold text-muted">
+                              ₱{Number(row.cogs).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td className={`px-6 py-4 text-right font-rajdhani font-black ${profitVal > 0 ? 'text-brand-neonblue' : profitVal < 0 ? 'text-brand-crimson' : 'text-muted'}`}>
+                              ₱{profitVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td className="px-6 py-4 text-center text-xs font-bold">
+                              {marginVal !== null ? `${marginVal}%` : '—'}
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              {profitVal > 0 && (
+                                <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+                                  Profitable
+                                </span>
+                              )}
+                              {profitVal < 0 && (
+                                <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border bg-rose-500/10 text-rose-400 border-rose-500/20">
+                                  Deficit
+                                </span>
+                              )}
+                              {profitVal === 0 && Number(row.revenue) > 0 && (
+                                <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border bg-amber-500/10 text-amber-400 border-amber-500/20">
+                                  Break-Even
+                                </span>
+                              )}
+                              {profitVal === 0 && Number(row.revenue) === 0 && (
+                                <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border bg-slate-500/10 text-slate-400 border-slate-500/20">
+                                  No Activity
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
