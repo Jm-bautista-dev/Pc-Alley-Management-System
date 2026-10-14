@@ -95,9 +95,40 @@ const updateStock = async (req, res) => {
   try {
     const { product_id, branch_id, quantity, low_stock_threshold, price, enabled } = req.body;
     
-    // Security Enforcement
-    if (req.user.role === 'branch_admin' && parseInt(branch_id) !== req.user.branch_id) {
-      return res.status(403).json({ message: 'Forbidden: You can only manage inventory for your assigned sector.' });
+    // Support updating all branches for superadmin
+    if (branch_id === 'all' || branch_id === 'ALL') {
+      if (req.user.role !== 'super_admin' && req.user.role !== 'superadmin' && req.user.role !== 'admin_manager') {
+        return res.status(403).json({ message: 'Forbidden: Only superadmin can manage inventory across all branches.' });
+      }
+
+      const allBranches = await Branch.findAll();
+      const updatedList = [];
+
+      for (const b of allBranches) {
+        let [inv] = await Inventory.findOrCreate({
+          where: { product_id, branch_id: b.id },
+          defaults: {
+            stock: quantity !== undefined ? parseInt(quantity) : 0,
+            quantity: quantity !== undefined ? parseInt(quantity) : 0,
+            low_stock_threshold: low_stock_threshold !== undefined ? parseInt(low_stock_threshold) : 5,
+            price: (price === null || price === "" || isNaN(price)) ? null : parseFloat(price),
+            enabled: enabled !== undefined ? Boolean(enabled) : true
+          }
+        });
+
+        if (quantity !== undefined) {
+          inv.stock = parseInt(quantity);
+          inv.quantity = parseInt(quantity);
+        }
+        if (low_stock_threshold !== undefined) inv.low_stock_threshold = parseInt(low_stock_threshold);
+        if (price !== undefined) inv.price = (price === null || price === "" || isNaN(price)) ? null : parseFloat(price);
+        if (enabled !== undefined) inv.enabled = Boolean(enabled);
+
+        await inv.save();
+        updatedList.push(inv);
+      }
+
+      return res.json({ message: 'Updated inventory across all branches', count: updatedList.length, data: updatedList });
     }
 
     const inventory = await Inventory.findOne({ where: { product_id, branch_id } });

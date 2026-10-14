@@ -17,6 +17,7 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
   const [stockData, setStockData] = useState({ branch_id: "", quantity: "", price: "", enabled: true, low_stock_threshold: 5 });
   const [updating, setUpdating] = useState(false);
   const [currentStock, setCurrentStock] = useState(0);
+  const [branchStockList, setBranchStockList] = useState([]);
   const [categories, setCategories] = useState([]);
   const [brands, setBrands] = useState([]);
   const [user, setUser] = useState(null);
@@ -88,8 +89,69 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
       setImagePreview(null);
       setRemoveImage(false);
       setImageChanged(false);
+
+      // Fetch live branch stocks for this product
+      if (product.id) {
+        const token = localStorage.getItem("token");
+        fetch(apiUrl(`/api/products/${product.id}/stock`), {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+          .then(res => res.ok ? res.json() : [])
+          .then(data => {
+            if (Array.isArray(data)) {
+              setBranchStockList(data);
+              // If initial branch is set, sync currentStock
+              const targetBranchId = storedUser?.role === "branch_admin" ? String(storedUser.branch_id) : (product.branch_id || "");
+              if (targetBranchId === "all") {
+                const total = data.reduce((sum, b) => sum + (Number(b.stock) || 0), 0);
+                setCurrentStock(total);
+              } else if (targetBranchId) {
+                const found = data.find(b => String(b.branch_id) === String(targetBranchId));
+                if (found) setCurrentStock(Number(found.stock) || 0);
+              }
+            }
+          })
+          .catch(err => console.error("Error fetching branch stock breakdown:", err));
+      }
+    } else {
+      setBranchStockList([]);
     }
   }, [isOpen, product]);
+
+  const handleBranchSelect = (branchId) => {
+    if (branchId === "all") {
+      const total = branchStockList.reduce((sum, b) => sum + (Number(b.stock) || 0), 0);
+      setCurrentStock(total);
+      setStockData(prev => ({
+        ...prev,
+        branch_id: "all",
+        quantity: "",
+        price: "",
+        enabled: true
+      }));
+      return;
+    }
+
+    const found = branchStockList.find(b => String(b.branch_id) === String(branchId));
+    if (found) {
+      setCurrentStock(Number(found.stock) || 0);
+      setStockData(prev => ({
+        ...prev,
+        branch_id: branchId,
+        quantity: found.stock ?? "",
+        price: found.price !== null && found.price !== undefined ? found.price : "",
+        low_stock_threshold: found.low_stock_threshold ?? 5,
+        enabled: found.enabled !== false
+      }));
+    } else {
+      setCurrentStock(0);
+      setStockData(prev => ({
+        ...prev,
+        branch_id: branchId,
+        quantity: ""
+      }));
+    }
+  };
 
   // Derive the current display image URL
   const currentImageUrl = product?.image_url || product?.product_image || null;
@@ -520,20 +582,44 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
           <hr className="border-border/50" />
           <h3 className="text-xs font-black uppercase tracking-widest text-brand-neonblue">Adjust Stock</h3>
 
-          <div className="bg-brand-bgbase/50 border border-border/30 rounded-lg p-3 mb-3 text-xs">
-            <span className="text-muted uppercase font-black tracking-wider">Current Stock: </span>
-            <span className="text-main font-black text-lg ml-1">{currentStock}</span>
+          <div className="bg-brand-bgbase/50 border border-border/30 rounded-lg p-3 mb-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <span className="text-muted uppercase font-black tracking-wider">Current Stock: </span>
+              <span className="text-main font-black text-lg ml-1">{currentStock}</span>
+              {stockData.branch_id === "all" && (
+                <span className="text-[10px] text-muted ml-1.5 font-semibold">(Total across all branches)</span>
+              )}
+            </div>
+            {stockData.branch_id === "all" && branchStockList.length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {branchStockList.map(b => (
+                  <span key={b.branch_id} className="text-[10px] font-mono px-2 py-0.5 rounded bg-brand-surface border border-border/50 text-main">
+                    <span className="text-muted font-bold">{b.branch_name}:</span> {b.stock}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[10px] uppercase font-black text-muted mb-1">Branch</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-[10px] uppercase font-black text-muted">Branch</label>
+                {stockData.branch_id === "all" && (
+                  <span className="text-[9px] font-bold text-brand-neonblue uppercase tracking-wider">
+                    All Branches Mode
+                  </span>
+                )}
+              </div>
               <select
                 value={stockData.branch_id}
-                onChange={e => setStockData({ ...stockData, branch_id: e.target.value })}
+                onChange={e => handleBranchSelect(e.target.value)}
                 disabled={user?.role === "branch_admin"}
                 className="w-full bg-brand-bgbase border border-border text-main rounded-lg px-3 py-2 text-sm font-bold appearance-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <option value="">Select Branch</option>
+                {(user?.role === "super_admin" || user?.role === "superadmin" || user?.role === "admin_manager" || !user?.role || user?.role === "admin") && (
+                  <option value="all">All Branches</option>
+                )}
                 {(branches || []).map(b => (
                   <option key={b.id} value={b.id}>{b.name}</option>
                 ))}
@@ -545,7 +631,7 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
                 type="number"
                 value={stockData.quantity}
                 onChange={e => setStockData({ ...stockData, quantity: e.target.value })}
-                placeholder="Current: product.stock"
+                placeholder={stockData.branch_id === "all" ? "Apply to all branches" : `Current: ${currentStock}`}
                 className="w-full bg-brand-bgbase border border-border text-main rounded-lg px-3 py-2 text-sm font-bold"
               />
             </div>
