@@ -169,58 +169,135 @@ export const getTrendData = (salesHistory, filterType = "30", startDate = null, 
  * Calculate Product Burn Rate (Days Remaining until stock-out).
  * Compares 30-day velocity with current stock.
  */
-export const getBurnRates = (salesHistory, inventory) => {
-  // Ensure inventory is an array – API may return { data: [...] } or undefined
+export const getBurnRates = (paramA, paramB) => {
+  // Gracefully handle argument order: (salesHistory, inventory) or (inventory, salesHistory)
+  let salesHistory = Array.isArray(paramA) ? paramA : (paramA?.data ?? []);
+  let inventory = Array.isArray(paramB) ? paramB : (paramB?.data ?? []);
+
+  if (
+    salesHistory.length > 0 &&
+    (salesHistory[0].product_id !== undefined || salesHistory[0].stock !== undefined || (salesHistory[0].Product && !salesHistory[0].invoiceNumber)) &&
+    inventory.length > 0 &&
+    (inventory[0].invoiceNumber !== undefined || inventory[0].SaleItems !== undefined || inventory[0].OrderItems !== undefined)
+  ) {
+    const tmp = salesHistory;
+    salesHistory = inventory;
+    inventory = tmp;
+  }
+
+  // Ensure inventory is an array
   if (!Array.isArray(inventory)) {
-    if (inventory && typeof inventory === 'object' && Array.isArray(inventory.data)) {
-      inventory = inventory.data;
-    } else {
-      inventory = [];
-    }
+    inventory = Array.isArray(inventory?.data) ? inventory.data : [];
   }
 
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-  const productVelocity = {};
+  const productVelocityById = {};
+  const productVelocityByName = {};
 
   salesHistory.forEach(raw => {
     const order = normalise(raw);
     const orderDate = new Date(order.createdAt);
-    if (orderDate >= thirtyDaysAgo && order.items.length > 0) {
+    if (orderDate >= thirtyDaysAgo && Array.isArray(order.items) && order.items.length > 0) {
       order.items.forEach(item => {
-        // Support both new SaleItem (productId) and old OrderItem (product_id)
+        const qty = Number(item.quantity) || 1;
         const pId = item.productId ?? item.product_id;
-        if (pId) productVelocity[pId] = (productVelocity[pId] || 0) + (Number(item.quantity) || 0);
+        if (pId) {
+          productVelocityById[pId] = (productVelocityById[pId] || 0) + qty;
+        }
+        const rawName = item.productName || item.Product?.name || item.name || '';
+        const cleanName = rawName.split(/,\s*/)[0].replace(/\s+\d{4}\s*$/, '').trim().toLowerCase();
+        if (cleanName) {
+          productVelocityByName[cleanName] = (productVelocityByName[cleanName] || 0) + qty;
+        }
       });
     }
   });
 
   const burnRates = [];
+  const seenKeys = new Set();
+
   inventory.forEach(item => {
     const pId = item.product_id || (item.Product && item.Product.id) || item.id;
-    const stock = item.stock !== undefined && item.stock !== null ? Number(item.stock) : Number(item.quantity || 0);
-    const velocity = productVelocity[pId] || 0;
+    const stock = Number(
+      item.stock !== undefined && item.stock !== null
+        ? item.stock
+        : (item.quantity !== undefined ? item.quantity : (item.Product?.available_quantity || 0))
+    );
+    const threshold = Number(item.low_stock_threshold || 5);
+    const prodName = item.Product?.name || item.name || `Product #${pId}`;
+    const cleanProdName = prodName.split(/,\s*/)[0].replace(/\s+\d{4}\s*$/, '').trim().toLowerCase();
+    const branchName = item.Branch?.name || '';
+    const uniqueKey = `${pId}_${item.branch_id || ''}`;
+
+    if (seenKeys.has(uniqueKey)) return;
+    seenKeys.add(uniqueKey);
+
+    // Calculate sales velocity
+    let velocity = (pId && productVelocityById[pId]) || 0;
+    if (!velocity && cleanProdName) {
+      if (productVelocityByName[cleanProdName]) {
+        velocity = productVelocityByName[cleanProdName];
+      } else {
+        for (const [vName, vQty] of Object.entries(productVelocityByName)) {
+          if (cleanProdName.includes(vName) || vName.includes(cleanProdName)) {
+            velocity = vQty;
+            break;
+          }
+        }
+      }
+    }
+
     const daily = velocity / 30;
+    const isOutOfStock = stock === 0;
+    const isLowStock = stock > 0 && stock <= threshold;
 
-    if (daily > 0) {
-      const daysRemaining = Math.max(0, Math.ceil(stock / daily));
-      let status = 'safe';
-      if (daysRemaining <= 5) status = 'critical';
-      else if (daysRemaining <= 10) status = 'warning';
+    let daysRemaining = 999;
+    if (isOutOfStock) {
+      daysRemaining = 0;
+    } else if (daily > 0) {
+      daysRemaining = Math.max(0, Math.ceil(stock / daily));
+    } else if (isLowStock) {
+      daysRemaining = 0;
+    }
 
+    let status = 'safe';
+    if (isOutOfStock) {
+      status = 'critical';
+    } else if (daysRemaining <= 5 || isLowStock) {
+      status = 'critical';
+    } else if (daysRemaining <= 14 || stock <= threshold * 2) {
+      status = 'warning';
+    }
+
+    // Only surface items that have stock-out risk, low stock, or active velocity burn
+    if (isOutOfStock || isLowStock || daily > 0 || stock <= threshold * 3) {
       burnRates.push({
         id: pId,
-        name: item.Product?.name || item.name || 'Unknown Product',
+        branchId: item.branch_id,
+        branchName,
+        name: prodName,
         stock,
+        threshold,
         dailyVelocity: daily.toFixed(1),
         daysRemaining,
-        status
+        status,
+        isOutOfStock,
+        isLowStock
       });
     }
   });
 
-  return burnRates.sort((a, b) => a.daysRemaining - b.daysRemaining).slice(0, 5);
+  // Sort: Out of stock first, then lowest days remaining, then lowest stock
+  burnRates.sort((a, b) => {
+    if (a.isOutOfStock && !b.isOutOfStock) return -1;
+    if (!a.isOutOfStock && b.isOutOfStock) return 1;
+    if (a.daysRemaining !== b.daysRemaining) return a.daysRemaining - b.daysRemaining;
+    return a.stock - b.stock;
+  });
+
+  return burnRates;
 };
 
 /**

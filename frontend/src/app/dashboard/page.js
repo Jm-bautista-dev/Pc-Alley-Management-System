@@ -100,6 +100,7 @@ export default function Dashboard() {
   const [pendingRestockRequests, setPendingRestockRequests] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [staffInventory, setStaffInventory] = useState([]);
+  const [stockFilterTab, setStockFilterTab] = useState("all");
 
   const cacheRef = useRef({});
   const dateFilterRef = useRef(dateFilter);
@@ -277,8 +278,20 @@ export default function Dashboard() {
   // Calculations
   const limitedSales = limitData(salesHistory, 2000);
   const trends = getTrendData(limitedSales, dateFilter, customStartDate, customEndDate);
-  const burnRates = getBurnRates(inventory, limitedSales);
+  const burnRates = getBurnRates(limitedSales, inventory);
   const criticalStockItems = burnRates.filter(b => b.status === 'critical' || b.daysRemaining <= 7);
+
+  const outOfStockItems = burnRates.filter(b => b.isOutOfStock || b.stock === 0);
+  const lowStockItems = burnRates.filter(b => !b.isOutOfStock && (b.isLowStock || b.stock <= (b.threshold || 5)));
+  const fastBurnItems = burnRates.filter(b => Number(b.dailyVelocity) > 0);
+
+  const displayedStockItems = stockFilterTab === "out_of_stock"
+    ? outOfStockItems
+    : stockFilterTab === "low_stock"
+    ? lowStockItems
+    : stockFilterTab === "fast_burn"
+    ? fastBurnItems
+    : burnRates;
 
   // Dead stock calculation
   const deadStock = inventory
@@ -374,8 +387,8 @@ export default function Dashboard() {
 
   // Staff View State
   const isStaffUser = user?.role === 'employee' || user?.role === 'staff';
-  const lowStockItems = staffInventory.filter(i => (i.quantity ?? 0) <= 10 && (i.quantity ?? 0) > 0);
-  const outOfStockItems = staffInventory.filter(i => (i.quantity ?? 0) === 0);
+  const staffLowStockItems = staffInventory.filter(i => (i.quantity ?? 0) <= 10 && (i.quantity ?? 0) > 0);
+  const staffOutOfStockItems = staffInventory.filter(i => (i.quantity ?? 0) === 0);
 
   // ── STAFF VIEW ─────────────────────────────────────────────────────────────
   if (isStaffUser) {
@@ -414,8 +427,8 @@ export default function Dashboard() {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                     {[
                       { label: 'Total Products', value: staffInventory.length, icon: Package, color: '#0EA5E9' },
-                      { label: 'Low Stock Items', value: lowStockItems.length, icon: AlertTriangle, color: '#F59E0B' },
-                      { label: 'Out of Stock', value: outOfStockItems.length, icon: XCircle, color: '#EF4444' },
+                      { label: 'Low Stock Items', value: staffLowStockItems.length, icon: AlertTriangle, color: '#F59E0B' },
+                      { label: 'Out of Stock', value: staffOutOfStockItems.length, icon: XCircle, color: '#EF4444' },
                       { label: 'My Restock Reqs', value: myRestockRequests.length, icon: ClipboardCheck, color: '#8B5CF6' },
                     ].map((card, i) => (
                       <motion.div key={i} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="glass-card p-4 md:p-5 flex flex-col justify-between">
@@ -500,17 +513,17 @@ export default function Dashboard() {
                           <h3 className="font-rajdhani font-black text-base uppercase tracking-wider">Low Stock Warnings</h3>
                         </div>
                         <span className="px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400 text-[9px] font-black">
-                          {lowStockItems.length} items
+                          {staffLowStockItems.length} items
                         </span>
                       </div>
                       <div className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-border/10">
-                        {lowStockItems.length === 0 ? (
+                        {staffLowStockItems.length === 0 ? (
                           <div className="h-full flex flex-col items-center justify-center text-muted gap-2 p-6">
                             <CheckCircle size={28} className="text-green-500/30" />
                             <p className="text-[10px] font-black uppercase tracking-wider text-green-500/60">Inventory levels healthy</p>
                           </div>
                         ) : (
-                          lowStockItems.map((item, i) => (
+                          staffLowStockItems.map((item, i) => (
                             <div key={item.id ?? i} className="p-4 flex items-center justify-between hover:bg-white/5 transition-colors">
                               <div>
                                 <p className="text-xs font-bold text-main">{item.Product?.name ?? item.name}</p>
@@ -711,40 +724,127 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* STOCK HEALTH — ELEVATED TO TOP */}
+            {/* STOCK HEALTH — REAL-TIME MONITORING */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8" ref={inventoryRef}>
               {/* Critical Stock & Burn Rates */}
-              <div className="lg:col-span-2 glass-card p-5 md:p-6 flex flex-col h-[380px]">
-                <div className="flex items-center justify-between mb-4 border-b border-border/20 pb-3">
+              <div className="lg:col-span-2 glass-card p-5 md:p-6 flex flex-col h-[400px]">
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-3 border-b border-border/20 pb-3">
                   <div className="flex items-center gap-2.5">
                     <div className="w-1.5 h-5 bg-red-500 rounded-full" />
-                    <h3 className="font-rajdhani font-black text-lg uppercase tracking-wider text-main">
-                      Stock Health &amp; Depletion Risks
-                    </h3>
+                    <div>
+                      <h3 className="font-rajdhani font-black text-lg uppercase tracking-wider text-main flex items-center gap-2">
+                        Stock Health &amp; Depletion Risks
+                        {outOfStockItems.length > 0 ? (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-red-500/20 text-red-400 border border-red-500/30 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                            {outOfStockItems.length} Out of Stock
+                          </span>
+                        ) : lowStockItems.length > 0 ? (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                            {lowStockItems.length} Low Stock
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                            Healthy
+                          </span>
+                        )}
+                      </h3>
+                      <p className="text-[10px] text-muted">Real-time inventory levels, run-out velocity, and critical depletion risks</p>
+                    </div>
                   </div>
-                  <Link href="/reports/stock" className="text-[10px] font-black uppercase text-brand-neonblue hover:underline flex items-center gap-1">
-                    Manage Stock <ChevronRight size={12} />
-                  </Link>
+
+                  <div className="flex items-center gap-3">
+                    <Link href="/reports/stock" className="text-[10px] font-black uppercase text-brand-neonblue hover:underline flex items-center gap-1">
+                      Manage Stock <ChevronRight size={12} />
+                    </Link>
+                  </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2.5 pr-1">
-                  {burnRates.length > 0 ? (
-                    burnRates.slice(0, 6).map((item, idx) => (
+                {/* Sub-tabs / Filter pills */}
+                <div className="flex items-center gap-1.5 mb-3 overflow-x-auto pb-1">
+                  {[
+                    { id: "all", label: "All At-Risk", count: burnRates.length },
+                    { id: "out_of_stock", label: "Out of Stock", count: outOfStockItems.length, alert: outOfStockItems.length > 0 },
+                    { id: "low_stock", label: "Low Stock", count: lowStockItems.length },
+                    { id: "fast_burn", label: "Active Velocity", count: fastBurnItems.length },
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setStockFilterTab(tab.id)}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shrink-0 ${
+                        stockFilterTab === tab.id
+                          ? "bg-brand-neonblue/20 text-brand-neonblue border border-brand-neonblue/40 shadow-sm"
+                          : "bg-brand-surface/30 text-muted/70 hover:text-main hover:bg-white/5 border border-border/20"
+                      }`}
+                    >
+                      {tab.label}
+                      <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ${
+                        tab.alert && stockFilterTab !== tab.id
+                          ? "bg-red-500/30 text-red-400 border border-red-500/40"
+                          : "bg-white/10 text-main"
+                      }`}>
+                        {tab.count}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-1">
+                  {displayedStockItems.length > 0 ? (
+                    displayedStockItems.slice(0, 10).map((item, idx) => (
                       <div key={idx} className="flex justify-between items-center p-3 rounded-xl border border-border/20 bg-brand-surface/40 hover:bg-white/5 transition-colors">
-                        <div>
-                          <h4 className="font-bold text-xs text-main">{item.name}</h4>
-                          <span className="text-[9px] text-muted uppercase font-bold tracking-wider">
-                            Velocity: {item.dailyVelocity}/day &bull; {item.stock} left in stock
-                          </span>
+                        <div className="min-w-0 pr-3">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-bold text-xs text-main truncate max-w-[280px] md:max-w-[380px]" title={item.name}>
+                              {item.name}
+                            </h4>
+                            {item.branchName && (
+                              <span className="shrink-0 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-white/5 text-muted border border-border/30">
+                                {item.branchName}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5 text-[9px] uppercase font-bold tracking-wider">
+                            {item.isOutOfStock || item.stock === 0 ? (
+                              <span className="text-red-400 font-black flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                                0 Units in Stock
+                              </span>
+                            ) : item.isLowStock || item.stock <= (item.threshold || 5) ? (
+                              <span className="text-amber-400 font-bold">
+                                {item.stock} Units Left (Min: {item.threshold || 5})
+                              </span>
+                            ) : (
+                              <span className="text-main/80">
+                                {item.stock} Units in Stock
+                              </span>
+                            )}
+                            <span className="text-muted/40">&bull;</span>
+                            <span className="text-muted">
+                              Velocity: {item.dailyVelocity}/day
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2.5">
-                          <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
-                            item.status === 'critical' ? 'bg-red-500/10 text-red-500 border border-red-500/20' :
-                            item.status === 'warning' ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' :
-                            'bg-green-500/10 text-green-500 border border-green-500/20'
-                          }`}>
-                            {item.daysRemaining} Days
-                          </span>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          {item.isOutOfStock || item.stock === 0 ? (
+                            <span className="px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-red-500/15 text-red-400 border border-red-500/30">
+                              Depleted
+                            </span>
+                          ) : item.daysRemaining <= 7 ? (
+                            <span className="px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-red-500/10 text-red-500 border border-red-500/20">
+                              ~{item.daysRemaining}d Left
+                            </span>
+                          ) : item.daysRemaining <= 14 || item.isLowStock ? (
+                            <span className="px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-500 border border-orange-500/20">
+                              Low Stock
+                            </span>
+                          ) : (
+                            <span className="px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                              {item.daysRemaining}d Buffer
+                            </span>
+                          )}
+
                           <Link
                             href="/purchases/restock"
                             className="px-2.5 py-1 bg-brand-neonblue/10 text-brand-neonblue hover:bg-brand-neonblue hover:text-white transition-colors rounded-lg text-[9px] font-black uppercase border border-brand-neonblue/20"
@@ -755,9 +855,23 @@ export default function Dashboard() {
                       </div>
                     ))
                   ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-muted gap-2">
+                    <div className="h-full flex flex-col items-center justify-center text-muted gap-2 py-8">
                       <CheckCircle size={32} className="text-green-500/30" />
-                      <p className="text-xs font-black uppercase tracking-wider text-green-500/60">No immediate stock-out risks detected</p>
+                      <p className="text-xs font-black uppercase tracking-wider text-green-500/60">
+                        {stockFilterTab === "out_of_stock"
+                          ? "No items currently out of stock"
+                          : stockFilterTab === "low_stock"
+                          ? "No items at low stock threshold"
+                          : "No immediate stock-out risks detected"}
+                      </p>
+                      {stockFilterTab !== "all" && (
+                        <button
+                          onClick={() => setStockFilterTab("all")}
+                          className="text-[10px] text-brand-neonblue underline uppercase font-bold"
+                        >
+                          View all at-risk stock
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

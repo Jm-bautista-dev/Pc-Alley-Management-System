@@ -126,14 +126,21 @@ export default function StockReportPage() {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const prodSales = {};
+    const prodSalesByName = {};
     salesData.forEach(order => {
       const orderDate = new Date(order.createdAt);
       if (orderDate >= thirtyDaysAgo) {
         const items = order.SaleItems || order.OrderItems || order.items || [];
         items.forEach(item => {
+          const qty = Number(item.quantity) || 0;
           const pId = item.productId ?? item.product_id;
           if (pId) {
-            prodSales[pId] = (prodSales[pId] || 0) + (Number(item.quantity) || 0);
+            prodSales[pId] = (prodSales[pId] || 0) + qty;
+          }
+          const rawName = item.productName || item.Product?.name || item.name || '';
+          const cleanName = rawName.split(/,\s*/)[0].replace(/\s+\d{4}\s*$/, '').trim().toLowerCase();
+          if (cleanName) {
+            prodSalesByName[cleanName] = (prodSalesByName[cleanName] || 0) + qty;
           }
         });
       }
@@ -141,7 +148,17 @@ export default function StockReportPage() {
     return inventory.map(item => {
       const pId = item.product_id || item.Product?.id || item.id;
       const stock = item.stock !== undefined && item.stock !== null ? Number(item.stock) : Number(item.quantity || 0);
-      const sold = prodSales[pId] || 0;
+      const prodName = (item.Product?.name || item.name || '').toLowerCase();
+      const cleanProdName = prodName.split(/,\s*/)[0].replace(/\s+\d{4}\s*$/, '').trim();
+      let sold = prodSales[pId] || prodSalesByName[cleanProdName] || 0;
+      if (!sold && cleanProdName) {
+        for (const [vName, vQty] of Object.entries(prodSalesByName)) {
+          if (cleanProdName.includes(vName) || vName.includes(cleanProdName)) {
+            sold = vQty;
+            break;
+          }
+        }
+      }
       const daily = sold / 30;
       const daysRem = daily > 0 ? Math.floor(stock / daily) : (stock === 0 ? 0 : 999);
 
@@ -149,7 +166,6 @@ export default function StockReportPage() {
       // Default baseline: GPUs (and high-value components) = 10 pcs minimum
       // Fast-moving peripherals (monitors, keyboards, mice, headsets, cables) = 50 pcs minimum
       const catName = (item.Product?.Category?.name || item.category || '').toLowerCase();
-      const prodName = (item.Product?.name || item.name || '').toLowerCase();
 
       let targetMinStock = item.low_stock_threshold || 10;
       const isFastMoving = 
