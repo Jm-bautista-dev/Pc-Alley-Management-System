@@ -180,19 +180,6 @@ export default function ProfitLossPage() {
         pointBackgroundColor: '#10B981',
         pointRadius: 2,
         pointHoverRadius: 5,
-      },
-      {
-        label: 'Net Income',
-        data: trends.map(t => Number(t.netIncome !== undefined ? t.netIncome : ((t.revenue || 0) - (t.cogs || 0) - (t.expenses || 0)))),
-        borderColor: '#8B5CF6',
-        backgroundColor: 'rgba(139, 92, 246, 0.05)',
-        borderWidth: 2,
-        borderDash: [5, 4],
-        tension: 0.35,
-        fill: false,
-        pointBackgroundColor: '#8B5CF6',
-        pointRadius: 2,
-        pointHoverRadius: 5,
       }
     ]
   };
@@ -244,10 +231,10 @@ export default function ProfitLossPage() {
 
   const getChartTitle = () => {
     switch (periodFilter) {
-      case '30': return 'FINANCIAL PERFORMANCE FLOW (30-DAY TELEMETRY)';
-      case '90': return 'FINANCIAL PERFORMANCE FLOW (90-DAY TELEMETRY)';
-      case '365': return 'FINANCIAL PERFORMANCE FLOW (365-DAY ANNUAL TELEMETRY)';
-      default: return 'FINANCIAL PERFORMANCE FLOW (ALL-TIME TELEMETRY)';
+      case '30': return 'REVENUE, COGS & GROSS PROFIT FLOW (30-DAY TELEMETRY)';
+      case '90': return 'REVENUE, COGS & GROSS PROFIT FLOW (90-DAY TELEMETRY)';
+      case '365': return 'REVENUE, COGS & GROSS PROFIT FLOW (365-DAY ANNUAL TELEMETRY)';
+      default: return 'REVENUE, COGS & GROSS PROFIT FLOW (ALL-TIME TELEMETRY)';
     }
   };
 
