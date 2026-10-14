@@ -432,13 +432,15 @@ export default function StockTransfersPage() {
     }
   };
 
-  // Complete / Receive Transfer
+  // Complete / Receive Transfer (Only Destination Branch that receives the goods)
   const handleCompleteTransfer = (transfer) => {
-    const isSuperAdmin = currentUser?.role === "super_admin";
     const isDestAdmin = currentUser?.role === "branch_admin" && currentUser.branch_id === transfer.toBranchId;
 
-    if (!isSuperAdmin && !isDestAdmin) {
-      return showError("Unauthorized", "Only the destination branch or Super Admin can receive this transfer.");
+    if (!isDestAdmin) {
+      return showError(
+        "Unauthorized",
+        `Only the recipient branch (${transfer.DestBranch?.name || "destination branch"}) where the stock is delivered can confirm receipt.`
+      );
     }
 
     showConfirm(
@@ -782,7 +784,7 @@ export default function StockTransfersPage() {
                       const isSourceAdmin =
                         currentUser?.role === "branch_admin" &&
                         currentUser.branch_id === transfer.fromBranchId;
-                      const canReceive = isPending && (isSuperAdmin || isDestAdmin);
+                      const canReceive = isPending && isDestAdmin;
                       const canCancel = isPending && (isSuperAdmin || isSourceAdmin);
 
                       return (
@@ -854,8 +856,8 @@ export default function StockTransfersPage() {
                           {/* Actions */}
                           <td className="py-3.5 px-4 text-right">
                             <div className="flex items-center justify-end gap-1.5">
-                              {/* Receive & Confirm Delivery Button */}
-                              {canReceive && (
+                              {/* Receive & Confirm Delivery Button (Only Destination Branch can receive) */}
+                              {canReceive ? (
                                 <button
                                   onClick={() => handleCompleteTransfer(transfer)}
                                   className="px-2.5 py-1 rounded-lg bg-green-500/10 hover:bg-green-500/20 text-green-500 border border-green-500/30 text-[11px] font-bold transition-all flex items-center gap-1 shadow-sm"
@@ -864,7 +866,12 @@ export default function StockTransfersPage() {
                                   <Check size={12} className="stroke-[3]" />
                                   <span>Confirm Received</span>
                                 </button>
-                              )}
+                              ) : isPending ? (
+                                <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono text-yellow-500/90 bg-yellow-500/10 border border-yellow-500/20">
+                                  <Clock size={10} className="text-yellow-500" />
+                                  <span>Awaiting {transfer.DestBranch?.name || "Destination"}</span>
+                                </span>
+                              ) : null}
 
                               {/* Print Transmittal Slip */}
                               <button
@@ -1511,7 +1518,7 @@ export default function StockTransfersPage() {
                   </button>
 
                   {selectedTransfer.status === "Pending" && (
-                    (currentUser?.role === "super_admin" || currentUser?.branch_id === selectedTransfer.toBranchId) && (
+                    currentUser?.role === "branch_admin" && currentUser?.branch_id === selectedTransfer.toBranchId ? (
                       <button
                         onClick={() => handleCompleteTransfer(selectedTransfer)}
                         className="px-4 py-2 rounded-xl bg-green-500 hover:bg-green-600 text-white font-rajdhani font-bold text-xs uppercase tracking-wider shadow-sm transition-all flex items-center gap-1.5"
@@ -1519,6 +1526,11 @@ export default function StockTransfersPage() {
                         <Check size={14} className="stroke-[3]" />
                         <span>Accept & Receive Stock</span>
                       </button>
+                    ) : (
+                      <span className="text-[11px] text-yellow-500 font-mono flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                        <Clock size={13} />
+                        <span>Awaiting delivery confirmation from {selectedTransfer.DestBranch?.name || "destination branch"}</span>
+                      </span>
                     )
                   )}
                 </div>

@@ -155,9 +155,9 @@ const completeTransferRoute = async (req, res) => {
       return res.status(400).json({ message: 'This stock transfer is already completed.' });
     }
 
-    // Validate branch authorization: only destination branch or super admin can complete/receive
-    if (req.user.role !== 'super_admin' && transfer.toBranchId !== req.user.branch_id) {
-      return res.status(403).json({ message: 'Forbidden: Only the destination branch (or Super Admin) can accept this stock transfer.' });
+    // Validate branch authorization: only destination branch where goods are delivered can confirm receipt
+    if (req.user.role !== 'branch_admin' || transfer.toBranchId !== req.user.branch_id) {
+      return res.status(403).json({ message: 'Forbidden: Only the destination branch where products are delivered can confirm and receive this stock transfer.' });
     }
 
     const completedTransfer = await completeStockTransfer(
