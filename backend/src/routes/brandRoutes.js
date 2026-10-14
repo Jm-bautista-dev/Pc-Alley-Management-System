@@ -23,6 +23,7 @@ const slugify = (text) => {
 // GET all brands (for admin list)
 router.get('/', authenticateToken, async (req, res) => {
   try {
+    const { Category } = require('../models');
     const brands = await Brand.findAll({
       attributes: {
         include: [
@@ -32,6 +33,9 @@ router.get('/', authenticateToken, async (req, res) => {
           ]
         ]
       },
+      include: [
+        { model: Category, as: 'Category', attributes: ['id', 'name'] }
+      ],
       order: [['name', 'ASC']]
     });
     res.json(brands);
@@ -53,11 +57,18 @@ router.get('/active', authenticateToken, async (req, res) => {
         raw: true
       });
       const brandIds = [...new Set(products.map(p => p.brand_id))];
-      where.id = { [Op.in]: brandIds };
+      where[Op.or] = [
+        { id: { [Op.in]: brandIds } },
+        { category_id: parseInt(category_id) }
+      ];
     }
 
+    const { Category } = require('../models');
     const brands = await Brand.findAll({
       where,
+      include: [
+        { model: Category, as: 'Category', attributes: ['id', 'name'] }
+      ],
       order: [['name', 'ASC']]
     });
     res.json(brands);
@@ -66,10 +77,10 @@ router.get('/active', authenticateToken, async (req, res) => {
   }
 });
 
-// POST create brand (Super Admin only)
-router.post('/', [authenticateToken, authorizeRoles('super_admin'), upload.single('logo')], async (req, res) => {
+// POST create brand (Super Admin & Branch Admin)
+router.post('/', [authenticateToken, authorizeRoles('super_admin', 'branch_admin'), upload.single('logo')], async (req, res) => {
   try {
-    const { name, description, status } = req.body;
+    const { name, description, status, category_id } = req.body;
     const cleanName = (name || '').trim();
     if (!cleanName) {
       return res.status(400).json({ error: 'Brand name is required.' });
@@ -102,6 +113,7 @@ router.post('/', [authenticateToken, authorizeRoles('super_admin'), upload.singl
       slug,
       logo,
       description: (description || '').trim() || null,
+      category_id: category_id ? parseInt(category_id) : null,
       status: status || 'active'
     });
 
@@ -115,7 +127,7 @@ router.post('/', [authenticateToken, authorizeRoles('super_admin'), upload.singl
 router.patch('/:id', [authenticateToken, authorizeRoles('super_admin', 'branch_admin'), upload.single('logo')], async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, status, remove_logo } = req.body;
+    const { name, description, status, category_id, remove_logo } = req.body;
 
     const brand = await Brand.findByPk(id);
     if (!brand) {
@@ -146,6 +158,9 @@ router.patch('/:id', [authenticateToken, authorizeRoles('super_admin', 'branch_a
         return res.status(400).json({ error: 'Description cannot exceed 255 characters.' });
       }
       brand.description = (description || '').trim() || null;
+    }
+    if (category_id !== undefined) {
+      brand.category_id = category_id ? parseInt(category_id) : null;
     }
     if (status !== undefined) brand.status = status;
 

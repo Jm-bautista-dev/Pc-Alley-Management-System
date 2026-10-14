@@ -60,6 +60,9 @@ Product.belongsTo(Branch, { foreignKey: 'branch_id' });
 Category.hasMany(Product, { foreignKey: 'category_id', onDelete: 'RESTRICT' });
 Product.belongsTo(Category, { foreignKey: 'category_id' });
 
+Category.hasMany(Brand, { foreignKey: 'category_id', as: 'brands' });
+Brand.belongsTo(Category, { foreignKey: 'category_id', as: 'Category' });
+
 Brand.hasMany(Product, { foreignKey: 'brand_id', onDelete: 'RESTRICT' });
 Product.belongsTo(Brand, { foreignKey: 'brand_id' });
 

@@ -15,18 +15,36 @@ import {
 export default function BrandsPage() {
   const { theme } = useTheme();
   const [brands, setBrands] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState("ALL");
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editingBrand, setEditingBrand] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  const [formData, setFormData] = useState({ name: "", description: "", status: "active" });
+  const [formData, setFormData] = useState({ name: "", description: "", category_id: "", status: "active" });
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState(null);
   const logoInputRef = useRef(null);
 
-  useEffect(() => { fetchBrands(); }, []);
+  useEffect(() => {
+    fetchBrands();
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(apiUrl("/api/categories"), { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        setCategories(data);
+      }
+    } catch (err) {
+      console.error("Failed to load categories", err);
+    }
+  };
 
   const fetchBrands = async () => {
     setLoading(true);
@@ -42,7 +60,7 @@ export default function BrandsPage() {
 
   const openCreateModal = () => {
     setEditingBrand(null);
-    setFormData({ name: "", description: "", status: "active" });
+    setFormData({ name: "", description: "", category_id: "", status: "active" });
     setLogoFile(null);
     setLogoPreview(null);
     setShowModal(true);
@@ -50,7 +68,12 @@ export default function BrandsPage() {
 
   const openEditModal = (brand) => {
     setEditingBrand(brand);
-    setFormData({ name: brand.name, description: brand.description || "", status: brand.status });
+    setFormData({
+      name: brand.name,
+      description: brand.description || "",
+      category_id: brand.category_id ? String(brand.category_id) : (brand.Category?.id ? String(brand.Category.id) : ""),
+      status: brand.status
+    });
     setLogoFile(null);
     setLogoPreview(brand.logo ? apiUrl(brand.logo) : null);
     setShowModal(true);
@@ -83,6 +106,7 @@ export default function BrandsPage() {
     const fd = new FormData();
     fd.append("name", cleanName);
     fd.append("description", (formData.description || "").trim());
+    fd.append("category_id", formData.category_id || "");
     fd.append("status", formData.status);
     if (logoFile) fd.append("logo", logoFile);
     if (editingBrand && !logoFile && !logoPreview) fd.append("remove_logo", "true");
@@ -152,9 +176,13 @@ export default function BrandsPage() {
     }
   };
 
-  const filteredBrands = brands.filter(b =>
-    b.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredBrands = brands.filter(b => {
+    const matchesSearch = b.name.toLowerCase().includes(search.toLowerCase());
+    const matchesCategory = selectedCategory === "ALL" ||
+      String(b.category_id) === String(selectedCategory) ||
+      String(b.Category?.id) === String(selectedCategory);
+    return matchesSearch && matchesCategory;
+  });
   const activeBrands = filteredBrands.filter(b => b.status === "active");
   const archivedBrands = filteredBrands.filter(b => b.status !== "active");
 
@@ -173,7 +201,23 @@ export default function BrandsPage() {
                 Brand <span className="text-brand-neonblue">Directory</span>
               </motion.h1>
             </div>
-            <div className="flex items-center gap-3 w-full md:w-auto">
+            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+              {/* Product Category Filter (Left of Search Brand) */}
+              <div className="relative min-w-[160px] flex-1 sm:flex-initial">
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="w-full bg-brand-surface border border-border/50 rounded-full px-4 py-2.5 text-xs text-main font-bold outline-none focus:border-brand-neonblue transition-colors cursor-pointer"
+                >
+                  <option value="ALL">All Categories</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="relative flex-1 md:w-72">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
                 <input
@@ -319,6 +363,23 @@ export default function BrandsPage() {
                   />
                 </div>
 
+                {/* Product Category */}
+                <div>
+                  <label className="block text-[10px] font-black text-muted uppercase tracking-[2px] mb-2">Product Category</label>
+                  <select
+                    value={formData.category_id}
+                    onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
+                    className="w-full bg-brand-bgbase border border-border/50 rounded-xl px-4 py-3 text-sm text-main font-bold outline-none focus:border-brand-neonblue transition-colors cursor-pointer"
+                  >
+                    <option value="">No Category (Uncategorized)</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* Description */}
                 <div>
                   <label className="block text-[10px] font-black text-muted uppercase tracking-[2px] mb-2">Description</label>
@@ -399,7 +460,14 @@ function BrandCard({ brand, index, onEdit, onDelete, onToggle, archived }) {
 
       {/* Info */}
       <div className="p-4">
-        <h4 className="text-sm font-black text-main uppercase tracking-wide truncate mb-1">{brand.name}</h4>
+        <div className="flex items-start justify-between gap-2 mb-1">
+          <h4 className="text-sm font-black text-main uppercase tracking-wide truncate">{brand.name}</h4>
+          {brand.Category && (
+            <span className="shrink-0 px-2 py-0.5 rounded-full text-[9px] font-bold bg-brand-neonblue/10 text-brand-neonblue border border-brand-neonblue/20 truncate max-w-[120px]" title={brand.Category.name}>
+              {brand.Category.name}
+            </span>
+          )}
+        </div>
         <p className="text-[10px] text-muted truncate mb-3">{brand.description || "No description"}</p>
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-bold text-muted flex items-center gap-1">

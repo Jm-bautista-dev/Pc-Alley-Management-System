@@ -6,6 +6,7 @@ const Brand = sequelize.define('Brand', {
   slug: { type: DataTypes.STRING, unique: true },
   logo: { type: DataTypes.STRING, allowNull: true },
   description: { type: DataTypes.TEXT, allowNull: true },
+  category_id: { type: DataTypes.INTEGER, allowNull: true },
   status: { type: DataTypes.STRING, defaultValue: 'active', allowNull: false },
   deleted_at: { type: DataTypes.DATE, allowNull: true }
 }, {
