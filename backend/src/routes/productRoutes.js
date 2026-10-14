@@ -2,12 +2,13 @@ const express = require('express');
 const router = express.Router();
 const { body, param } = require('express-validator');
 const validate = require('../middleware/validate');
-const { getProducts, createProduct, createBundle, updateProduct, bulkImportProducts, undoBulkImport } = require('../controllers/productController');
+const { getProducts, createProduct, createBundle, updateProduct, bulkImportProducts, undoBulkImport, getProductBranchStock } = require('../controllers/productController');
 const { deleteProduct } = require('../controllers/inventoryController');
 const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
 const upload = require('../middleware/uploadMiddleware');
 
 router.get('/', authenticateToken, getProducts);
+router.get('/:id/stock', authenticateToken, getProductBranchStock);
 
 router.post('/', [
   authenticateToken, 

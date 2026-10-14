@@ -577,5 +577,38 @@ const undoBulkImport = async (req, res) => {
   }
 };
 
-module.exports = { getProducts, createProduct, createBundle, updateProduct, bulkImportProducts, undoBulkImport };
+const getProductBranchStock = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const branches = await Branch.findAll({
+      attributes: ['id', 'name', 'location'],
+      order: [['id', 'ASC']]
+    });
+    const inventory = await Inventory.findAll({
+      where: { product_id: id },
+      attributes: ['branch_id', 'stock', 'price', 'low_stock_threshold', 'enabled']
+    });
+
+    const stockMap = {};
+    inventory.forEach(inv => {
+      stockMap[inv.branch_id] = inv;
+    });
+
+    const result = branches.map(b => ({
+      branch_id: b.id,
+      branch_name: b.name,
+      location: b.location,
+      stock: stockMap[b.id] ? Number(stockMap[b.id].stock || 0) : 0,
+      price: stockMap[b.id]?.price || null,
+      low_stock_threshold: stockMap[b.id]?.low_stock_threshold || 5,
+      enabled: stockMap[b.id]?.enabled !== false
+    }));
+
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+module.exports = { getProducts, createProduct, createBundle, updateProduct, bulkImportProducts, undoBulkImport, getProductBranchStock };
 

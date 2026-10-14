@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X, Package, Tag, Layers, Barcode, Hash, Copy, Check,
-  Cpu, HardDrive, Database, Monitor, Zap, Sliders, ExternalLink
+  Cpu, HardDrive, Database, Monitor, Zap, Sliders, ExternalLink,
+  Store, Building2
 } from "lucide-react";
 import { resolveProductImageUrl, handleProductImageError } from "@/lib/imageHelper";
 import { parseProductSpecs, formatSpecsForExport } from "@/lib/hardwareSpecs";
+import { apiUrl } from "@/lib/api";
 
 export default function ProductDetailsModal({
   product = null,
@@ -16,11 +18,46 @@ export default function ProductDetailsModal({
   onEdit = null
 }) {
   const [copied, setCopied] = useState(false);
+  const [branchStocks, setBranchStocks] = useState([]);
+  const [loadingStocks, setLoadingStocks] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || !product?.id) {
+      setBranchStocks([]);
+      return;
+    }
+
+    let isMounted = true;
+    const fetchBranchStock = async () => {
+      setLoadingStocks(true);
+      try {
+        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+        const res = await fetch(apiUrl(`/api/products/${product.id}/stock`), {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          setBranchStocks(Array.isArray(data) ? data : []);
+        }
+      } catch (e) {
+        console.error("Failed to load branch stocks:", e);
+      } finally {
+        if (isMounted) setLoadingStocks(false);
+      }
+    };
+
+    fetchBranchStock();
+    return () => { isMounted = false; };
+  }, [isOpen, product?.id]);
 
   if (!isOpen || !product) return null;
 
   const parsedSpecs = parseProductSpecs(product.specifications);
   const isObjectSpecs = typeof parsedSpecs === "object" && parsedSpecs !== null;
+
+  const totalStockCount = branchStocks.length > 0
+    ? branchStocks.reduce((sum, b) => sum + (Number(b.stock) || 0), 0)
+    : (product.stockSummary?.totalStock ?? product.available_quantity ?? 0);
 
   const handleCopySpecs = () => {
     const formatted = formatSpecsForExport(product.specifications);
@@ -111,28 +148,26 @@ export default function ProductDetailsModal({
 
         {/* Modal Body */}
         <div className="p-6 md:p-8 space-y-6 max-h-[60vh] overflow-y-auto custom-scrollbar">
-          {/* Quick Metrics: Price & Stock */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            <div className="p-4 rounded-2xl bg-brand-bgbase/40 border border-border/40">
+          {/* Quick Metrics: Unit Price, Selling Price & Available Stock Aligned */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-4 rounded-2xl bg-brand-bgbase/40 border border-border/40 flex flex-col justify-between">
+              <span className="text-[10px] font-black text-muted uppercase tracking-[2px] block mb-1">Unit Price</span>
+              <span className="text-xl font-rajdhani font-black text-main">
+                ₱{Number(product.last_purchase_price ?? product.unit_price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+            <div className="p-4 rounded-2xl bg-brand-bgbase/40 border border-border/40 flex flex-col justify-between">
               <span className="text-[10px] font-black text-muted uppercase tracking-[2px] block mb-1">Selling Price</span>
               <span className="text-xl font-rajdhani font-black text-brand-crimson">
-                ₱{Number(product.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ₱{Number(product.price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
-            <div className="p-4 rounded-2xl bg-brand-bgbase/40 border border-border/40">
+            <div className="p-4 rounded-2xl bg-brand-bgbase/40 border border-border/40 flex flex-col justify-between">
               <span className="text-[10px] font-black text-muted uppercase tracking-[2px] block mb-1">Available Stock</span>
               <span className="text-xl font-rajdhani font-black text-main">
-                {(product.stockSummary?.totalStock ?? product.available_quantity ?? 0).toLocaleString()} units
+                {totalStockCount.toLocaleString()} units
               </span>
             </div>
-            {product.last_purchase_price && (
-              <div className="p-4 rounded-2xl bg-brand-bgbase/40 border border-border/40 col-span-2 sm:col-span-1">
-                <span className="text-[10px] font-black text-muted uppercase tracking-[2px] block mb-1">Last Purchase Price</span>
-                <span className="text-xl font-rajdhani font-black text-muted">
-                  ₱{Number(product.last_purchase_price).toLocaleString()}
-                </span>
-              </div>
-            )}
           </div>
 
           {/* Description if present */}
@@ -144,6 +179,72 @@ export default function ProductDetailsModal({
               </p>
             </div>
           )}
+
+          {/* Branch Stock Breakdown Section */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-xs font-black uppercase tracking-[2px] text-main flex items-center gap-2">
+                <Store size={14} className="text-brand-neonblue" /> Branch Stock Availability
+              </h4>
+              <span className="text-[10px] font-mono text-muted uppercase tracking-wider">
+                {branchStocks.length > 0 ? `${branchStocks.length} Branches Tracked` : "Branch Breakdown"}
+              </span>
+            </div>
+
+            {loadingStocks ? (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="p-4 rounded-2xl bg-brand-bgbase/40 border border-border/40 animate-pulse h-20" />
+                ))}
+              </div>
+            ) : branchStocks.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {branchStocks.map(b => {
+                  const stockNum = Number(b.stock) || 0;
+                  const threshold = Number(b.low_stock_threshold) || 5;
+                  const isLow = stockNum > 0 && stockNum <= threshold;
+                  const isOut = stockNum === 0;
+                  const statusLabel = isOut ? "Out of Stock" : isLow ? "Low Stock" : "In Stock";
+                  const badgeStyle = isOut
+                    ? "bg-red-500/10 text-red-400 border-red-500/20"
+                    : isLow
+                    ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                    : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+
+                  return (
+                    <div
+                      key={b.branch_id}
+                      className="p-3.5 rounded-2xl bg-brand-bgbase/60 border border-border/40 flex flex-col justify-between hover:border-brand-neonblue/30 transition-all shadow-sm group"
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <span className="text-xs font-black font-rajdhani text-main uppercase tracking-wider group-hover:text-brand-neonblue transition-colors truncate">
+                          {b.branch_name}
+                        </span>
+                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border shrink-0 ${badgeStyle}`}>
+                          {statusLabel}
+                        </span>
+                      </div>
+                      <div className="flex items-baseline justify-between">
+                        <span className="text-2xl font-rajdhani font-black text-main">
+                          {stockNum.toLocaleString()}{" "}
+                          <span className="text-[11px] font-bold text-muted uppercase">units</span>
+                        </span>
+                        {b.price && (
+                          <span className="text-[11px] font-mono text-muted/80 font-bold" title="Branch Custom Price">
+                            ₱{Number(b.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="p-4 rounded-2xl border border-dashed border-border/40 text-center text-xs text-muted">
+                No branch inventory recorded for this product.
+              </div>
+            )}
+          </div>
 
           {/* Technical Specifications Section */}
           <div>
