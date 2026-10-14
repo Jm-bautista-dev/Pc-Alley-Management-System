@@ -433,7 +433,7 @@ export default function StockTransfersPage() {
   };
 
   // Complete / Receive Transfer (Only Destination Branch that receives the goods)
-  const handleCompleteTransfer = (transfer) => {
+  const handleCompleteTransfer = async (transfer) => {
     const isDestAdmin = currentUser?.role === "branch_admin" && currentUser.branch_id === transfer.toBranchId;
 
     if (!isDestAdmin) {
@@ -443,58 +443,62 @@ export default function StockTransfersPage() {
       );
     }
 
-    showConfirm(
+    const confirmed = await showConfirm(
       `Receive Transfer #${transfer.id}?`,
       `Are you sure you want to receive and accept this transfer into ${transfer.DestBranch?.name || "destination branch"}? Stock will be added to local inventory immediately.`,
-      async () => {
-        const token = localStorage.getItem("token");
-        try {
-          const res = await fetch(apiUrl(`/api/stock-transfers/${transfer.id}/complete`), {
-            method: "POST",
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          const data = await res.json();
-          if (!res.ok) {
-            throw new Error(data.message || data.error || "Failed to complete transfer.");
-          }
-          showSuccess("Transfer Received", "Stock has been received and added to inventory.");
-          if (selectedTransfer?.id === transfer.id) {
-            setSelectedTransfer(null);
-          }
-          fetchTransfers();
-        } catch (err) {
-          showError("Receipt Failed", err.message);
-        }
-      }
+      { confirmLabel: "Receive Stock" }
     );
+
+    if (!confirmed) return;
+
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(apiUrl(`/api/stock-transfers/${transfer.id}/complete`), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || data.error || "Failed to complete transfer.");
+      }
+      showSuccess("Transfer Received", "Stock has been received and added to inventory.");
+      if (selectedTransfer?.id === transfer.id) {
+        setSelectedTransfer(null);
+      }
+      fetchTransfers();
+    } catch (err) {
+      showError("Receipt Failed", err.message);
+    }
   };
 
   // Cancel Pending Transfer
-  const handleDeleteTransfer = (transfer) => {
-    showConfirm(
+  const handleDeleteTransfer = async (transfer) => {
+    const confirmed = await showConfirm(
       `Cancel Transfer #${transfer.id}?`,
       "Are you sure you want to cancel this pending stock transfer? This action cannot be undone.",
-      async () => {
-        const token = localStorage.getItem("token");
-        try {
-          const res = await fetch(apiUrl(`/api/stock-transfers/${transfer.id}`), {
-            method: "DELETE",
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          const data = await res.json();
-          if (!res.ok) {
-            throw new Error(data.message || data.error || "Failed to cancel transfer.");
-          }
-          showSuccess("Transfer Cancelled", "The pending stock transfer has been removed.");
-          if (selectedTransfer?.id === transfer.id) {
-            setSelectedTransfer(null);
-          }
-          fetchTransfers();
-        } catch (err) {
-          showError("Cancellation Failed", err.message);
-        }
-      }
+      { danger: true, confirmLabel: "Cancel Transfer" }
     );
+
+    if (!confirmed) return;
+
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(apiUrl(`/api/stock-transfers/${transfer.id}`), {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || data.error || "Failed to cancel transfer.");
+      }
+      showSuccess("Transfer Cancelled", "The pending stock transfer has been removed.");
+      if (selectedTransfer?.id === transfer.id) {
+        setSelectedTransfer(null);
+      }
+      fetchTransfers();
+    } catch (err) {
+      showError("Cancellation Failed", err.message);
+    }
   };
 
   // Filtered Transfers
