@@ -1093,7 +1093,7 @@ export default function StockTransfersPage() {
                   {/* Transfer Date Picker */}
                   <div className="pt-2 border-t border-border/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
-                      <label className="block text-[10px] font-black uppercase tracking-[2px] text-main/50 mb-1 flex items-center gap-1.5">
+                      <label className="text-[10px] font-black uppercase tracking-[2px] text-main/50 mb-1 flex items-center gap-1.5">
                         <Calendar size={12} className="text-brand-neonblue" />
                         <span>Transfer Date / Scheduled Delivery</span>
                       </label>

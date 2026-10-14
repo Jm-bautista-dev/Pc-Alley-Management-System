@@ -557,7 +557,7 @@ export default function ServiceJobsPage() {
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-black uppercase tracking-wider text-brand-muted mb-1.5 flex items-center justify-between">
+                      <label className="text-[10px] font-black uppercase tracking-wider text-brand-muted mb-1.5 flex items-center justify-between">
                         <span>Assigned Technician</span>
                         <span className="text-[9px] font-bold text-purple-400 lowercase">Staff member</span>
                       </label>
@@ -704,7 +704,7 @@ export default function ServiceJobsPage() {
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-black uppercase tracking-wider text-brand-muted mb-1.5 flex items-center justify-between">
+                      <label className="text-[10px] font-black uppercase tracking-wider text-brand-muted mb-1.5 flex items-center justify-between">
                         <span>Assigned Technician</span>
                         <span className="text-[9px] font-bold text-purple-400 lowercase">Staff member</span>
                       </label>
