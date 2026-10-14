@@ -1149,17 +1149,17 @@ export default function ProcurementPage() {
 
                 {/* Pagination Footer */}
                 {sortedInventory.length > limit && (
-                  <div className="flex items-center justify-between mt-4 px-2">
-                    <div className="text-sm text-muted">
-                      Showing {((currentPage - 1) * limit) + 1}–{Math.min(currentPage * limit, sortedInventory.length)} of {sortedInventory.length} items
-                    </div>
+                  <div className="mt-4 px-2">
                     <Pagination
                       currentPage={currentPage}
                       totalPages={totalPages}
+                      totalItems={sortedInventory.length}
+                      itemsPerPage={limit}
+                      onItemsPerPageChange={setLimit}
+                      itemsPerPageOptions={[10, 25, 50, 100]}
+                      itemLabel="items"
                       onPageChange={setCurrentPage}
-                      limit={limit}
-                      onLimitChange={setLimit}
-                      limits={[10,25,50,100]}
+                      className="py-2"
                     />
                   </div>
                 )}

@@ -257,7 +257,7 @@ export default function NotificationsPanel({ isOpen, onClose }) {
                               )}
 
                               {/* Mark read */}
-                              {!note.read && !isRestock && (
+                              {!note.read && (
                                 <button
                                   onClick={() => markAsRead(note.id)}
                                   className="h-7 px-3 rounded-lg border border-border text-xs font-medium text-muted hover:text-main hover:bg-brand-bgbase"
@@ -266,16 +266,14 @@ export default function NotificationsPanel({ isOpen, onClose }) {
                                 </button>
                               )}
 
-                              {/* Dismiss — always shown for admin/super_admin; shown for non-restock for staff */}
-                              {(currentUserRole === 'super_admin' || currentUserRole === 'branch_admin' || !isRestock) && (
-                                <button
-                                  onClick={() => removeNotification(note.id)}
-                                  className="h-7 px-2 rounded-lg text-xs text-muted hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-400/10 ml-auto"
-                                  title="Dismiss"
-                                >
-                                  <X size={12} />
-                                </button>
-                              )}
+                              {/* Dismiss */}
+                              <button
+                                onClick={() => removeNotification(note.id)}
+                                className="h-7 px-2 rounded-lg text-xs text-muted hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-400/10 ml-auto"
+                                title="Dismiss"
+                              >
+                                <X size={12} />
+                              </button>
                             </div>
                           </div>
                         </div>

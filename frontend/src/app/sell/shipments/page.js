@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { showSuccess, showError, showInfo, showWarning, showConfirm, showModal } from "@/context/ModalContext";
+import Pagination from "@/components/Pagination";
 
 const COURIERS = ["LBC Express", "J&T Express", "Ninja Van", "GrabExpress", "Lalamove", "2GO Express", "Flash Express", "In-House Delivery"];
 
@@ -270,14 +271,16 @@ export default function ShipmentsPage() {
               </table>
             </div>
             {totalPages > 1 && (
-              <div className="border-t border-border/50 p-4 flex items-center justify-between bg-brand-bgbase/20">
-                <span className="text-[10px] font-black uppercase tracking-widest text-muted">Page {currentPage} of {totalPages}</span>
-                <div className="flex gap-2">
-                  <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1}
-                    className="p-2 rounded-lg border border-border text-muted hover:text-main disabled:opacity-40 disabled:cursor-not-allowed transition-all"><ChevronLeft size={14} /></button>
-                  <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages}
-                    className="p-2 rounded-lg border border-border text-muted hover:text-main disabled:opacity-40 disabled:cursor-not-allowed transition-all"><ChevronRight size={14} /></button>
-                </div>
+              <div className="border-t border-border/50 p-4 bg-brand-bgbase/20">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  totalItems={filtered.length}
+                  itemsPerPage={limit}
+                  itemLabel="shipments"
+                  onPageChange={(p) => setCurrentPage(p)}
+                  className="py-1"
+                />
               </div>
             )}
           </motion.div>

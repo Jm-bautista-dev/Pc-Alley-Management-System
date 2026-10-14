@@ -146,26 +146,51 @@ export default function ProfitLossPage() {
     labels: trends.map(t => t.label || t.date),
     datasets: [
       {
-        label: 'Daily Revenue',
-        data: trends.map(t => t.revenue),
+        label: 'Total Revenue',
+        data: trends.map(t => Number(t.revenue || 0)),
         borderColor: '#00F2FF',
-        backgroundColor: 'rgba(0, 242, 255, 0.1)',
-        borderWidth: 3,
-        tension: 0.4,
+        backgroundColor: 'rgba(0, 242, 255, 0.08)',
+        borderWidth: 2.5,
+        tension: 0.35,
         fill: true,
         pointBackgroundColor: '#00F2FF',
-        pointRadius: 3,
+        pointRadius: 2.5,
         pointHoverRadius: 6,
       },
       {
-        label: 'Daily Expenses',
-        data: trends.map(t => t.expenses),
-        borderColor: '#EF4444',
-        backgroundColor: 'rgba(239, 68, 68, 0.05)',
+        label: 'Cost of Goods (COGS)',
+        data: trends.map(t => Number(t.cogs || 0)),
+        borderColor: '#F59E0B',
+        backgroundColor: 'rgba(245, 158, 11, 0.05)',
         borderWidth: 2,
-        tension: 0.4,
+        tension: 0.35,
         fill: false,
-        pointBackgroundColor: '#EF4444',
+        pointBackgroundColor: '#F59E0B',
+        pointRadius: 2,
+        pointHoverRadius: 5,
+      },
+      {
+        label: 'Gross Profit',
+        data: trends.map(t => Number(t.grossProfit !== undefined ? t.grossProfit : ((t.revenue || 0) - (t.cogs || 0)))),
+        borderColor: '#10B981',
+        backgroundColor: 'rgba(16, 185, 129, 0.05)',
+        borderWidth: 2,
+        tension: 0.35,
+        fill: false,
+        pointBackgroundColor: '#10B981',
+        pointRadius: 2,
+        pointHoverRadius: 5,
+      },
+      {
+        label: 'Net Income',
+        data: trends.map(t => Number(t.netIncome !== undefined ? t.netIncome : ((t.revenue || 0) - (t.cogs || 0) - (t.expenses || 0)))),
+        borderColor: '#8B5CF6',
+        backgroundColor: 'rgba(139, 92, 246, 0.05)',
+        borderWidth: 2,
+        borderDash: [5, 4],
+        tension: 0.35,
+        fill: false,
+        pointBackgroundColor: '#8B5CF6',
         pointRadius: 2,
         pointHoverRadius: 5,
       }
@@ -180,8 +205,12 @@ export default function ProfitLossPage() {
         display: true,
         position: 'top',
         labels: {
-          color: 'rgba(255, 255, 255, 0.7)',
-          font: { family: 'DM Sans', size: 11, weight: 'bold' }
+          color: 'rgba(255, 255, 255, 0.75)',
+          font: { family: 'DM Sans', size: 11, weight: 'bold' },
+          usePointStyle: true,
+          boxWidth: 8,
+          boxHeight: 8,
+          padding: 15
         }
       },
       tooltip: {
@@ -215,10 +244,10 @@ export default function ProfitLossPage() {
 
   const getChartTitle = () => {
     switch (periodFilter) {
-      case '30': return 'REVENUE & EXPENSE FLOW (30-DAY DAILY TELEMETRY)';
-      case '90': return 'REVENUE & EXPENSE FLOW (90-DAY DAILY TELEMETRY)';
-      case '365': return 'REVENUE & EXPENSE FLOW (365-DAY ANNUAL TELEMETRY)';
-      default: return 'REVENUE & EXPENSE FLOW (ALL-TIME TELEMETRY)';
+      case '30': return 'FINANCIAL PERFORMANCE FLOW (30-DAY TELEMETRY)';
+      case '90': return 'FINANCIAL PERFORMANCE FLOW (90-DAY TELEMETRY)';
+      case '365': return 'FINANCIAL PERFORMANCE FLOW (365-DAY ANNUAL TELEMETRY)';
+      default: return 'FINANCIAL PERFORMANCE FLOW (ALL-TIME TELEMETRY)';
     }
   };
 

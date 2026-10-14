@@ -28,6 +28,7 @@ import { apiUrl } from "@/lib/api";
 import { showSuccess, showError } from "@/context/ModalContext";
 import { exportToExcel } from "@/lib/excelExport";
 import { useTheme } from "@/context/ThemeContext";
+import Pagination from "@/components/Pagination";
 
 export default function CustomerWarrantiesPage() {
   const { theme } = useTheme();
@@ -454,30 +455,16 @@ export default function CustomerWarrantiesPage() {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="p-4 border-t border-border flex items-center justify-between text-xs text-muted">
-                <span>
-                  Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
-                  {Math.min(currentPage * itemsPerPage, filtered.length)} of {filtered.length} warranties
-                </span>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
-                    disabled={currentPage === 1}
-                    className="p-2 rounded-lg border border-border text-muted hover:text-main disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                  >
-                    <ChevronLeft size={14} />
-                  </button>
-                  <span className="px-3 font-bold text-main">
-                    {currentPage} / {totalPages}
-                  </span>
-                  <button
-                    onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
-                    disabled={currentPage === totalPages}
-                    className="p-2 rounded-lg border border-border text-muted hover:text-main disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                  >
-                    <ChevronRight size={14} />
-                  </button>
-                </div>
+              <div className="p-4 border-t border-border bg-brand-bgbase/20">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  totalItems={filtered.length}
+                  itemsPerPage={itemsPerPage}
+                  itemLabel="warranties"
+                  onPageChange={(p) => setCurrentPage(p)}
+                  className="py-1"
+                />
               </div>
             )}
           </motion.div>

@@ -3050,21 +3050,11 @@ export default function SalesPage() {
                     })()}
 
 
-                    <div className="flex justify-between">
-                      <span>VATable Sales</span>
-                      <span className="text-main font-bold">₱{vatableSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                    </div>
-
-                    <div className="flex justify-between">
-                      <span>{t[language].tax}</span>
-                      <span className="text-main font-bold">₱{tax.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                    </div>
                   </div>
 
                   <div className="flex justify-between items-baseline pt-2">
                     <div>
                       <span className="text-[10px] font-black uppercase tracking-widest text-brand-muted block">Total Due</span>
-                      <span className="text-[8px] font-bold text-brand-muted/70 uppercase tracking-wider">VAT-Inclusive</span>
                     </div>
                     <span className="text-2xl font-rajdhani font-black text-main tracking-wide">
                       ₱{grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

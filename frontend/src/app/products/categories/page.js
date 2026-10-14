@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { apiUrl } from "@/lib/api";
 import { showSuccess, showError, showConfirm } from "@/context/ModalContext";
 import { useTheme } from "@/context/ThemeContext";
+import Pagination from "@/components/Pagination";
 
 export default function CategoriesPage() {
   const { theme } = useTheme();
@@ -520,53 +521,20 @@ export default function CategoriesPage() {
                       </div>
 
                       {/* Pagination Controls */}
-                      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-border/30">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] uppercase font-black tracking-widest text-muted">Show</span>
-                          <select
-                            value={pageSize}
-                            onChange={(e) => setPageSize(Number(e.target.value))}
-                            className="bg-brand-bgbase border border-border/50 text-main rounded-lg px-2 py-1 text-xs font-bold outline-none focus:border-brand-neonblue cursor-pointer h-8"
-                          >
-                            <option value={10}>10</option>
-                            <option value={20}>20</option>
-                            <option value={30}>30</option>
-                          </select>
-                          <span className="text-xs text-muted font-bold ml-2">
-                            Showing {filteredCategories.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filteredCategories.length)} of {filteredCategories.length} entries
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
-                            disabled={currentPage === 1}
-                            className={`px-3 py-1.5 rounded-lg border border-border/50 text-xs font-bold transition-all uppercase tracking-wider ${
-                              currentPage === 1
-                                ? "text-muted/40 cursor-not-allowed border-border/20"
-                                : "text-muted hover:text-main hover:bg-brand-bgbase"
-                            }`}
-                          >
-                            Previous
-                          </button>
-                          <span className="text-xs text-muted font-bold px-2">
-                            Page {currentPage} of {totalPages || 1}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
-                            disabled={currentPage === totalPages || totalPages === 0}
-                            className={`px-3 py-1.5 rounded-lg border border-border/50 text-xs font-bold transition-all uppercase tracking-wider ${
-                              currentPage === totalPages || totalPages === 0
-                                ? "text-muted/40 cursor-not-allowed border-border/20"
-                                : "text-muted hover:text-main hover:bg-brand-bgbase"
-                            }`}
-                          >
-                            Next
-                          </button>
-                        </div>
-                      </div>
+                      <Pagination
+                        currentPage={currentPage}
+                        totalPages={totalPages || 1}
+                        totalItems={filteredCategories.length}
+                        itemsPerPage={pageSize}
+                        onItemsPerPageChange={(newSize) => {
+                          setPageSize(newSize);
+                          setCurrentPage(1);
+                        }}
+                        itemsPerPageOptions={[10, 20, 30, 50]}
+                        itemLabel="categories"
+                        onPageChange={(p) => setCurrentPage(p)}
+                        className="pt-4 border-t border-border/30"
+                      />
                     </div>
                   )}
                 </div>

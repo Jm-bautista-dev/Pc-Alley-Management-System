@@ -292,7 +292,7 @@ function AdminPageContent() {
                     className="btn-ghost h-9 px-4 rounded-full text-xs font-bold flex items-center gap-1.5"
                   >
                     <Users size={14} />
-                    <span>Manage in Personnel</span>
+                    <span>Manage in Accounts</span>
                   </motion.button>
                 </div>
               </div>

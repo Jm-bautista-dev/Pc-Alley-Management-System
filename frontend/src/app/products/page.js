@@ -31,6 +31,7 @@ import { apiUrl, handleSessionExpired } from "@/lib/api";
 import { resolveProductImageUrl, handleProductImageError } from "@/lib/imageHelper";
 import { showSuccess, showError, showInfo, showWarning, showConfirm, showModal } from "@/context/ModalContext";
 import ProductDetailsModal from "@/components/ProductDetailsModal";
+import Pagination from "@/components/Pagination";
 import { formatSpecsSummary, formatSpecsForExport } from "@/lib/hardwareSpecs";
 import { exportToExcel } from "@/lib/excelExport";
 
@@ -838,41 +839,18 @@ export default function ProductsPage() {
 
             {/* Pagination */}
             {!loading && totalPages > 1 && (
-              <div className="flex items-center justify-between mt-8 pb-8">
-                <p className="text-[10px] text-main/40 font-black uppercase tracking-widest">
-                  Page {page} of {totalPages} &bull; {totalItems} total items
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                    disabled={page <= 1}
-                    className="h-9 px-4 rounded-lg border border-border text-[11px] font-black uppercase tracking-widest text-main/60 hover:text-main hover:border-brand-neonblue/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                  >
-                    ← Prev
-                  </button>
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    const start = Math.max(1, page - 2);
-                    const p = start + i;
-                    if (p > totalPages) return null;
-                    return (
-                      <button
-                        key={p}
-                        onClick={() => setPage(p)}
-                        className={`h-9 w-9 rounded-lg border text-[11px] font-black transition-all ${p === page ? 'border-brand-neonblue/50 text-brand-neonblue bg-brand-neonblue/10' : 'border-border text-main/40 hover:text-main hover:border-brand-neonblue/30'}`}
-                      >
-                        {p}
-                      </button>
-                    );
-                  })}
-                  <button
-                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                    disabled={page >= totalPages}
-                    className="h-9 px-4 rounded-lg border border-border text-[11px] font-black uppercase tracking-widest text-main/60 hover:text-main hover:border-brand-neonblue/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                  >
-                    Next →
-                  </button>
-                </div>
-              </div>
+              <Pagination
+                currentPage={page}
+                totalPages={totalPages}
+                totalItems={totalItems}
+                itemsPerPage={LIMIT}
+                itemLabel="products"
+                onPageChange={(newPage) => {
+                  setPage(newPage);
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                className="mt-6 pb-8"
+              />
             )}
           </div>
         </div>

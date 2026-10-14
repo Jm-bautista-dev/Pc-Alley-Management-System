@@ -404,7 +404,7 @@ function PersonnelPageContent() {
       <Sidebar />
 
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        <TopBar title="PERSONNEL & BRANCHES" />
+        <TopBar title="ACCOUNTS & BRANCHES" />
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-10 custom-scrollbar relative z-10 bg-brand-bgbase text-main">
           {/* Header Action Section */}
@@ -417,10 +417,10 @@ function PersonnelPageContent() {
                 </span>
               </div>
               <h1 className="text-2xl md:text-3xl font-rajdhani font-black uppercase text-main tracking-wide">
-                Personnel Management
+                Account Management
               </h1>
               <p className="text-xs text-muted font-medium mt-1">
-                Browse branch personnel, view assigned Admin & Staff email addresses, and manage accounts.
+                Browse branch accounts, view assigned Admin & Staff email addresses, and manage accounts.
               </p>
             </div>
 
@@ -579,13 +579,13 @@ function PersonnelPageContent() {
             )}
           </div>
 
-          {/* Personnel Directory Overview Section */}
+          {/* Accounts Directory Overview Section */}
           <div className="bg-brand-surface border border-border rounded-2xl p-5 md:p-6 lg:p-8 shadow-sm">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
               <div className="flex items-center gap-3">
                 <div className="w-1 h-4 bg-brand-neonpurple rounded-full" />
                 <h2 className="text-sm font-rajdhani font-bold uppercase tracking-wider text-main">
-                  Personnel Directory
+                  Accounts Directory
                 </h2>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-main/5 text-muted">
                   {filteredUsers.length} {filteredUsers.length === 1 ? "Account" : "Accounts"}
@@ -652,7 +652,7 @@ function PersonnelPageContent() {
                         colSpan="5"
                         className="py-16 text-center text-[10px] font-black uppercase tracking-[4px] text-main/20 animate-pulse"
                       >
-                        Loading Personnel Directory...
+                        Loading Accounts Directory...
                       </td>
                     </tr>
                   ) : filteredUsers.length === 0 ? (
@@ -661,7 +661,7 @@ function PersonnelPageContent() {
                         colSpan="5"
                         className="py-16 text-center text-xs font-bold uppercase tracking-wider text-muted"
                       >
-                        No Personnel Found
+                        No Accounts Found
                       </td>
                     </tr>
                   ) : (
@@ -793,7 +793,7 @@ function PersonnelPageContent() {
                   <div className="flex items-center gap-2 mb-1.5">
                     <span className="w-2 h-2 rounded-full bg-brand-neonblue shadow-[0_0_8px_#00F2FF]" />
                     <span className="text-[10px] font-black uppercase tracking-[3px] text-brand-neonblue">
-                      Branch Personnel Roster
+                      Branch Accounts Roster
                     </span>
                   </div>
                   <h3 className="text-xl md:text-2xl font-rajdhani font-black uppercase text-main tracking-wider flex items-center gap-2.5">
@@ -988,7 +988,7 @@ function PersonnelPageContent() {
               {/* Modal Footer */}
               <div className="pt-4 border-t border-border/80 flex items-center justify-between">
                 <p className="text-[11px] text-muted font-medium">
-                  Total {currentModalBranchStats.admins.length + currentModalBranchStats.staff.length} personnel assigned to {selectedBranchForModal.name}
+                  Total {currentModalBranchStats.admins.length + currentModalBranchStats.staff.length} accounts assigned to {selectedBranchForModal.name}
                 </p>
               </div>
             </motion.div>

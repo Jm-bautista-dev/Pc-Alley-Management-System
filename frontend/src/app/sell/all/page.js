@@ -29,6 +29,7 @@ import { exportToExcel } from "@/lib/excelExport";
 import { useTheme } from "@/context/ThemeContext";
 import { apiUrl } from "@/lib/api";
 import { useAuthGuard } from "@/lib/useAuthGuard";
+import Pagination from "@/components/Pagination";
 
 // ─────────────────────────────────────────────────────────────────
 // Order Details Modal – uses shared ThermalReceiptModal for printing
@@ -755,29 +756,18 @@ export default function SalesLedgerPage() {
 
             {/* Pagination */}
             {totalPages > 0 && (
-              <div className="border-t border-border/50 p-4 flex flex-col sm:flex-row items-center justify-between gap-4 bg-brand-bgbase/30">
-                <span className="text-xs font-bold text-muted uppercase tracking-widest">
-                  Showing {filteredSales.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredSales.length)} of {filteredSales.length} Entries
-                </span>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                    disabled={currentPage === 1}
-                    className="px-4 py-2 rounded-lg bg-brand-surface border border-border/50 text-[10px] font-black uppercase tracking-widest text-muted hover:text-main hover:border-brand-neonblue/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Prev
-                  </button>
-                  <div className="flex gap-1 items-center px-2">
-                    <span className="text-[11px] font-black text-main">{currentPage} / {totalPages || 1}</span>
-                  </div>
-                  <button
-                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                    disabled={currentPage === totalPages || totalPages === 0}
-                    className="px-4 py-2 rounded-lg bg-brand-surface border border-border/50 text-[10px] font-black uppercase tracking-widest text-muted hover:text-main hover:border-brand-neonblue/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Next
-                  </button>
-                </div>
+              <div className="border-t border-border/50 p-4 bg-brand-bgbase/30">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  totalItems={filteredSales.length}
+                  itemsPerPage={itemsPerPage}
+                  itemLabel="sales"
+                  onPageChange={(p) => {
+                    setCurrentPage(p);
+                  }}
+                  className="py-1"
+                />
               </div>
             )}
           </div>

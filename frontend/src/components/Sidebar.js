@@ -35,7 +35,7 @@ const Sidebar = () => {
       "Procurement":     ["/purchases", "/admin/product-requests", "/products/my-requests"],
       "Reports":         ["/reports"],
       "Analytics":       ["/forecasting", "/prescriptive-analytics"],
-      "Personnel":       ["/personnel"],
+      "Account":         ["/personnel"],
       "Administration":  ["/staff", "/roles", "/admin"],
       "Staff":           ["/staff", "/roles"],
       "Our Staff":       ["/staff", "/roles"],
@@ -104,7 +104,7 @@ const Sidebar = () => {
           { title: "Sales Forecasting", path: "/forecasting" },
           { title: "Prescriptive Analytics", path: "/prescriptive-analytics" }
         ] },
-        { title: "Personnel",       icon: Users,           path: "/personnel",        group: "SYSTEM" },
+        { title: "Account",         icon: Users,           path: "/personnel",        group: "SYSTEM" },
         { title: "System Admin",    icon: ShieldCheck,     path: "/admin",            group: "SYSTEM" },
       ];
     }
@@ -141,7 +141,7 @@ const Sidebar = () => {
         { title: "Stock Requests", path: "/purchases/restock" }
       ] },
 
-      { title: "Personnel",       icon: Users,           path: "/personnel",        group: "SYSTEM" },
+      { title: "Account",         icon: Users,           path: "/personnel",        group: "SYSTEM" },
       { title: personnelTitle,    icon: UserPlus,        path: "#user-management",  group: "SYSTEM", subItems: [
         { title: "Staff Registry", path: "/staff" },
         { title: "Roles & Permissions", path: "/roles" }

@@ -126,7 +126,7 @@ export function NotificationProvider({ children }) {
 
   const markAllAsRead = async () => {
     // Optimistic update
-    setNotifications((prev) => prev.map((n) => n.type === 'restock_request' ? n : { ...n, read: true, is_read: true }));
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true, is_read: true })));
     const token = localStorage.getItem("token");
     try {
       await fetch(apiUrl("/api/notifications/read-all"), {
@@ -138,7 +138,7 @@ export function NotificationProvider({ children }) {
 
   const removeNotification = async (id) => {
     // Optimistic remove
-    setNotifications((prev) => prev.filter((n) => n.id !== id || n.type === 'restock_request'));
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
     if (String(id).startsWith("local-")) return;
     const token = localStorage.getItem("token");
     try {
@@ -150,7 +150,7 @@ export function NotificationProvider({ children }) {
   };
 
   const clearAll = async () => {
-    setNotifications((prev) => prev.filter(n => n.type === 'restock_request'));
+    setNotifications([]);
     const token = localStorage.getItem("token");
     try {
       await fetch(apiUrl("/api/notifications/clear-all"), {

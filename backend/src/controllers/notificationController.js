@@ -1,20 +1,38 @@
 const { Notification } = require('../models');
+const { Op } = require('sequelize');
+
+// Helper to determine what notifications a user can see
+const getRoleNotificationFilter = (user, query = {}) => {
+  if (user.role === 'super_admin') {
+    if (query.branchId) {
+      return { branchId: query.branchId };
+    }
+    // Super admin sees all notifications or notifications intended for super admin / all branches
+    return {};
+  }
+
+  // Branch Admin: sees notifications for their own branch or specifically assigned to their user
+  if (user.role === 'branch_admin') {
+    return {
+      [Op.or]: [
+        { branchId: user.branch_id },
+        { userId: user.id }
+      ]
+    };
+  }
+
+  // Staff (employee): sees notifications assigned to them or to their branch
+  return {
+    [Op.or]: [
+      { userId: user.id },
+      { branchId: user.branch_id }
+    ]
+  };
+};
 
 const getNotifications = async (req, res) => {
   try {
-    const where = {};
-    if (req.user.role === 'super_admin') {
-      if (req.query.branchId) {
-        where.branchId = req.query.branchId;
-      }
-    } else {
-      const { Op } = require('sequelize');
-      where.userId = req.user.id;
-      where[Op.or] = [
-        { branchId: req.user.branch_id },
-        { branchId: null }
-      ];
-    }
+    const where = getRoleNotificationFilter(req.user, req.query);
 
     const notifications = await Notification.findAll({
       where,
@@ -30,9 +48,13 @@ const getNotifications = async (req, res) => {
 const markRead = async (req, res) => {
   try {
     const { id } = req.params;
-    const notification = await Notification.findOne({
-      where: { id, userId: req.user.id }
-    });
+    const filter = getRoleNotificationFilter(req.user);
+    const where = {
+      id,
+      ...filter
+    };
+
+    const notification = await Notification.findOne({ where });
     if (!notification) return res.status(404).json({ message: 'Notification not found.' });
     notification.isRead = true;
     await notification.save();
@@ -44,9 +66,15 @@ const markRead = async (req, res) => {
 
 const markAllRead = async (req, res) => {
   try {
+    const filter = getRoleNotificationFilter(req.user);
+    const where = {
+      ...filter,
+      isRead: false
+    };
+
     await Notification.update(
       { isRead: true },
-      { where: { userId: req.user.id, isRead: false } }
+      { where }
     );
     res.json({ message: 'All notifications marked as read.' });
   } catch (error) {
@@ -57,20 +85,14 @@ const markAllRead = async (req, res) => {
 const deleteOne = async (req, res) => {
   try {
     const { id } = req.params;
-    const isAdmin = req.user.role === 'super_admin' || req.user.role === 'branch_admin';
-
-    // For admins, allow deletion of any notification (including restock_request)
-    const where = isAdmin
-      ? { id }
-      : { id, userId: req.user.id };
+    const filter = getRoleNotificationFilter(req.user);
+    const where = {
+      id,
+      ...filter
+    };
 
     const notification = await Notification.findOne({ where });
     if (!notification) return res.status(404).json({ message: 'Notification not found.' });
-
-    // Only block staff (employee) from dismissing pending restock_request notifications
-    if (!isAdmin && notification.type === 'restock_request') {
-      return res.status(400).json({ message: 'Pending restock requests cannot be dismissed. They must be approved or rejected.' });
-    }
 
     await notification.destroy();
     res.json({ message: 'Notification deleted.' });
@@ -81,18 +103,9 @@ const deleteOne = async (req, res) => {
 
 const clearAll = async (req, res) => {
   try {
-    const { Op } = require('sequelize');
-    const isAdmin = req.user.role === 'super_admin' || req.user.role === 'branch_admin';
-
-    const where = isAdmin
-      ? {} // Admins can clear all notifications, including restock_request
-      : {
-          userId: req.user.id,
-          type: { [Op.ne]: 'restock_request' } // Staff cannot clear pending restock notifications
-        };
-
-    await Notification.destroy({ where });
-    res.json({ message: 'All dismissible notifications cleared.' });
+    const filter = getRoleNotificationFilter(req.user);
+    await Notification.destroy({ where: filter });
+    res.json({ message: 'All notifications cleared.' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
