@@ -155,13 +155,25 @@ export default function StockTransfersPage() {
         });
         if (res.ok) {
           const raw = await res.json();
-          const items = (raw.data || []).map(row => ({
-            id: row.Product?.id || row.product_id,
-            name: row.Product?.name || `Product #${row.product_id}`,
-            sku: row.Product?.sku || "N/A",
-            available: row.quantity || 0,
-            image: row.Product?.image_url || row.Product?.product_image || null
-          })).filter(i => i.available > 0); // only show items with available stock
+          const items = (raw.data || []).map(row => {
+            const available = row.quantity || 0;
+            // Reserve buffer: low_stock_threshold or default 10 so branch never goes out of stock
+            const threshold = (row.low_stock_threshold !== undefined && row.low_stock_threshold !== null && row.low_stock_threshold > 0)
+              ? row.low_stock_threshold
+              : 10;
+            const reserveBuffer = Math.max(1, threshold);
+            const maxTransferable = Math.max(0, available - reserveBuffer);
+
+            return {
+              id: row.Product?.id || row.product_id,
+              name: row.Product?.name || `Product #${row.product_id}`,
+              sku: row.Product?.sku || "N/A",
+              available,
+              reserveBuffer,
+              maxTransferable,
+              image: row.Product?.image_url || row.Product?.product_image || null
+            };
+          }).filter(i => i.available > 0);
           setSourceInventory(items);
         }
       } catch (err) {
@@ -212,10 +224,16 @@ export default function StockTransfersPage() {
     if (!qty || qty <= 0) {
       return showError("Invalid Quantity", "Quantity must be at least 1 unit.");
     }
-    if (qty > selectedProduct.available) {
+    if (selectedProduct.maxTransferable <= 0) {
       return showError(
-        "Insufficient Stock",
-        `Only ${selectedProduct.available} units available in ${getSelectedSourceBranchName()}.`
+        "Cannot Transfer Item",
+        `"${selectedProduct.name}" only has ${selectedProduct.available} units in stock, which is at or below the safety reserve buffer (${selectedProduct.reserveBuffer} units). Transferring this item would leave ${getSelectedSourceBranchName()} out of stock.`
+      );
+    }
+    if (qty > selectedProduct.maxTransferable) {
+      return showError(
+        "Exceeds Transferable Stock",
+        `Only ${selectedProduct.maxTransferable} units can be transferred for "${selectedProduct.name}". The source branch (${getSelectedSourceBranchName()}) must retain at least ${selectedProduct.reserveBuffer} units as a safety reserve so it does not run out of stock (available: ${selectedProduct.available}).`
       );
     }
 
@@ -224,10 +242,10 @@ export default function StockTransfersPage() {
     if (existingIndex >= 0) {
       const updated = [...transferItems];
       const newQty = updated[existingIndex].quantity + qty;
-      if (newQty > selectedProduct.available) {
+      if (newQty > selectedProduct.maxTransferable) {
         return showError(
-          "Insufficient Stock",
-          `Total quantity (${newQty}) exceeds available stock (${selectedProduct.available}).`
+          "Exceeds Transferable Stock",
+          `Total transfer quantity (${newQty}) exceeds the maximum transferable limit (${selectedProduct.maxTransferable} units). Source branch must retain at least ${selectedProduct.reserveBuffer} units.`
         );
       }
       updated[existingIndex].quantity = newQty;
@@ -240,6 +258,8 @@ export default function StockTransfersPage() {
           name: selectedProduct.name,
           sku: selectedProduct.sku,
           available: selectedProduct.available,
+          reserveBuffer: selectedProduct.reserveBuffer,
+          maxTransferable: selectedProduct.maxTransferable,
           quantity: qty
         }
       ]);
@@ -879,80 +899,154 @@ export default function StockTransfersPage() {
                     </p>
                   ) : (
                     <div className="space-y-3">
-                      {/* Product Selector Dropdown */}
+                      {/* Search Filter Box */}
                       <div className="relative">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-main/40" />
                         <input
                           type="text"
                           value={productSearch}
-                          onChange={e => {
-                            setProductSearch(e.target.value);
-                            setSelectedProduct(null);
-                          }}
-                          placeholder="Search product name or SKU in source branch..."
-                          className="w-full px-3 py-2 bg-brand-surface border border-border rounded-xl text-xs text-main placeholder:text-main/30 focus:outline-none focus:border-brand-neonblue transition-colors"
+                          onChange={e => setProductSearch(e.target.value)}
+                          placeholder="Search product name or SKU to filter dropdown..."
+                          className="w-full pl-9 pr-3 py-2 bg-brand-surface border border-border rounded-xl text-xs text-main placeholder:text-main/30 focus:outline-none focus:border-brand-neonblue transition-colors"
                         />
-
-                        {/* Search Suggestions */}
-                        {productSearch && !selectedProduct && (
-                          <div className="absolute top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-brand-surface border border-border rounded-xl shadow-xl z-20 divide-y divide-border/50 custom-scrollbar">
-                            {availableProductOptions.length === 0 ? (
-                              <p className="p-3 text-xs text-main/40 text-center">No matching products found.</p>
-                            ) : (
-                              availableProductOptions.map(prod => (
-                                <div
-                                  key={prod.id}
-                                  onClick={() => {
-                                    setSelectedProduct(prod);
-                                    setProductSearch(`${prod.name} (${prod.sku})`);
-                                  }}
-                                  className="p-2.5 hover:bg-main/5 cursor-pointer flex items-center justify-between text-xs transition-colors"
-                                >
-                                  <div>
-                                    <p className="font-semibold text-main">{prod.name}</p>
-                                    <p className="text-[10px] text-main/40 font-mono">SKU: {prod.sku}</p>
-                                  </div>
-                                  <span className="px-2 py-0.5 rounded bg-brand-neonblue/10 text-brand-neonblue font-mono font-bold text-[10px]">
-                                    {prod.available} in stock
-                                  </span>
-                                </div>
-                              ))
-                            )}
-                          </div>
-                        )}
                       </div>
 
-                      {/* Selected Item Detail & Quantity Input */}
+                      {/* Product Selector Dropdown */}
+                      <div>
+                        <select
+                          value={selectedProduct ? String(selectedProduct.id) : ""}
+                          onChange={e => {
+                            const found = sourceInventory.find(p => String(p.id) === e.target.value);
+                            setSelectedProduct(found || null);
+                            if (found) {
+                              setItemQuantity(found.maxTransferable > 0 ? 1 : 0);
+                            }
+                          }}
+                          className="w-full px-3 py-2.5 rounded-xl bg-brand-surface border border-border text-xs text-main focus:outline-none focus:border-brand-neonblue transition-colors cursor-pointer"
+                        >
+                          <option value="">-- Choose product to transfer ({availableProductOptions.length} products listed) --</option>
+                          {availableProductOptions.map(prod => (
+                            <option key={prod.id} value={String(prod.id)}>
+                              [{prod.sku}] {prod.name} — Stock: {prod.available} | Max Transfer: {prod.maxTransferable} {prod.maxTransferable === 0 ? "(Zero Transferable - Below Reserve)" : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Selected Item Stock & Validation Card */}
                       {selectedProduct && (
-                        <div className="flex flex-col sm:flex-row items-center gap-3 p-3 rounded-xl bg-brand-surface border border-brand-neonblue/30">
-                          <div className="flex-1 w-full">
-                            <p className="text-xs font-bold text-main">{selectedProduct.name}</p>
-                            <p className="text-[10px] text-main/50 font-mono">
-                              SKU: {selectedProduct.sku} • Available: <strong className="text-brand-neonblue">{selectedProduct.available}</strong>
-                            </p>
-                          </div>
-
-                          <div className="flex items-center gap-2 w-full sm:w-auto">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[10px] text-main/50 uppercase font-mono">Qty:</span>
-                              <input
-                                type="number"
-                                min={1}
-                                max={selectedProduct.available}
-                                value={itemQuantity}
-                                onChange={e => setItemQuantity(Math.max(1, parseInt(e.target.value || "1", 10)))}
-                                className="w-20 px-2 py-1.5 bg-brand-bgbase border border-border rounded-lg text-xs font-mono text-center text-main focus:outline-none focus:border-brand-neonblue"
-                              />
+                        <div className="p-4 rounded-xl bg-brand-surface border border-brand-neonblue/30 space-y-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/50 pb-2">
+                            <div>
+                              <p className="text-sm font-bold text-main">{selectedProduct.name}</p>
+                              <p className="text-[10px] text-main/50 font-mono">SKU: {selectedProduct.sku}</p>
                             </div>
-
-                            <button
-                              type="button"
-                              onClick={handleAddItem}
-                              className="px-3 py-1.5 rounded-lg bg-brand-neonblue text-black font-rajdhani font-bold text-xs uppercase tracking-wider hover:opacity-90 transition-all flex items-center gap-1"
-                            >
-                              <Plus size={14} className="stroke-[3]" />
-                              <span>Add</span>
-                            </button>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-main/5 text-main/60 self-start sm:self-auto">
+                              Source: {getSelectedSourceBranchName()}
+                            </span>
                           </div>
+
+                          {/* 3 Metric Badges: Available, Safety Reserve, Max Transferable */}
+                          <div className="grid grid-cols-3 gap-2 text-center">
+                            <div className="p-2.5 rounded-lg bg-main/5 border border-border">
+                              <p className="text-[9px] uppercase font-mono text-main/50 mb-0.5">Available Stock</p>
+                              <p className="text-base font-rajdhani font-black text-main">{selectedProduct.available} units</p>
+                            </div>
+                            <div className="p-2.5 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                              <p className="text-[9px] uppercase font-mono text-yellow-500/80 mb-0.5">Safety Reserve</p>
+                              <p className="text-base font-rajdhani font-black text-yellow-500">{selectedProduct.reserveBuffer} units</p>
+                              <p className="text-[8px] text-yellow-500/60 font-mono">Keeps branch in stock</p>
+                            </div>
+                            <div className="p-2.5 rounded-lg bg-brand-neonblue/10 border border-brand-neonblue/20">
+                              <p className="text-[9px] uppercase font-mono text-brand-neonblue/80 mb-0.5">Max Transferable</p>
+                              <p className="text-base font-rajdhani font-black text-brand-neonblue">{selectedProduct.maxTransferable} units</p>
+                              <p className="text-[8px] text-brand-neonblue/60 font-mono">Max allowable limit</p>
+                            </div>
+                          </div>
+
+                          {/* Zero Transferable Warning */}
+                          {selectedProduct.maxTransferable <= 0 ? (
+                            <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-yellow-500 text-xs flex items-center gap-2">
+                              <AlertTriangle size={15} className="shrink-0" />
+                              <span>
+                                <strong>Transfer Restricted:</strong> Current stock ({selectedProduct.available} units) is at or below the safety reserve buffer ({selectedProduct.reserveBuffer} units). Transferring this product would cause {getSelectedSourceBranchName()} to go out of stock.
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="space-y-2 pt-1">
+                              <div className="flex flex-col sm:flex-row items-center gap-3">
+                                <span className="text-xs font-semibold text-main/70 shrink-0">Transfer Quantity:</span>
+
+                                <div className="flex items-center gap-1.5 w-full sm:w-auto">
+                                  <button
+                                    type="button"
+                                    onClick={() => setItemQuantity(q => Math.max(1, q - 1))}
+                                    className="w-8 h-8 rounded-lg bg-brand-bgbase border border-border text-main hover:bg-main/5 flex items-center justify-center font-bold"
+                                  >
+                                    -
+                                  </button>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    max={selectedProduct.maxTransferable}
+                                    value={itemQuantity}
+                                    onChange={e => setItemQuantity(parseInt(e.target.value || "0", 10))}
+                                    className={`w-20 px-2 py-1.5 bg-brand-bgbase border rounded-lg text-xs font-mono text-center text-main focus:outline-none ${
+                                      itemQuantity > selectedProduct.maxTransferable || itemQuantity <= 0
+                                        ? "border-brand-crimson text-brand-crimson"
+                                        : "border-border focus:border-brand-neonblue"
+                                    }`}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => setItemQuantity(q => Math.min(selectedProduct.maxTransferable, q + 1))}
+                                    className="w-8 h-8 rounded-lg bg-brand-bgbase border border-border text-main hover:bg-main/5 flex items-center justify-center font-bold"
+                                  >
+                                    +
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => setItemQuantity(selectedProduct.maxTransferable)}
+                                    className="px-2.5 py-1.5 rounded-lg bg-brand-neonblue/10 hover:bg-brand-neonblue/20 text-brand-neonblue border border-brand-neonblue/30 text-[10px] font-mono font-bold uppercase transition-colors"
+                                  >
+                                    MAX ({selectedProduct.maxTransferable})
+                                  </button>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={handleAddItem}
+                                  disabled={itemQuantity <= 0 || itemQuantity > selectedProduct.maxTransferable}
+                                  className="w-full sm:w-auto sm:ml-auto px-4 py-2 rounded-xl bg-brand-neonblue disabled:opacity-30 disabled:cursor-not-allowed text-black font-rajdhani font-bold text-xs uppercase tracking-wider hover:opacity-90 transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                                >
+                                  <Plus size={14} className="stroke-[3]" />
+                                  <span>Add Item</span>
+                                </button>
+                              </div>
+
+                              {/* Realtime Live Validation Feedback */}
+                              {itemQuantity > selectedProduct.maxTransferable ? (
+                                <p className="text-[11px] text-brand-crimson font-semibold flex items-center gap-1.5 bg-brand-crimson/10 border border-brand-crimson/20 p-2 rounded-lg">
+                                  <AlertTriangle size={14} className="shrink-0" />
+                                  <span>
+                                    Exceeds limit! Only <strong>{selectedProduct.maxTransferable} units</strong> can be transferred. {getSelectedSourceBranchName()} must keep a safety reserve of <strong>{selectedProduct.reserveBuffer} units</strong> to not go out of stock.
+                                  </span>
+                                </p>
+                              ) : itemQuantity > 0 ? (
+                                <p className="text-[11px] text-green-500 flex items-center gap-1.5 font-mono">
+                                  <Check size={13} className="stroke-[3]" />
+                                  <span>
+                                    {selectedProduct.available - itemQuantity} units will remain in {getSelectedSourceBranchName()} (Safe & In Stock).
+                                  </span>
+                                </p>
+                              ) : (
+                                <p className="text-[11px] text-main/40 font-mono">
+                                  Enter a transfer quantity between 1 and {selectedProduct.maxTransferable} units.
+                                </p>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -972,12 +1066,19 @@ export default function StockTransfersPage() {
                           <div key={item.productId} className="p-2.5 flex items-center justify-between text-xs">
                             <div className="flex-1 pr-2">
                               <p className="font-semibold text-main truncate max-w-xs">{item.name}</p>
-                              <p className="text-[10px] text-main/40 font-mono">SKU: {item.sku}</p>
+                              <p className="text-[10px] text-main/40 font-mono">
+                                SKU: {item.sku} • Stock: {item.available} units (Reserve: {item.reserveBuffer})
+                              </p>
                             </div>
                             <div className="flex items-center gap-3">
-                              <span className="font-mono font-bold text-brand-neonblue">
-                                {item.quantity} {item.quantity === 1 ? "unit" : "units"}
-                              </span>
+                              <div className="text-right">
+                                <span className="font-mono font-bold text-brand-neonblue">
+                                  {item.quantity} {item.quantity === 1 ? "unit" : "units"}
+                                </span>
+                                <p className="text-[10px] text-green-500 font-mono">
+                                  {item.available - item.quantity} remaining
+                                </p>
+                              </div>
                               <button
                                 type="button"
                                 onClick={() => handleRemoveItem(item.productId)}
