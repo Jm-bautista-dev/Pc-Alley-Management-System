@@ -17,7 +17,11 @@ import {
   X,
   AlertCircle,
   Archive,
-  Ban
+  Ban,
+  Calendar,
+  Clock,
+  Package,
+  ShieldCheck
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiUrl } from "@/lib/api";
@@ -619,22 +623,75 @@ export default function QuotationsPage() {
               className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-lg bg-brand-surface border border-border rounded-[32px] p-8 relative z-10 shadow-2xl">
-              <div className="flex justify-between items-start mb-6">
+              className="w-full max-w-lg bg-brand-surface border border-border rounded-[32px] p-6 sm:p-8 relative z-10 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
+              
+              {/* Warranty Header & Badges */}
+              <div className="flex justify-between items-start mb-5 pb-4 border-b border-border/40">
                 <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <p className="text-[10px] font-black uppercase tracking-[3px] text-brand-neonblue">Warranty</p>
-                    <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border ${STATUS_STYLE[viewQuote.status] || STATUS_STYLE.Draft}`}>
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <span className="px-2.5 py-0.5 rounded-full text-[9px] font-mono font-black uppercase tracking-wider bg-brand-neonblue/10 text-brand-neonblue border border-brand-neonblue/20">
+                      WRN-#{String(viewQuote.id).slice(-6).toUpperCase()}
+                    </span>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${STATUS_STYLE[viewQuote.status] || STATUS_STYLE.Draft}`}>
                       {viewQuote.status}
                     </span>
+                    {viewQuote.valid_until && (
+                      <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${
+                        new Date(viewQuote.valid_until) < new Date()
+                          ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                          : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                      }`}>
+                        {new Date(viewQuote.valid_until) < new Date() ? 'Coverage Expired' : 'Active Coverage'}
+                      </span>
+                    )}
                   </div>
-                  <h3 className="text-xl font-rajdhani font-black uppercase">{viewQuote.customer_name}</h3>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-muted/60 mb-0.5">Registered Customer</p>
+                  <h3 className="text-xl font-rajdhani font-black uppercase text-main leading-tight truncate max-w-sm" title={viewQuote.customer_name}>
+                    {viewQuote.customer_name}
+                  </h3>
                 </div>
-                <button onClick={() => setViewQuote(null)} className="p-2 text-muted hover:text-main transition-colors"><X size={18} /></button>
+                <button onClick={() => setViewQuote(null)} className="p-2 text-muted hover:text-main rounded-xl hover:bg-brand-bgbase transition-colors cursor-pointer" aria-label="Close">
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Warranty Coverage & Dates Grid */}
+              <div className="grid grid-cols-2 gap-3 mb-5 p-4 rounded-2xl bg-brand-bgbase/60 border border-border/40">
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-wider text-muted flex items-center gap-1.5 mb-1">
+                    <Calendar size={12} className="text-brand-neonblue" /> Coverage Valid Until
+                  </p>
+                  <p className="text-sm font-rajdhani font-black text-main">
+                    {viewQuote.valid_until
+                      ? new Date(viewQuote.valid_until).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })
+                      : "7-Day Standard Coverage"}
+                  </p>
+                  {viewQuote.valid_until && (
+                    <p className={`text-[10px] font-bold mt-0.5 ${
+                      new Date(viewQuote.valid_until) < new Date() ? 'text-red-400' : 'text-emerald-400'
+                    }`}>
+                      {Math.ceil((new Date(viewQuote.valid_until) - new Date()) / (1000 * 60 * 60 * 24)) > 0
+                        ? `${Math.ceil((new Date(viewQuote.valid_until) - new Date()) / (1000 * 60 * 60 * 24))} days remaining`
+                        : 'Warranty Expired'}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-wider text-muted flex items-center gap-1.5 mb-1">
+                    <Clock size={12} className="text-brand-neonblue" /> Date Issued
+                  </p>
+                  <p className="text-sm font-rajdhani font-bold text-main">
+                    {viewQuote.createdAt
+                      ? new Date(viewQuote.createdAt).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })
+                      : new Date().toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}
+                  </p>
+                  <p className="text-[10px] text-muted/60 font-medium mt-0.5">PC Alley Official Record</p>
+                </div>
               </div>
 
               {viewQuote.status === 'Void' && (
-                <div className="mb-6 p-4 rounded-2xl bg-brand-crimson/10 border border-brand-crimson/30 text-brand-crimson">
+                <div className="mb-5 p-4 rounded-2xl bg-brand-crimson/10 border border-brand-crimson/30 text-brand-crimson">
                   <div className="flex items-center gap-2 mb-1.5">
                     <Ban size={16} className="shrink-0" />
                     <span className="text-xs font-black uppercase tracking-wider">Warranty Voided</span>
@@ -656,25 +713,59 @@ export default function QuotationsPage() {
                 </div>
               )}
 
-              <div className="space-y-3 mb-6">
-                {viewQuote.items.map((item, i) => (
-                  <div key={i} className="flex justify-between items-center p-3 rounded-xl bg-brand-bgbase/50 border border-border/30">
-                    <div>
-                      <p className="text-sm font-bold text-main">{item.product_name || "Product"}</p>
-                      <p className="text-[10px] text-muted font-bold">Qty: {item.quantity} × ₱{item.unit_price.toLocaleString()}</p>
+              {/* Covered Products List */}
+              <div className="mb-5">
+                <p className="text-[10px] font-black uppercase tracking-[2px] text-muted/60 mb-2.5 flex items-center gap-1.5">
+                  <Package size={12} /> Covered Products ({viewQuote.items?.length || 0})
+                </p>
+                <div className="space-y-2.5">
+                  {viewQuote.items.map((item, i) => (
+                    <div key={i} className="flex justify-between items-center p-3.5 rounded-2xl bg-brand-bgbase/50 border border-border/30 hover:border-brand-neonblue/20 transition-colors">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-brand-surface border border-border/50 flex items-center justify-center text-brand-neonblue shrink-0">
+                          <Package size={14} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-main truncate" title={item.product_name}>
+                            {item.product_name || "Product"}
+                          </p>
+                          <p className="text-[10px] text-muted font-mono font-bold">
+                            Qty: {item.quantity} × ₱{parseFloat(item.unit_price || 0).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="font-black text-main font-rajdhani text-sm shrink-0">
+                        ₱{(item.quantity * item.unit_price).toLocaleString()}
+                      </p>
                     </div>
-                    <p className="font-black text-main">₱{(item.quantity * item.unit_price).toLocaleString()}</p>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
+
+              {/* Total Covered Amount */}
               <div className="border-t border-border/50 pt-4 flex justify-between items-center">
-                <span className="text-xs font-black uppercase tracking-widest text-muted">Total</span>
-                <span className="text-2xl font-rajdhani font-black text-main">₱{viewQuote.subtotal.toLocaleString()}</span>
+                <div>
+                  <span className="text-xs font-black uppercase tracking-widest text-muted block">Total Covered Value</span>
+                  <span className="text-[9px] text-muted/50">Replacement / Service Valuation</span>
+                </div>
+                <span className="text-2xl font-rajdhani font-black text-brand-neonblue">
+                  ₱{parseFloat(viewQuote.subtotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
               </div>
+
+              {/* Serial Number & Remarks Section */}
               {viewQuote.note && (
-                <p className="mt-4 text-xs text-muted bg-brand-bgbase/50 rounded-xl p-3 border border-border/30">{viewQuote.note}</p>
+                <div className="mt-4 p-3.5 rounded-2xl bg-brand-bgbase/60 border border-border/40">
+                  <p className="text-[9px] font-black uppercase tracking-wider text-muted flex items-center gap-1 mb-1">
+                    <ShieldCheck size={11} className="text-brand-neonblue" /> Serial Numbers / Claim Remarks
+                  </p>
+                  <p className="text-xs font-mono text-main bg-brand-surface/70 p-2.5 rounded-xl border border-border/30 select-all">
+                    {viewQuote.note}
+                  </p>
+                </div>
               )}
-              <button onClick={() => window.print()} className="mt-6 w-full py-3 bg-brand-bgbase border border-border rounded-full text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 text-muted hover:text-main transition-all">
+
+              <button onClick={() => window.print()} className="mt-5 w-full py-3 bg-brand-bgbase hover:bg-brand-surface border border-border rounded-full text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 text-muted hover:text-main transition-all cursor-pointer shadow-sm">
                 <Printer size={14} /> Print Warranty Details
               </button>
             </motion.div>
