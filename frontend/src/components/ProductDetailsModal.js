@@ -153,13 +153,19 @@ export default function ProductDetailsModal({
             <div className="p-4 rounded-2xl bg-brand-bgbase/40 border border-border/40 flex flex-col justify-between">
               <span className="text-[10px] font-black text-muted uppercase tracking-[2px] block mb-1">Unit Price</span>
               <span className="text-xl font-rajdhani font-black text-main">
-                ₱{Number(product.last_purchase_price ?? product.unit_price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ₱{(Number(product.last_purchase_price ?? product.unit_price ?? 0) > 0
+                  ? Number(product.last_purchase_price ?? product.unit_price)
+                  : ((Number(product.price ?? 0) > 0 ? Number(product.price) : (Number(branchStocks.find(b => Number(b.price) > 0)?.price) || 0)) * 0.75)
+                ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
             <div className="p-4 rounded-2xl bg-brand-bgbase/40 border border-border/40 flex flex-col justify-between">
               <span className="text-[10px] font-black text-muted uppercase tracking-[2px] block mb-1">Selling Price</span>
               <span className="text-xl font-rajdhani font-black text-brand-crimson">
-                ₱{Number(product.price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ₱{(Number(product.price ?? 0) > 0 
+                  ? Number(product.price) 
+                  : (Number(branchStocks.find(b => Number(b.price) > 0)?.price) || 0)
+                ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
             <div className="p-4 rounded-2xl bg-brand-bgbase/40 border border-border/40 flex flex-col justify-between">

@@ -149,6 +149,8 @@ export default function ProductsPage() {
         page: String(page),
         limit: String(LIMIT),
       });
+      if (debouncedSearch) inventoryParams.set("search", debouncedSearch);
+      if (selectedBrand && selectedBrand !== "All") inventoryParams.set("brand_id", selectedBrand);
       if (selectedBranch) inventoryParams.set("branch_id", selectedBranch);
 
       // Fetch both in parallel
@@ -246,15 +248,25 @@ export default function ProductsPage() {
   }, {});
 
   const scopedProducts = products
-    .map(product => ({
-      ...product,
-      stockSummary: stockByProductId[product.id] || {
+    .map(product => {
+      const summary = product.stockSummary || stockByProductId[product.id] || {
         totalStock: 0,
         branchStocks: {},
         lowStockThreshold: 5,
         hasInventoryRecord: false
-      }
-    }));
+      };
+      const displayStock = selectedBranch 
+        ? (summary.branchStocks?.[selectedBranch] ?? (stockByProductId[product.id]?.branchStocks?.[selectedBranch] || 0))
+        : (summary.totalStock ?? (stockByProductId[product.id]?.totalStock || 0));
+
+      return {
+        ...product,
+        stockSummary: {
+          ...summary,
+          totalStock: displayStock
+        }
+      };
+    });
 
   const selectedBranchName = selectedBranch
     ? branches.find(branch => String(branch.id) === String(selectedBranch))?.name || user?.branch_name || `Branch #${selectedBranch}`
@@ -792,11 +804,11 @@ export default function ProductsPage() {
                       <div className="text-right flex-shrink-0 flex items-center gap-6">
                         <div>
                           <p className="text-[9px] text-main/30 font-black uppercase tracking-[2px] mb-0.5">Unit Price</p>
-                          <p className="text-sm font-rajdhani font-black text-main/70">₱{Number(product.last_purchase_price || 0).toLocaleString()}</p>
+                          <p className="text-sm font-rajdhani font-black text-main/70">₱{Number(product.last_purchase_price || product.unit_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                         </div>
                         <div>
                           <p className="text-[9px] text-main/30 font-black uppercase tracking-[2px] mb-0.5">Selling Price</p>
-                          <p className="text-sm font-rajdhani font-black text-brand-crimson">₱{Number(product.price || 0).toLocaleString()}</p>
+                          <p className="text-sm font-rajdhani font-black text-brand-crimson">₱{Number(product.price || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                         </div>
                         <div>
                           <p className="text-[9px] text-main/30 font-black uppercase tracking-[2px] mb-0.5">

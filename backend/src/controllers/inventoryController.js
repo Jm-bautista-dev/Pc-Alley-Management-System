@@ -121,7 +121,13 @@ const updateStock = async (req, res) => {
           inv.quantity = parseInt(quantity);
         }
         if (low_stock_threshold !== undefined) inv.low_stock_threshold = parseInt(low_stock_threshold);
-        if (price !== undefined) inv.price = (price === null || price === "" || isNaN(price)) ? null : parseFloat(price);
+        if (price !== undefined) {
+          const parsedP = (price === null || price === "" || isNaN(price)) ? null : parseFloat(price);
+          inv.price = parsedP;
+          if (parsedP !== null && parsedP > 0) {
+            await Product.update({ price: parsedP }, { where: { id: product_id } }).catch(() => {});
+          }
+        }
         if (enabled !== undefined) inv.enabled = Boolean(enabled);
 
         await inv.save();
@@ -136,7 +142,13 @@ const updateStock = async (req, res) => {
 
     if (quantity !== undefined) inventory.quantity = quantity;
     if (low_stock_threshold !== undefined) inventory.low_stock_threshold = low_stock_threshold;
-    if (price !== undefined) inventory.price = price === null || price === "" ? null : parseFloat(price);
+    if (price !== undefined) {
+      const parsedP = price === null || price === "" ? null : parseFloat(price);
+      inventory.price = parsedP;
+      if (parsedP !== null && parsedP > 0) {
+        await Product.update({ price: parsedP }, { where: { id: product_id } }).catch(() => {});
+      }
+    }
     if (enabled !== undefined) inventory.enabled = enabled;
     
     await inventory.save();

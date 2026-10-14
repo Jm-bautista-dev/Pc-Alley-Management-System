@@ -1,4 +1,4 @@
-const { Product, Category, Brand, ProductBundle, Branch, Inventory } = require('../models');
+const { Product, Category, Brand, ProductBundle, Branch, Inventory, BranchProduct } = require('../models');
 const imageService = require('../services/imageService');
 const { getPaginationParams } = require('../utils/pagination');
 const { Op } = require('sequelize');
@@ -57,11 +57,45 @@ const getProducts = async (req, res) => {
       Category,
       Brand,
       {
+        model: BranchProduct,
+        include: [{ model: Branch }]
+      },
+      {
         model: Product,
         as: 'BundleItems',
         through: { attributes: ['quantity'] }
       }
     ];
+
+    const formatProductRow = (row) => {
+      const p = row.get ? row.get({ plain: true }) : row;
+      const branchProducts = p.BranchProducts || [];
+      const totalStock = branchProducts.reduce((sum, bp) => sum + (Number(bp.stock) || 0), 0);
+      
+      // If master price is 0 or null, check if any branch has a non-zero price set
+      let effectivePrice = p.price;
+      if (!effectivePrice || Number(effectivePrice) === 0) {
+        const pricedBranch = branchProducts.find(bp => bp.price && Number(bp.price) > 0);
+        if (pricedBranch) effectivePrice = pricedBranch.price;
+      }
+
+      // Branch stocks dictionary
+      const branchStocks = {};
+      branchProducts.forEach(bp => {
+        branchStocks[bp.branch_id] = Number(bp.stock) || 0;
+      });
+
+      return {
+        ...p,
+        price: effectivePrice,
+        stockSummary: {
+          totalStock,
+          branchStocks,
+          lowStockThreshold: branchProducts[0]?.low_stock_threshold || 5,
+          hasInventoryRecord: branchProducts.length > 0
+        }
+      };
+    };
 
     if (req.query.page || req.query.limit) {
       const { rows, count } = await Product.findAndCountAll({
@@ -73,7 +107,7 @@ const getProducts = async (req, res) => {
         distinct: true // Ensure count is correct when using associations
       });
       res.json({
-        data: rows,
+        data: rows.map(formatProductRow),
         pagination: {
           total: count,
           page,
@@ -88,7 +122,7 @@ const getProducts = async (req, res) => {
         include,
         order
       });
-      res.json(products);
+      res.json(products.map(formatProductRow));
     }
   } catch (error) {
     res.status(500).json({ error: error.message });
