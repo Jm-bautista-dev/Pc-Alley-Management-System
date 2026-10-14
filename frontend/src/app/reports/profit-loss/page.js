@@ -159,110 +159,61 @@ export default function ProfitLossPage() {
 
   const isMonthly = viewGranularity === 'monthly';
 
-  // Helper to calculate elevated visual values for linear scale so low-volume sales (> 0)
-  // create a clean visible elevation above 0 rather than flattening against the floor,
-  // while keeping tooltips and exact labels 100% faithful to the real revenue/cogs.
-  const computePlotData = (items, keyExtractor) => {
-    const rawValues = items.map(keyExtractor);
-    const positiveValues = rawValues.filter(v => Number(v || 0) > 0).map(v => Number(v));
-    const maxVal = positiveValues.length > 0 ? Math.max(...positiveValues) : 0;
-    
-    // In linear scale, if maxVal is huge (e.g., ₱9M), anything below 2% of maxVal
-    // (like ₱300 or ₱1,050) compresses into < 1px.
-    // We elevate values > 0 to have a perceptual minimum (3.5% of maxVal) visually,
-    // storing the exact actual value in rawValue for tooltips, legends, and callouts!
-    const minElevated = maxVal > 0 ? maxVal * 0.038 : 0;
-
-    return items.map((item, idx) => {
-      const actualVal = Number(keyExtractor(item) || 0);
-      let plotY = actualVal;
-
-      if (scaleType === 'logarithmic') {
-        plotY = actualVal > 0 ? actualVal : null;
-      } else if (actualVal > 0 && maxVal > 0 && actualVal < minElevated) {
-        // Apply smooth perceptual lift so small values arch visibly into a distinct peak
-        plotY = minElevated;
-      }
-
-      return {
-        x: idx,
-        y: plotY,
-        actual: actualVal
-      };
-    });
+  // Helper to sanitize positive values if in log scale so log(0) does not crash or clip
+  const toScaleValue = (val) => {
+    const num = Number(val || 0);
+    if (scaleType === 'logarithmic') {
+      return num > 0 ? num : null;
+    }
+    return num;
   };
 
   const activeDailyPoints = trends.filter(t => (t.revenue || 0) > 0).length;
-
-  const monthlyRevPoints = computePlotData(chronologicalMonthly, m => m.revenue);
-  const monthlyCogsPoints = computePlotData(chronologicalMonthly, m => m.cogs);
-  const monthlyGpPoints = computePlotData(chronologicalMonthly, m => 
-    m.grossProfit !== undefined ? m.grossProfit : ((m.revenue || 0) - (m.cogs || 0))
-  );
-
-  const dailyRevPoints = computePlotData(trends, t => t.revenue);
-  const dailyCogsPoints = computePlotData(trends, t => t.cogs);
-  const dailyGpPoints = computePlotData(trends, t => 
-    t.grossProfit !== undefined ? t.grossProfit : ((t.revenue || 0) - (t.cogs || 0))
-  );
 
   const chartData = isMonthly ? {
     labels: chronologicalMonthly.map(m => `${m.month.slice(0, 3)} '${String(m.year).slice(2)}`),
     datasets: [
       {
         label: 'Total Revenue',
-        data: monthlyRevPoints,
+        data: chronologicalMonthly.map(m => toScaleValue(m.revenue)),
         borderColor: '#00F2FF',
         backgroundColor: chartType === 'bar' ? 'rgba(0, 242, 255, 0.7)' : 'rgba(0, 242, 255, 0.08)',
         borderRadius: 4,
-        borderWidth: 2.5,
+        borderWidth: 2,
         tension: 0.35,
         fill: chartType !== 'bar',
-        minBarLength: 14,
-        pointBackgroundColor: (ctx) => {
-          const pt = ctx.raw;
-          const actual = pt?.actual ?? pt;
-          return actual > 0 && actual < 10000 ? '#FFFFFF' : '#00F2FF';
-        },
-        pointBorderColor: '#00F2FF',
-        pointBorderWidth: (ctx) => {
-          const pt = ctx.raw;
-          const actual = pt?.actual ?? pt;
-          return actual > 0 && actual < 10000 ? 3 : 1.5;
-        },
-        pointRadius: (ctx) => {
-          const pt = ctx.raw;
-          const actual = pt?.actual ?? pt;
-          if (!actual || actual <= 0) return 3;
-          if (actual < 10000) return 6.5; // Beacon dot for small sales like Jan & Mar!
-          return 5;
-        },
-        pointHoverRadius: 8,
+        minBarLength: 10,
+        pointBackgroundColor: '#00F2FF',
+        pointRadius: 4.5,
+        pointHoverRadius: 7,
       },
       {
         label: 'Cost of Goods (COGS)',
-        data: monthlyCogsPoints,
+        data: chronologicalMonthly.map(m => toScaleValue(m.cogs)),
         borderColor: '#F59E0B',
         backgroundColor: chartType === 'bar' ? 'rgba(245, 158, 11, 0.7)' : 'rgba(245, 158, 11, 0.05)',
         borderRadius: 4,
         borderWidth: 2,
         tension: 0.35,
         fill: false,
-        minBarLength: 14,
+        minBarLength: 10,
         pointBackgroundColor: '#F59E0B',
         pointRadius: 4,
         pointHoverRadius: 7,
       },
       {
         label: 'Gross Profit',
-        data: monthlyGpPoints,
+        data: chronologicalMonthly.map(m => {
+          const gp = m.grossProfit !== undefined ? m.grossProfit : ((m.revenue || 0) - (m.cogs || 0));
+          return toScaleValue(gp);
+        }),
         borderColor: '#10B981',
         backgroundColor: chartType === 'bar' ? 'rgba(16, 185, 129, 0.7)' : 'rgba(16, 185, 129, 0.05)',
         borderRadius: 4,
         borderWidth: 2,
         tension: 0.35,
         fill: false,
-        minBarLength: 14,
+        minBarLength: 10,
         pointBackgroundColor: '#10B981',
         pointRadius: 4,
         pointHoverRadius: 7,
@@ -273,131 +224,47 @@ export default function ProfitLossPage() {
     datasets: [
       {
         label: 'Total Revenue',
-        data: dailyRevPoints,
+        data: trends.map(t => toScaleValue(t.revenue)),
         borderColor: '#00F2FF',
         backgroundColor: 'rgba(0, 242, 255, 0.08)',
         borderWidth: 2.5,
         tension: 0.35,
         fill: true,
         spanGaps: scaleType === 'logarithmic',
-        // Distinct beacon marker for small sales days (< ₱5,000) like Jan & Mar!
-        pointRadius: (ctx) => {
-          const pt = ctx.raw;
-          const actual = pt?.actual ?? pt;
-          if (!actual || actual <= 0) return 0; // Clean baseline without point clutter
-          if (actual < 5000) return 6; // Beacon dot for small sales
-          return 3.5;
-        },
-        pointHoverRadius: 8,
-        pointBackgroundColor: (ctx) => {
-          const pt = ctx.raw;
-          const actual = pt?.actual ?? pt;
-          if (actual > 0 && actual < 5000) return '#FFFFFF';
-          return '#00F2FF';
-        },
-        pointBorderColor: '#00F2FF',
-        pointBorderWidth: (ctx) => {
-          const pt = ctx.raw;
-          const actual = pt?.actual ?? pt;
-          if (actual > 0 && actual < 5000) return 3;
-          return 1.5;
-        }
+        pointRadius: (ctx) => (Number(ctx.raw || 0) > 0 ? 3.5 : 0),
+        pointHoverRadius: 7,
+        pointBackgroundColor: '#00F2FF',
       },
       {
         label: 'Cost of Goods (COGS)',
-        data: dailyCogsPoints,
+        data: trends.map(t => toScaleValue(t.cogs)),
         borderColor: '#F59E0B',
         backgroundColor: 'rgba(245, 158, 11, 0.05)',
         borderWidth: 2,
         tension: 0.35,
         fill: false,
         spanGaps: scaleType === 'logarithmic',
-        pointRadius: (ctx) => {
-          const pt = ctx.raw;
-          const actual = pt?.actual ?? pt;
-          return actual > 0 ? 3 : 0;
-        },
+        pointRadius: (ctx) => (Number(ctx.raw || 0) > 0 ? 3 : 0),
         pointHoverRadius: 6,
         pointBackgroundColor: '#F59E0B',
       },
       {
         label: 'Gross Profit',
-        data: dailyGpPoints,
+        data: trends.map(t => {
+          const gp = t.grossProfit !== undefined ? t.grossProfit : ((t.revenue || 0) - (t.cogs || 0));
+          return toScaleValue(gp);
+        }),
         borderColor: '#10B981',
         backgroundColor: 'rgba(16, 185, 129, 0.05)',
         borderWidth: 2,
         tension: 0.35,
         fill: false,
         spanGaps: scaleType === 'logarithmic',
-        pointRadius: (ctx) => {
-          const pt = ctx.raw;
-          const actual = pt?.actual ?? pt;
-          return actual > 0 ? 3 : 0;
-        },
+        pointRadius: (ctx) => (Number(ctx.raw || 0) > 0 ? 3 : 0),
         pointHoverRadius: 6,
         pointBackgroundColor: '#10B981',
       }
     ]
-  };
-
-  // Custom Chart.js inline plugin to draw floating value tags on active points
-  const valueCalloutPlugin = {
-    id: 'valueCalloutPlugin',
-    afterDatasetsDraw(chart) {
-      if (chartType === 'bar' && isMonthly) return;
-      const { ctx } = chart;
-      const revenueDataset = chart.data.datasets[0];
-      const meta = chart.getDatasetMeta(0);
-      if (!meta || !meta.data) return;
-
-      meta.data.forEach((element, index) => {
-        const rawPt = revenueDataset.data[index];
-        const actualVal = rawPt?.actual ?? rawPt;
-        if (!actualVal || actualVal <= 0) return;
-
-        // Determine tag text
-        let tagText = '';
-        if (actualVal >= 1000000) {
-          tagText = `₱${(actualVal / 1000000).toFixed(2)}M`;
-        } else if (actualVal >= 1000) {
-          tagText = `₱${(actualVal / 1000).toLocaleString(undefined, { minimumFractionDigits: actualVal < 10000 ? 2 : 1, maximumFractionDigits: 2 })}k`;
-        } else {
-          tagText = `₱${actualVal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-        }
-
-        const isSmall = actualVal < 10000;
-        const x = element.x;
-        const y = element.y - (isSmall ? 16 : 14);
-
-        ctx.save();
-        ctx.font = 'bold 10px "DM Sans", sans-serif';
-        const textWidth = ctx.measureText(tagText).width;
-        const paddingX = 6;
-        const paddingY = 3;
-        const boxWidth = textWidth + paddingX * 2;
-        const boxHeight = 16;
-        const boxX = x - boxWidth / 2;
-        const boxY = y - boxHeight / 2;
-
-        // Draw pill background
-        ctx.fillStyle = isSmall ? 'rgba(0, 242, 255, 0.95)' : 'rgba(15, 23, 42, 0.88)';
-        ctx.beginPath();
-        ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 4);
-        ctx.fill();
-
-        // Draw pill border
-        ctx.strokeStyle = isSmall ? '#FFFFFF' : '#00F2FF';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-
-        // Draw text
-        ctx.fillStyle = isSmall ? '#0A0A0A' : '#00F2FF';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(tagText, x, y);
-        ctx.restore();
-      });
-    }
   };
 
   const chartOptions = {
@@ -428,12 +295,8 @@ export default function ProfitLossPage() {
         borderRadius: 8,
         callbacks: {
           label: (c) => {
-            const rawPt = c.raw;
-            // Always display the 100% faithful actual currency value!
-            const actual = rawPt?.actual !== undefined ? rawPt.actual : (c.parsed.y ?? 0);
-            const formatted = actual !== null && actual !== undefined 
-              ? Number(actual).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) 
-              : '0.00';
+            const val = c.parsed.y;
+            const formatted = val !== null && val !== undefined ? Number(val).toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00';
             return ` ${c.dataset.label}: ₱${formatted}`;
           }
         }
@@ -741,7 +604,7 @@ export default function ProfitLossPage() {
                   ) : chartType === 'bar' && isMonthly ? (
                     <Bar data={chartData} options={chartOptions} />
                   ) : (
-                    <Line data={chartData} options={chartOptions} plugins={[valueCalloutPlugin]} />
+                    <Line data={chartData} options={chartOptions} />
                   )}
                 </div>
               </motion.div>
