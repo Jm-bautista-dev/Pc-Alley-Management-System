@@ -27,6 +27,7 @@ router.post('/', [
   body('items').isArray({ min: 1 }).withMessage('Items array is required and cannot be empty.'),
   body('items.*.productId').isInt().withMessage('Product ID must be an integer.'),
   body('items.*.quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1.'),
+  body('transferDate').optional({ checkFalsy: true }).isString().trim(),
   body('notes').optional({ checkFalsy: true }).isString().trim(),
   body('autoReceive').optional().isBoolean(),
   validate

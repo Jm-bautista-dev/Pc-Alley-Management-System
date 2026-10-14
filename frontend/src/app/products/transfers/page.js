@@ -25,7 +25,9 @@ import {
   Check,
   FileText,
   Filter,
-  ShieldCheck
+  ShieldCheck,
+  Printer,
+  Calendar
 } from "lucide-react";
 import { apiUrl, handleSessionExpired } from "@/lib/api";
 import { showSuccess, showError, showWarning, showConfirm } from "@/context/ModalContext";
@@ -50,9 +52,14 @@ export default function StockTransfersPage() {
   const [selectedTransfer, setSelectedTransfer] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // Transmittal Slip Modal
+  const [transmittalData, setTransmittalData] = useState(null);
+  const [isTransmittalOpen, setIsTransmittalOpen] = useState(false);
+
   // Creation Form State
   const [fromBranchId, setFromBranchId] = useState("");
   const [toBranchId, setToBranchId] = useState("");
+  const [transferDate, setTransferDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [transferNotes, setTransferNotes] = useState("");
   const [autoReceive, setAutoReceive] = useState(false);
 
@@ -257,6 +264,7 @@ export default function StockTransfersPage() {
     }
     setTransferNotes("");
     setAutoReceive(false);
+    setTransferDate(new Date().toISOString().split("T")[0]);
     setTransferItems([]);
     setSelectedProduct(null);
     setItemQuantity(1);
@@ -331,11 +339,31 @@ export default function StockTransfersPage() {
     if (!fromBranchId || !toBranchId) {
       return showError("Branch Required", "Please select both source and destination branches.");
     }
-    if (fromBranchId === toBranchId) {
+    if (String(fromBranchId) === String(toBranchId)) {
       return showError("Invalid Route", "Source and destination branches cannot be the same.");
     }
-    if (transferItems.length === 0) {
-      return showError("No Products Added", "Please add at least one product to the transfer list.");
+
+    // Auto-include currently chosen product if transferItems list is empty
+    let itemsToSubmit = [...transferItems];
+    if (itemsToSubmit.length === 0 && selectedProduct) {
+      const qty = parseInt(itemQuantity, 10);
+      if (qty > 0 && qty <= selectedProduct.maxTransferable) {
+        itemsToSubmit = [
+          {
+            productId: selectedProduct.id,
+            name: selectedProduct.name,
+            sku: selectedProduct.sku,
+            available: selectedProduct.available,
+            reserveBuffer: selectedProduct.reserveBuffer,
+            maxTransferable: selectedProduct.maxTransferable,
+            quantity: qty
+          }
+        ];
+      }
+    }
+
+    if (itemsToSubmit.length === 0) {
+      return showError("No Products Added", "Please choose a product and enter quantity before dispatching.");
     }
 
     setSubmitting(true);
@@ -344,7 +372,8 @@ export default function StockTransfersPage() {
       const payload = {
         fromBranchId: parseInt(fromBranchId, 10),
         toBranchId: parseInt(toBranchId, 10),
-        items: transferItems.map(i => ({
+        transferDate: transferDate || new Date().toISOString().split("T")[0],
+        items: itemsToSubmit.map(i => ({
           productId: i.productId,
           quantity: i.quantity
         })),
@@ -370,9 +399,31 @@ export default function StockTransfersPage() {
         "Transfer Dispatched",
         autoReceive
           ? "Stock transfer completed and inventories updated successfully!"
-          : "Stock transfer dispatched. Awaiting confirmation from destination branch."
+          : "Stock transfer dispatched. Stock will remain in source branch until destination confirms receipt."
       );
+
+      // Prepare transmittal slip record
+      const fullRecord = data.transfer || data;
+      if (!fullRecord.SourceBranch) {
+        fullRecord.SourceBranch = branches.find(b => String(b.id) === String(fromBranchId));
+      }
+      if (!fullRecord.DestBranch) {
+        fullRecord.DestBranch = branches.find(b => String(b.id) === String(toBranchId));
+      }
+      if (!fullRecord.transferDate) {
+        fullRecord.transferDate = transferDate;
+      }
+      if (!fullRecord.StockTransferItems || fullRecord.StockTransferItems.length === 0) {
+        fullRecord.StockTransferItems = itemsToSubmit.map(item => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          Product: { id: item.productId, name: item.name, sku: item.sku }
+        }));
+      }
+
       setIsCreateModalOpen(false);
+      setTransmittalData(fullRecord);
+      setIsTransmittalOpen(true);
       fetchTransfers();
     } catch (err) {
       showError("Transfer Failed", err.message);
@@ -786,27 +837,46 @@ export default function StockTransfersPage() {
 
                           {/* Date */}
                           <td className="py-3.5 px-4 text-main/50 font-mono text-[11px]">
-                            {new Date(transfer.createdAt).toLocaleDateString("en-PH", {
-                              month: "short",
-                              day: "numeric",
-                              year: "numeric"
-                            })}
+                            {transfer.transferDate ? (
+                              <div>
+                                <span className="font-bold text-main/80">{transfer.transferDate}</span>
+                                <span className="block text-[9px] text-main/40 font-sans">Scheduled Date</span>
+                              </div>
+                            ) : (
+                              new Date(transfer.createdAt).toLocaleDateString("en-PH", {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric"
+                              })
+                            )}
                           </td>
 
                           {/* Actions */}
                           <td className="py-3.5 px-4 text-right">
                             <div className="flex items-center justify-end gap-1.5">
-                              {/* Receive Button */}
+                              {/* Receive & Confirm Delivery Button */}
                               {canReceive && (
                                 <button
                                   onClick={() => handleCompleteTransfer(transfer)}
-                                  className="px-2.5 py-1 rounded-lg bg-green-500/10 hover:bg-green-500/20 text-green-500 border border-green-500/30 text-[11px] font-bold transition-all flex items-center gap-1"
-                                  title="Receive & Accept Stock"
+                                  className="px-2.5 py-1 rounded-lg bg-green-500/10 hover:bg-green-500/20 text-green-500 border border-green-500/30 text-[11px] font-bold transition-all flex items-center gap-1 shadow-sm"
+                                  title="Confirm Delivery & Receive Stock"
                                 >
                                   <Check size={12} className="stroke-[3]" />
-                                  <span>Receive</span>
+                                  <span>Confirm Received</span>
                                 </button>
                               )}
+
+                              {/* Print Transmittal Slip */}
+                              <button
+                                onClick={() => {
+                                  setTransmittalData(transfer);
+                                  setIsTransmittalOpen(true);
+                                }}
+                                className="p-1.5 rounded-lg border border-border hover:bg-brand-neonblue/10 hover:border-brand-neonblue/30 text-main/60 hover:text-brand-neonblue transition-colors"
+                                title="Print Transmittal Slip"
+                              >
+                                <Printer size={14} />
+                              </button>
 
                               {/* View Details */}
                               <button
@@ -877,56 +947,76 @@ export default function StockTransfersPage() {
               {/* Modal Body */}
               <form onSubmit={handleSubmitTransfer} className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
 
-                {/* 1. Branch Routing Selector */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-brand-bgbase border border-border">
-                  {/* From Branch */}
-                  <div>
-                    <label className="block text-[10px] font-black uppercase tracking-[2px] text-main/50 mb-1.5">
-                      Source Branch (From)
-                    </label>
-                    {currentUser?.role === "branch_admin" ? (
-                      <div className="px-3 py-2 rounded-xl bg-brand-surface border border-border text-xs font-semibold text-main flex items-center justify-between">
-                        <span>{getSelectedSourceBranchName()}</span>
-                        <span className="text-[10px] text-brand-neonblue font-mono font-bold uppercase tracking-wider">
-                          Your Branch
-                        </span>
-                      </div>
-                    ) : (
+                {/* 1. Branch Routing & Schedule Selector */}
+                <div className="p-4 rounded-xl bg-brand-bgbase border border-border space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* From Branch */}
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-[2px] text-main/50 mb-1.5">
+                        Source Branch (From)
+                      </label>
+                      {currentUser?.role === "branch_admin" ? (
+                        <div className="px-3 py-2 rounded-xl bg-brand-surface border border-border text-xs font-semibold text-main flex items-center justify-between">
+                          <span>{getSelectedSourceBranchName()}</span>
+                          <span className="text-[10px] text-brand-neonblue font-mono font-bold uppercase tracking-wider">
+                            Your Branch
+                          </span>
+                        </div>
+                      ) : (
+                        <select
+                          value={fromBranchId}
+                          onChange={e => setFromBranchId(e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl bg-brand-surface border border-border text-xs text-main focus:outline-none focus:border-brand-neonblue transition-colors cursor-pointer"
+                          required
+                        >
+                          {branches.map(b => (
+                            <option key={b.id} value={String(b.id)}>
+                              {b.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+
+                    {/* To Branch */}
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-[2px] text-main/50 mb-1.5">
+                        Destination Branch (To)
+                      </label>
                       <select
-                        value={fromBranchId}
-                        onChange={e => setFromBranchId(e.target.value)}
+                        value={toBranchId}
+                        onChange={e => setToBranchId(e.target.value)}
                         className="w-full px-3 py-2 rounded-xl bg-brand-surface border border-border text-xs text-main focus:outline-none focus:border-brand-neonblue transition-colors cursor-pointer"
                         required
                       >
-                        {branches.map(b => (
-                          <option key={b.id} value={String(b.id)}>
-                            {b.name}
-                          </option>
-                        ))}
+                        <option value="" disabled>Select destination branch...</option>
+                        {branches
+                          .filter(b => String(b.id) !== String(fromBranchId))
+                          .map(b => (
+                            <option key={b.id} value={String(b.id)}>
+                              {b.name}
+                            </option>
+                          ))}
                       </select>
-                    )}
+                    </div>
                   </div>
 
-                  {/* To Branch */}
-                  <div>
-                    <label className="block text-[10px] font-black uppercase tracking-[2px] text-main/50 mb-1.5">
-                      Destination Branch (To)
-                    </label>
-                    <select
-                      value={toBranchId}
-                      onChange={e => setToBranchId(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl bg-brand-surface border border-border text-xs text-main focus:outline-none focus:border-brand-neonblue transition-colors cursor-pointer"
+                  {/* Transfer Date Picker */}
+                  <div className="pt-2 border-t border-border/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-[2px] text-main/50 mb-1 flex items-center gap-1.5">
+                        <Calendar size={12} className="text-brand-neonblue" />
+                        <span>Transfer Date / Scheduled Delivery</span>
+                      </label>
+                      <p className="text-[10px] text-main/40 font-mono">Date this shipment is dispatched for delivery</p>
+                    </div>
+                    <input
+                      type="date"
+                      value={transferDate}
+                      onChange={e => setTransferDate(e.target.value)}
+                      className="px-3 py-1.5 rounded-xl bg-brand-surface border border-border text-xs font-mono text-main focus:outline-none focus:border-brand-neonblue transition-colors cursor-pointer w-full sm:w-48"
                       required
-                    >
-                      <option value="" disabled>Select destination branch...</option>
-                      {branches
-                        .filter(b => String(b.id) !== String(fromBranchId))
-                        .map(b => (
-                          <option key={b.id} value={String(b.id)}>
-                            {b.name}
-                          </option>
-                        ))}
-                    </select>
+                    />
                   </div>
                 </div>
 
@@ -1262,22 +1352,38 @@ export default function StockTransfersPage() {
                 </div>
 
                 {/* Modal Footer Buttons */}
-                <div className="flex items-center justify-end gap-3 pt-3 border-t border-border">
-                  <button
-                    type="button"
-                    onClick={() => setIsCreateModalOpen(false)}
-                    className="px-4 py-2 rounded-xl border border-border text-xs font-semibold text-main/70 hover:text-main hover:bg-main/5 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={submitting || transferItems.length === 0}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-neonblue disabled:opacity-50 text-black font-rajdhani font-bold text-xs uppercase tracking-wider hover:opacity-90 shadow-md transition-all"
-                  >
-                    <Send size={13} />
-                    <span>{submitting ? "Dispatching..." : "Dispatch Transfer"}</span>
-                  </button>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-border">
+                  <div className="text-[11px] text-main/50">
+                    {transferItems.length > 0 ? (
+                      <span className="text-brand-neonblue font-mono font-bold">
+                        {transferItems.length} {transferItems.length === 1 ? "item" : "items"} staged ({transferItems.reduce((acc, i) => acc + i.quantity, 0)} total units)
+                      </span>
+                    ) : selectedProduct ? (
+                      <span className="text-brand-neonblue font-mono">
+                        Ready to transfer: <strong>{selectedProduct.name}</strong> ({itemQuantity} units)
+                      </span>
+                    ) : (
+                      <span className="text-main/40 italic">Select a product above to stage for transfer</span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 self-end sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => setIsCreateModalOpen(false)}
+                      className="px-4 py-2 rounded-xl border border-border text-xs font-semibold text-main/70 hover:text-main hover:bg-main/5 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={submitting || (transferItems.length === 0 && !selectedProduct)}
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-neonblue disabled:opacity-40 disabled:cursor-not-allowed text-black font-rajdhani font-bold text-xs uppercase tracking-wider hover:opacity-90 shadow-md transition-all"
+                    >
+                      <Send size={13} />
+                      <span>{submitting ? "Dispatching..." : "Dispatch Transfer"}</span>
+                    </button>
+                  </div>
                 </div>
               </form>
             </motion.div>
@@ -1391,7 +1497,19 @@ export default function StockTransfersPage() {
 
               {/* Footer */}
               <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-main/[0.02]">
-                <div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTransmittalData(selectedTransfer);
+                      setIsTransmittalOpen(true);
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-brand-surface hover:bg-main/5 border border-border text-xs font-bold text-main flex items-center gap-1.5 transition-colors"
+                  >
+                    <Printer size={13} className="text-brand-neonblue" />
+                    <span>Print Transmittal</span>
+                  </button>
+
                   {selectedTransfer.status === "Pending" && (
                     (currentUser?.role === "super_admin" || currentUser?.branch_id === selectedTransfer.toBranchId) && (
                       <button
@@ -1416,6 +1534,254 @@ export default function StockTransfersPage() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* ======================================================== */}
+      {/* MODAL: PRINTABLE STOCK TRANSFER TRANSMITTAL SLIP */}
+      {/* ======================================================== */}
+      <AnimatePresence>
+        {isTransmittalOpen && transmittalData && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-brand-surface border border-border rounded-2xl w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden"
+            >
+              {/* Modal Top Control Bar (Hidden during print) */}
+              <div className="no-print flex items-center justify-between px-6 py-3.5 border-b border-border bg-main/[0.03]">
+                <div className="flex items-center gap-2">
+                  <Printer size={16} className="text-brand-neonblue" />
+                  <span className="font-rajdhani font-bold text-sm uppercase tracking-wider text-main">
+                    Stock Transfer Transmittal Slip
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-brand-neonblue hover:bg-brand-neonblue/90 text-black font-rajdhani font-bold text-xs uppercase tracking-wider shadow-sm transition-all"
+                  >
+                    <Printer size={13} className="stroke-[2.5]" />
+                    <span>Print Transmittal</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsTransmittalOpen(false);
+                      setTransmittalData(null);
+                    }}
+                    className="p-1.5 rounded-lg text-main/40 hover:text-main hover:bg-main/5 transition-colors"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Printable Document Body */}
+              <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar bg-white text-black font-sans text-xs">
+                <div id="printable-transmittal" className="space-y-6">
+                  {/* Slip Header */}
+                  <div className="border-b-2 border-black pb-4 flex items-start justify-between">
+                    <div>
+                      <h1 className="text-xl font-black tracking-tight text-black uppercase font-rajdhani">
+                        PC ALLEY COMPUTER STORE
+                      </h1>
+                      <p className="text-[11px] font-semibold text-gray-700 tracking-wide uppercase">
+                        Official Stock Transfer Transmittal Slip
+                      </p>
+                      <p className="text-[10px] text-gray-500 mt-0.5">
+                        Accompanies inventory shipments during inter-branch logistics transfer
+                      </p>
+                    </div>
+
+                    <div className="text-right">
+                      <div className="inline-block border border-black px-3 py-1 rounded bg-gray-50">
+                        <span className="text-[9px] uppercase font-mono block text-gray-500 font-bold">Transfer Ref #</span>
+                        <span className="text-base font-black font-mono text-black">#TR-{transmittalData.id}</span>
+                      </div>
+                      <p className="text-[10px] text-gray-600 mt-1 font-mono">
+                        Date: <strong>{transmittalData.transferDate || (transmittalData.createdAt ? new Date(transmittalData.createdAt).toLocaleDateString("en-PH") : new Date().toLocaleDateString("en-PH"))}</strong>
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Logistics Routing Summary */}
+                  <div className="grid grid-cols-2 gap-4 border border-gray-300 rounded-lg p-3.5 bg-gray-50/50">
+                    <div>
+                      <span className="text-[9px] font-black uppercase tracking-wider text-gray-500 block mb-1">
+                        ORIGIN (SOURCE BRANCH)
+                      </span>
+                      <p className="text-sm font-bold text-black">
+                        {transmittalData.SourceBranch?.name || "Main Warehouse / HQ"}
+                      </p>
+                      <p className="text-[10px] text-gray-600">
+                        {transmittalData.SourceBranch?.location || "Branch Address on Record"}
+                      </p>
+                    </div>
+
+                    <div className="border-l border-gray-300 pl-4">
+                      <span className="text-[9px] font-black uppercase tracking-wider text-gray-500 block mb-1">
+                        DESTINATION (RECIPIENT BRANCH)
+                      </span>
+                      <p className="text-sm font-bold text-black">
+                        {transmittalData.DestBranch?.name || "Target Branch"}
+                      </p>
+                      <p className="text-[10px] text-gray-600">
+                        {transmittalData.DestBranch?.location || "Branch Address on Record"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Itemized Table of Transferred Goods */}
+                  <div>
+                    <h3 className="text-[10px] font-black uppercase tracking-wider text-black mb-1.5">
+                      ITEMIZED INVENTORY MANIFEST
+                    </h3>
+                    <table className="w-full border-collapse border border-gray-400 text-left text-xs">
+                      <thead>
+                        <tr className="bg-gray-100 border-b border-gray-400 text-[10px] uppercase font-black">
+                          <th className="py-2 px-2.5 border-r border-gray-300 w-10 text-center">#</th>
+                          <th className="py-2 px-2.5 border-r border-gray-300 w-28">SKU Code</th>
+                          <th className="py-2 px-2.5 border-r border-gray-300">Product Designation & Details</th>
+                          <th className="py-2 px-2.5 border-r border-gray-300 w-24 text-center">Qty Sent</th>
+                          <th className="py-2 px-2.5 w-24 text-center">Verified [✓]</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-300">
+                        {(transmittalData.StockTransferItems || []).map((item, idx) => (
+                          <tr key={item.id || idx}>
+                            <td className="py-2 px-2.5 border-r border-gray-300 text-center font-mono text-[11px] text-gray-600">
+                              {idx + 1}
+                            </td>
+                            <td className="py-2 px-2.5 border-r border-gray-300 font-mono text-[11px] font-bold text-black">
+                              {item.Product?.sku || "N/A"}
+                            </td>
+                            <td className="py-2 px-2.5 border-r border-gray-300 font-semibold text-black">
+                              {item.Product?.name || `Product #${item.productId}`}
+                            </td>
+                            <td className="py-2 px-2.5 border-r border-gray-300 text-center font-mono font-black text-black">
+                              {item.quantity} units
+                            </td>
+                            <td className="py-2 px-2.5 text-center text-gray-400 font-mono text-[10px]">
+                              [ &nbsp;&nbsp;&nbsp; ]
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-black bg-gray-50 font-black">
+                          <td colSpan={3} className="py-2 px-2.5 text-right uppercase text-[10px]">
+                            Total Quantity To Transfer:
+                          </td>
+                          <td className="py-2 px-2.5 text-center font-mono text-sm border-r border-gray-300 text-black">
+                            {(transmittalData.StockTransferItems || []).reduce((sum, it) => sum + (it.quantity || 0), 0)} units
+                          </td>
+                          <td className="py-2 px-2.5 text-center text-[10px] text-gray-500 font-mono">
+                            {(transmittalData.StockTransferItems || []).length} items
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+
+                  {/* Transfer Notes / Reason if provided */}
+                  {transmittalData.notes && (
+                    <div className="border border-gray-300 rounded p-2.5 bg-gray-50/50 text-[11px]">
+                      <span className="font-bold uppercase text-[9px] text-gray-500 block">Transfer Reason / Remarks:</span>
+                      <p className="italic text-gray-800">{transmittalData.notes}</p>
+                    </div>
+                  )}
+
+                  {/* Legal Terms Notice */}
+                  <div className="border-t border-dashed border-gray-300 pt-2 text-[9px] text-gray-500 leading-tight">
+                    <p>
+                      <strong>IMPORTANT NOTICE:</strong> This transmittal slip must travel with the physical goods. The recipient branch must verify item condition and quantity upon arrival before confirming delivery in the system. Any discrepancies must be noted on this document.
+                    </p>
+                  </div>
+
+                  {/* Three-Party Official Signatures Section */}
+                  <div className="pt-4 grid grid-cols-3 gap-6 text-center text-[10px]">
+                    {/* 1. Sender */}
+                    <div className="border-t border-black pt-2">
+                      <p className="font-bold text-black uppercase">DISPATCHED BY</p>
+                      <p className="text-gray-500 text-[9px] mb-4">Source Branch Staff / Manager</p>
+                      <div className="border-b border-gray-400 h-6 mb-1"></div>
+                      <p className="text-[9px] text-gray-400">Signature Over Printed Name / Date</p>
+                    </div>
+
+                    {/* 2. Courier / Logistics */}
+                    <div className="border-t border-black pt-2">
+                      <p className="font-bold text-black uppercase">CARRIER / DELIVERED BY</p>
+                      <p className="text-gray-500 text-[9px] mb-4">Driver / Transport Logistics</p>
+                      <div className="border-b border-gray-400 h-6 mb-1"></div>
+                      <p className="text-[9px] text-gray-400">Signature Over Printed Name / Date</p>
+                    </div>
+
+                    {/* 3. Recipient */}
+                    <div className="border-t border-black pt-2">
+                      <p className="font-bold text-black uppercase">RECEIVED & VERIFIED BY</p>
+                      <p className="text-gray-500 text-[9px] mb-4">Destination Branch Staff / Manager</p>
+                      <div className="border-b border-gray-400 h-6 mb-1"></div>
+                      <p className="text-[9px] text-gray-400">Signature Over Printed Name / Date</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Footer (Screen view only) */}
+              <div className="no-print flex items-center justify-between px-6 py-3.5 border-t border-border bg-main/[0.02]">
+                <p className="text-[11px] text-main/50">
+                  Print this transmittal to attach with the goods for shipment.
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsTransmittalOpen(false);
+                      setTransmittalData(null);
+                    }}
+                    className="px-4 py-2 rounded-xl border border-border text-xs font-semibold text-main/70 hover:text-main hover:bg-main/5 transition-colors"
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-neonblue text-black font-rajdhani font-bold text-xs uppercase tracking-wider hover:opacity-90 transition-all shadow-md"
+                  >
+                    <Printer size={13} className="stroke-[2.5]" />
+                    <span>Print Transmittal Slip</span>
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <style jsx global>{`
+        @media print {
+          body * {
+            visibility: hidden !important;
+          }
+          #printable-transmittal, #printable-transmittal * {
+            visibility: visible !important;
+          }
+          #printable-transmittal {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 20px !important;
+            background: white !important;
+            color: black !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

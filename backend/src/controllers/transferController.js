@@ -59,7 +59,7 @@ const getTransferById = async (req, res) => {
 
 const createTransfer = async (req, res) => {
   try {
-    const { fromBranchId, toBranchId, items, notes, autoReceive } = req.body;
+    const { fromBranchId, toBranchId, transferDate, items, notes, autoReceive } = req.body;
     
     if (!fromBranchId || !toBranchId) {
       return res.status(400).json({ message: 'Both source and destination branches are required.' });
@@ -105,6 +105,7 @@ const createTransfer = async (req, res) => {
     const transfer = await StockTransfer.create({
       fromBranchId,
       toBranchId,
+      transferDate: transferDate || new Date().toISOString().split('T')[0],
       status: 'Pending',
       notes
     });
@@ -127,7 +128,19 @@ const createTransfer = async (req, res) => {
       return res.status(201).json({ message: 'Stock transfer dispatched and completed successfully.', transfer: completed });
     }
 
-    res.status(201).json(transfer);
+    // Return transfer with full Branch and Product items for immediate Transmittal printing
+    const fullTransfer = await StockTransfer.findByPk(transfer.id, {
+      include: [
+        { model: Branch, as: 'SourceBranch', attributes: ['id', 'name', 'location'] },
+        { model: Branch, as: 'DestBranch', attributes: ['id', 'name', 'location'] },
+        {
+          model: StockTransferItem,
+          include: [{ model: Product, attributes: ['id', 'name', 'sku', 'price'] }]
+        }
+      ]
+    });
+
+    res.status(201).json(fullTransfer);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

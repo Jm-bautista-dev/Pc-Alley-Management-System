@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Package, Users, UserPlus, LogOut, LayoutDashboard,
   Settings, ShieldCheck, ChevronDown, Download, Upload, ClipboardList,
-  DollarSign, FileText, CornerDownLeft, Activity, Wrench, Layers
+  DollarSign, FileText, CornerDownLeft, Activity, Wrench, Layers, ArrowLeftRight
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import SettingsPanel from "./SettingsPanel";
@@ -80,6 +80,7 @@ const Sidebar = () => {
           { title: "Brands", path: "/products/brands" },
           { title: "Import Products", path: "/products/import" }
         ] },
+        { title: "Stock Transfers", icon: ArrowLeftRight,  path: "/products/transfers", group: "SALES" },
         { title: "Bundles",         icon: Layers,          path: "/bundles",          group: "SALES" },
         { title: "Services",        icon: Wrench,          path: "#services",         group: "SALES", subItems: [
           { title: "Service Catalog", path: "/services" },
@@ -124,6 +125,7 @@ const Sidebar = () => {
         { title: "Product Categories", path: "/products/categories" },
         { title: "Brands", path: "/products/brands" }
       ] },
+      { title: "Stock Transfers", icon: ArrowLeftRight,  path: "/products/transfers", group: "SALES" },
       { title: "Bundles",         icon: Layers,          path: "/bundles",          group: "SALES" },
       { title: "Services",        icon: Wrench,          path: "#services",         group: "SALES", subItems: [
         { title: "Service Catalog", path: "/services" },
