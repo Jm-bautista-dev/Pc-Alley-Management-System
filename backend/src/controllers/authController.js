@@ -153,20 +153,9 @@ const login = async (req, res) => {
 
     if (!matchingUsers.length) {
       console.warn(`[AUTH] Login failed: User not found for username: ${username}`);
-      const attemptInfo = recordFailedAttempt(req, username);
-      if (attemptInfo.isLocked) {
-        return res.status(429).json({
-          error: 'Account Temporarily Locked',
-          message: 'Account temporarily locked due to repeated failed login attempts. Try again in 15 minutes.',
-          requireCaptcha: true
-        });
-      }
+      recordFailedAttempt(req, username);
       return res.status(401).json({
-        message: 'Incorrect Username or Password',
-        failedAttempts: attemptInfo.failedAttempts,
-        remainingAttempts: attemptInfo.remainingAttempts,
-        attemptsRemaining: attemptInfo.remainingAttempts,
-        requireCaptcha: attemptInfo.requireCaptcha
+        message: 'Incorrect Username or Password'
       });
     }
 
@@ -181,20 +170,9 @@ const login = async (req, res) => {
 
     if (!user) {
       console.warn(`[AUTH] Login failed: Password mismatch for user: ${username}`);
-      const attemptInfo = recordFailedAttempt(req, username);
-      if (attemptInfo.isLocked) {
-        return res.status(429).json({
-          error: 'Account Temporarily Locked',
-          message: 'Account temporarily locked due to repeated failed login attempts. Try again in 15 minutes.',
-          requireCaptcha: true
-        });
-      }
+      recordFailedAttempt(req, username);
       return res.status(401).json({
-        message: 'Incorrect Username or Password',
-        failedAttempts: attemptInfo.failedAttempts,
-        remainingAttempts: attemptInfo.remainingAttempts,
-        attemptsRemaining: attemptInfo.remainingAttempts,
-        requireCaptcha: attemptInfo.requireCaptcha
+        message: 'Incorrect Username or Password'
       });
     }
 

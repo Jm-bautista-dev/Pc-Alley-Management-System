@@ -33,85 +33,22 @@ function getClientIp(req) {
 
 /**
  * Middleware: Check if IP or Account is currently locked out
+ * NOTE: Account/IP lockout disabled per administrator request.
  */
 function loginRateLimiter(req, res, next) {
-  const ip = getClientIp(req);
-  const username = String(req.body?.username || '').trim().toLowerCase();
-  const now = Date.now();
-
-  // 1. Check IP lockout
-  const ipData = ipAttempts.get(ip);
-  if (ipData && ipData.blockedUntil && now < ipData.blockedUntil) {
-    const remainingSec = Math.ceil((ipData.blockedUntil - now) / 1000);
-    res.set('Retry-After', String(remainingSec));
-    return res.status(429).json({
-      error: 'Too Many Requests',
-      message: `Too many failed login attempts from this network. Access suspended for ${remainingSec} seconds.`,
-      retryAfter: remainingSec,
-      lockedUntil: new Date(ipData.blockedUntil).toISOString()
-    });
-  }
-
-  // 2. Check Account lockout
-  if (username) {
-    const accData = accountAttempts.get(username);
-    if (accData && accData.blockedUntil && now < accData.blockedUntil) {
-      const remainingSec = Math.ceil((accData.blockedUntil - now) / 1000);
-      res.set('Retry-After', String(remainingSec));
-      return res.status(429).json({
-        error: 'Account Temporarily Locked',
-        message: `Account "${username}" is temporarily locked due to repeated failed login attempts. Try again in ${remainingSec} seconds.`,
-        retryAfter: remainingSec,
-        lockedUntil: new Date(accData.blockedUntil).toISOString()
-      });
-    }
-  }
-
   next();
 }
 
 /**
  * Record a failed login attempt for IP and username
+ * NOTE: Account/IP lockout disabled - always returns non-locked status.
  */
 function recordFailedAttempt(req, username) {
-  const ip = getClientIp(req);
-  const user = String(username || '').trim().toLowerCase();
-  const now = Date.now();
-
-  // Update IP attempts
-  let ipData = ipAttempts.get(ip) || { count: 0, lastAttempt: now, blockedUntil: null, lockoutCount: 0 };
-  ipData.count += 1;
-  ipData.lastAttempt = now;
-  if (ipData.count >= MAX_FAILED_ATTEMPTS) {
-    ipData.lockoutCount += 1;
-    const duration = BASE_LOCKOUT_MS * Math.pow(2, ipData.lockoutCount - 1);
-    ipData.blockedUntil = now + duration;
-  }
-  ipAttempts.set(ip, ipData);
-
-  // Update Account attempts
-  let accData = null;
-  if (user) {
-    accData = accountAttempts.get(user) || { count: 0, lastAttempt: now, blockedUntil: null, lockoutCount: 0 };
-    accData.count += 1;
-    accData.lastAttempt = now;
-    if (accData.count >= MAX_FAILED_ATTEMPTS) {
-      accData.lockoutCount += 1;
-      const duration = BASE_LOCKOUT_MS * Math.pow(2, accData.lockoutCount - 1);
-      accData.blockedUntil = now + duration;
-    }
-    accountAttempts.set(user, accData);
-  }
-
-  const highestCount = Math.max(ipData.count, accData?.count || 0);
-  const isLocked = Boolean(ipData.blockedUntil || accData?.blockedUntil);
-  const requireCaptcha = highestCount >= CAPTCHA_TRIGGER_ATTEMPTS;
-
   return {
-    failedAttempts: highestCount,
-    remainingAttempts: Math.max(0, MAX_FAILED_ATTEMPTS - highestCount),
-    isLocked,
-    requireCaptcha
+    failedAttempts: 0,
+    remainingAttempts: 999,
+    isLocked: false,
+    requireCaptcha: false
   };
 }
 

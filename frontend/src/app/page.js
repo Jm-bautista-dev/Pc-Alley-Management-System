@@ -210,7 +210,6 @@ export default function LoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage("");
-    if (lockoutTimer > 0) { setErrorMessage(`Account is locked. Please wait ${lockoutTimer} seconds.`); return; }
     if (requiresCaptcha && !captchaVerified) { setErrorMessage("Please complete the security challenge before logging in."); return; }
     setLoading(true);
     try {
@@ -236,12 +235,9 @@ export default function LoginPage() {
         else if (data.user?.role === "employee" || data.user?.role === "staff") { router.push("/sales"); }
         else { router.push("/dashboard"); }
       } else if (res.status === 429) {
-        const seconds = data.retryAfter || 900;
-        setLockoutTimer(seconds); setLockoutMessage(data.message || "Account temporarily locked due to excessive failed attempts.");
-        setErrorMessage(data.message || `Account locked. Retry in ${Math.ceil(seconds / 60)} minutes.`);
+        setErrorMessage(getApiErrorMessage(data.message, "Too many requests. Please try again."));
       } else {
         if (data.requireCaptcha) setRequiresCaptcha(true);
-        if (data.attemptsRemaining !== undefined) setAttemptsWarning(`Security Notice: ${data.attemptsRemaining} attempt(s) remaining before temporary lockout.`);
         setErrorMessage(getApiErrorMessage(data.message, "Invalid Security Credentials"));
       }
     } catch (err) {
@@ -406,23 +402,6 @@ export default function LoginPage() {
                   <p className="text-[11.5px] font-medium text-rose-400 leading-snug">{errorMessage}</p>
                 </motion.div>
               )}
-              {lockoutTimer > 0 && (
-                <div className="p-3 bg-rose-500/[0.1] border border-rose-500/25 rounded-xl">
-                  <div className="flex items-center gap-2 text-rose-400 font-bold text-[10.5px] mb-1">
-                    <ShieldAlert size={11} /><span>ACCOUNT LOCKED</span>
-                  </div>
-                  <p className={"text-[11px] " + fgMuted}>{lockoutMessage || "Too many failed attempts."}</p>
-                  <p className="text-[10px] font-mono text-rose-400 font-bold mt-1">
-                    Retry in: {Math.floor(lockoutTimer / 60)}m {lockoutTimer % 60}s
-                  </p>
-                </div>
-              )}
-              {attemptsWarning && lockoutTimer === 0 && (
-                <div className="p-2.5 bg-amber-500/[0.1] border border-amber-500/25 rounded-xl">
-                  <p className="text-[11px] text-amber-400 font-medium leading-snug">{attemptsWarning}</p>
-                </div>
-              )}
-
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                   <User size={13} className={"transition-colors duration-200 " + iconCls} />
@@ -470,12 +449,11 @@ export default function LoginPage() {
                 </div>
               )}
 
-              <motion.button type="submit" disabled={loading || lockoutTimer > 0}
+              <motion.button type="submit" disabled={loading}
                 whileHover={{ scale: 1.012 }} whileTap={{ scale: 0.988 }}
                 className="w-full py-3.5 px-6 rounded-xl bg-[#5B73E8] hover:bg-[#4E66DA] text-white font-bold text-[11.5px] tracking-[0.14em] uppercase flex items-center justify-center gap-2 transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed mt-1"
                 style={{ boxShadow: "0 4px 20px rgba(91,115,232,0.28)" }}>
                 {loading ? <Loader2 className="animate-spin" size={14} />
-                  : lockoutTimer > 0 ? `LOCKED (${lockoutTimer}s)`
                   : <><span>Sign In</span><ArrowRight size={13} /></>}
               </motion.button>
             </form>
