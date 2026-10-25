@@ -119,6 +119,19 @@ export default function InventoryPage() {
     }
   };
 
+  // Helper to sanitize integer inputs, stripping multiple leading zeros and capping at 5,000
+  const sanitizeIntegerInput = (val, max = 5000) => {
+    if (val === "" || val === undefined || val === null) return "";
+    let clean = String(val).replace(/\D/g, "");
+    if (clean.length > 1 && clean.startsWith("0")) {
+      clean = clean.replace(/^0+/, "") || "0";
+    }
+    if (clean !== "" && Number(clean) > max) {
+      clean = String(max);
+    }
+    return clean;
+  };
+
   const handleUpdateStock = async (e) => {
     e.preventDefault();
     const parsedQty = parseInt(adjustValue, 10);
@@ -127,8 +140,8 @@ export default function InventoryPage() {
       return;
     }
     const parsedThresh = parseInt(adjustThreshold, 10);
-    if (isNaN(parsedThresh) || parsedThresh < 0 || parsedThresh > 5000) {
-      showError("Low stock alert threshold must be between 0 and 5,000 units.");
+    if (isNaN(parsedThresh) || parsedThresh < 1 || parsedThresh > 5000) {
+      showError("Low stock alert threshold must be between 1 and 5,000 units.");
       return;
     }
 

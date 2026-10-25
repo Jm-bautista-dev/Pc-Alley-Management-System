@@ -12,6 +12,20 @@ import ProductSpecsEditor from "@/components/ProductSpecsEditor";
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
+// Helper to sanitize integer inputs, stripping leading zeros and capping at 5,000
+const sanitizeIntegerInput = (val, max = 5000) => {
+  if (val === "" || val === undefined || val === null) return "";
+  let clean = String(val).replace(/\D/g, "");
+  // Prevent duplicate leading zeros: e.g. "00" or "00000" becomes "0", "05" becomes "5"
+  if (clean.length > 1 && clean.startsWith("0")) {
+    clean = clean.replace(/^0+/, "") || "0";
+  }
+  if (clean !== "" && Number(clean) > max) {
+    clean = String(max);
+  }
+  return clean;
+};
+
 export default function EditProductModal({ product, isOpen, onClose, onUpdate, branches }) {
   const [formData, setFormData] = useState({});
   const [stockData, setStockData] = useState({ branch_id: "", quantity: "", price: "", enabled: true, low_stock_threshold: 5 });
@@ -270,7 +284,7 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
   const isThresholdInvalid = stockData.low_stock_threshold !== "" && stockData.low_stock_threshold !== undefined && stockData.low_stock_threshold !== null && (
     isNaN(Number(stockData.low_stock_threshold)) ||
     !Number.isInteger(Number(stockData.low_stock_threshold)) ||
-    Number(stockData.low_stock_threshold) < 0 ||
+    Number(stockData.low_stock_threshold) < 1 ||
     Number(stockData.low_stock_threshold) > 5000
   );
 
@@ -280,7 +294,7 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
       return;
     }
     if (isThresholdInvalid) {
-      showError("Low stock alert threshold must be an integer between 0 and 5,000 units.");
+      showError("Low stock alert threshold must be an integer between 1 and 5,000 units.");
       return;
     }
     setUpdating(true);
@@ -369,7 +383,7 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
       return;
     }
     if (isThresholdInvalid) {
-      showError("Low stock alert threshold must be an integer between 0 and 5,000 units.");
+      showError("Low stock alert threshold must be an integer between 1 and 5,000 units.");
       return;
     }
     setUpdating(true);
@@ -733,10 +747,8 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
                 max="5000"
                 value={stockData.quantity}
                 onChange={e => {
-                  const val = e.target.value;
-                  if (val === "" || /^\d{0,5}$/.test(val)) {
-                    setStockData(prev => ({ ...prev, quantity: val }));
-                  }
+                  const sanitized = sanitizeIntegerInput(e.target.value, 5000);
+                  setStockData(prev => ({ ...prev, quantity: sanitized }));
                 }}
                 placeholder={stockData.branch_id === "all" ? "Apply to all branches (Max: 5,000)" : `Current: ${currentStock}`}
                 className={`w-full bg-brand-bgbase border ${isQuantityInvalid ? "border-red-500 focus:border-red-500 text-red-400" : "border-border text-main"} rounded-lg px-3 py-2 text-sm font-bold transition-colors`}
@@ -769,20 +781,18 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
               </div>
               <input
                 type="number"
-                min="0"
+                min="1"
                 max="5000"
                 value={stockData.low_stock_threshold}
                 onChange={e => {
-                  const val = e.target.value;
-                  if (val === "" || /^\d{0,5}$/.test(val)) {
-                    setStockData(prev => ({ ...prev, low_stock_threshold: val }));
-                  }
+                  const sanitized = sanitizeIntegerInput(e.target.value, 5000);
+                  setStockData(prev => ({ ...prev, low_stock_threshold: sanitized }));
                 }}
                 className={`w-full bg-brand-bgbase border ${isThresholdInvalid ? "border-red-500 focus:border-red-500 text-red-400" : "border-border text-main"} rounded-lg px-3 py-2 text-sm font-bold transition-colors`}
               />
               {isThresholdInvalid && (
                 <p className="text-[10px] text-red-400 font-bold mt-1 flex items-center gap-1">
-                  <span>⚠️</span> Threshold must be between 0 and 5,000 units.
+                  <span>⚠️</span> Alert threshold must be between 1 and 5,000 units.
                 </p>
               )}
             </div>
