@@ -46,7 +46,10 @@ import {
   Sparkles,
   ClipboardList,
   RefreshCw,
-  ArrowLeftRight
+  ArrowLeftRight,
+  AlertTriangle,
+  AlertCircle,
+  Lock
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiUrl } from "@/lib/api";
@@ -751,6 +754,16 @@ export default function SalesPage() {
     }
   };
 
+  const getProductBranchStock = (productId) => {
+    if (!productId) return 0;
+    const invItem = inventory.find(i => (i.Product?.id || i.product_id || i.id) === productId);
+    if (!invItem) return 0;
+    if (invItem.enabled === false) return 0;
+    return (invItem.stock !== undefined && invItem.stock !== null)
+      ? Number(invItem.stock)
+      : Number(invItem.quantity ?? 0);
+  };
+
   const handleOpenBundleCustomizer = (bundle) => {
     setSelectedBundleForCustomization(bundle);
     setBundleCustomItems(
@@ -772,6 +785,11 @@ export default function SalesPage() {
       prev.map(i => {
         if (i.id === productId) {
           const newQty = i.quantity + delta;
+          const currentBranchStock = getProductBranchStock(productId);
+          if (delta > 0 && newQty > currentBranchStock && currentBranchStock > 0) {
+            showError(`Cannot increase: Only ${currentBranchStock} in stock for this branch.`);
+            return i;
+          }
           return newQty > 0 ? { ...i, quantity: newQty } : null;
         }
         return i;
@@ -870,6 +888,24 @@ export default function SalesPage() {
     return false;
   }, [selectedBundleForCustomization, bundleCustomItems]);
 
+  // Track out-of-stock or insufficient stock items in the currently customized bundle
+  const bundleStockIssues = useMemo(() => {
+    if (!selectedBundleForCustomization || !bundleCustomItems.length) return [];
+    return bundleCustomItems
+      .map(item => {
+        const stock = getProductBranchStock(item.id);
+        const isOutOfStock = stock <= 0;
+        const isInsufficient = stock < (item.quantity || 1);
+        return {
+          ...item,
+          availableStock: stock,
+          isOutOfStock,
+          isInsufficient
+        };
+      })
+      .filter(i => i.isInsufficient);
+  }, [selectedBundleForCustomization, bundleCustomItems, inventory]);
+
   // Dynamic pricing recalculation preserving existing promotional discount rules
   const bundleCalculatedPricing = useMemo(() => {
     if (!selectedBundleForCustomization) {
@@ -914,6 +950,20 @@ export default function SalesPage() {
       return;
     }
 
+    // Verify branch stock for every item before adding to transaction
+    const stockErrors = [];
+    bundleCustomItems.forEach(item => {
+      const stock = getProductBranchStock(item.id);
+      if (stock < (item.quantity || 1)) {
+        stockErrors.push(`"${item.name}" (needs ${item.quantity || 1}, available: ${stock})`);
+      }
+    });
+
+    if (stockErrors.length > 0) {
+      showError(`Cannot add bundle: The following items have insufficient stock: ${stockErrors.join(", ")}. Please replace or remove them.`);
+      return;
+    }
+
     const { finalPrice, currentRetailSum } = bundleCalculatedPricing;
     const bundleDisplayName = isBundleCustomized
       ? `${selectedBundleForCustomization.name} — Customized`
@@ -924,8 +974,7 @@ export default function SalesPage() {
     const totalBundleQuantity = bundleCustomItems.reduce((sum, bi) => sum + (bi.quantity || 1), 0);
 
     bundleCustomItems.forEach((bundleItem, idx) => {
-      const invItem = inventory.find(i => i.product_id === bundleItem.id || i.Product?.id === bundleItem.id);
-      const stock = invItem ? (invItem.quantity ?? invItem.stock ?? 9999) : 9999;
+      const stock = getProductBranchStock(bundleItem.id);
 
       let effectiveUnitPrice = bundleItem.price;
       if (finalPrice > 0) {
@@ -1869,19 +1918,33 @@ export default function SalesPage() {
                   }, 0);
                   const bundlePrice = parseFloat(bundle.price || 0);
                   const savings = retailSum > bundlePrice ? retailSum - bundlePrice : 0;
+                  const outOfStockItems = (bundle.items || []).filter(item => {
+                    const prodId = item.Product?.id || item.product_id;
+                    const stock = getProductBranchStock(prodId);
+                    return stock < (item.quantity || 1);
+                  });
+                  const hasOutOfStock = outOfStockItems.length > 0;
 
                   return (
                     <motion.div
                       key={bundle.id}
                       onClick={() => handleOpenBundleCustomizer(bundle)}
-                      className="bg-brand-surface rounded-3xl border border-brand-border hover:border-brand-neonpurple/40 p-5 flex flex-col justify-between cursor-pointer shadow-sm hover:shadow-md transition-all relative overflow-hidden group"
+                      className={`bg-brand-surface rounded-3xl border p-5 flex flex-col justify-between cursor-pointer shadow-sm hover:shadow-md transition-all relative overflow-hidden group ${
+                        hasOutOfStock
+                          ? "border-amber-500/30 hover:border-amber-500/60"
+                          : "border-brand-border hover:border-brand-neonpurple/40"
+                      }`}
                     >
                       <div>
                         <div className="flex items-center justify-between gap-2 mb-3">
                           <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-brand-neonpurple/10 text-brand-neonpurple border border-brand-neonpurple/20 flex items-center gap-1">
                             <ShoppingBag size={11} /> {totalItems} {totalItems === 1 ? "Item" : "Items"}
                           </span>
-                          {savings > 0 ? (
+                          {hasOutOfStock ? (
+                            <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-red-500/15 text-red-400 border border-red-500/30 flex items-center gap-1">
+                              <AlertTriangle size={10} /> {outOfStockItems.length} {outOfStockItems.length === 1 ? "Part" : "Parts"} Out
+                            </span>
+                          ) : savings > 0 ? (
                             <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                               Save ₱{savings.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </span>
@@ -1938,9 +2001,14 @@ export default function SalesPage() {
                             e.stopPropagation();
                             handleOpenBundleCustomizer(bundle);
                           }}
-                          className="px-3.5 py-1.5 bg-brand-neonpurple hover:bg-brand-neonpurple/80 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all"
+                          className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+                            hasOutOfStock
+                              ? "bg-amber-500/20 border border-amber-500/50 text-amber-400 hover:bg-amber-500 hover:text-black font-extrabold"
+                              : "bg-brand-neonpurple hover:bg-brand-neonpurple/80 text-white"
+                          }`}
                         >
-                          Customize &amp; Add
+                          {hasOutOfStock && <AlertTriangle size={12} />}
+                          <span>{hasOutOfStock ? "Replace Parts & Add" : "Customize & Add"}</span>
                         </button>
                       </div>
                     </motion.div>
@@ -3273,6 +3341,25 @@ export default function SalesPage() {
 
               {/* Content */}
               <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-6">
+                {/* Out-of-Stock Notification Banner */}
+                {bundleStockIssues.length > 0 && (
+                  <div className="p-4 bg-red-500/10 border border-red-500/40 rounded-2xl flex items-start sm:items-center justify-between gap-3 text-xs shadow-inner">
+                    <div className="flex items-center gap-2.5 text-main">
+                      <AlertTriangle size={18} className="text-red-400 shrink-0" />
+                      <div>
+                        <span className="font-black text-red-400 uppercase tracking-wide">
+                          {bundleStockIssues.length === 1
+                            ? "1 Product Out of Stock in this branch"
+                            : `${bundleStockIssues.length} Products Out of Stock in this branch`}
+                        </span>
+                        <p className="text-[11px] text-brand-muted mt-0.5">
+                          Unavailable components cannot be added to the transaction. Please use <strong className="text-amber-400 font-bold">Replace</strong> to substitute with available stock, or <strong className="text-brand-crimson font-bold">Remove</strong> them before proceeding.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Replacing item notification banner */}
                 {replacingBundleItemId && (
                   <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center justify-between">
@@ -3315,21 +3402,38 @@ export default function SalesPage() {
                         const isBeingReplaced = replacingBundleItemId === item.id;
                         const totalBundleItemsCount = bundleCustomItems.reduce((s, i) => s + (i.quantity || 1), 0) || 1;
                         const apportionedUnitPrice = Math.round((bundleCalculatedPricing.finalPrice / totalBundleItemsCount) * 100) / 100;
+                        const stock = getProductBranchStock(item.id);
+                        const isOutOfStock = stock <= 0;
+                        const isInsufficient = stock < item.quantity;
                         return (
                           <div
                             key={item.id}
                             className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all ${
                               isBeingReplaced
                                 ? "bg-amber-500/10 border-amber-500/60 shadow-lg"
+                                : isInsufficient
+                                ? "bg-red-500/10 border-red-500/50 shadow-sm"
                                 : "bg-brand-bgbase border-brand-border hover:border-brand-neonpurple/30"
                             }`}
                           >
                             <div className="flex-1 min-w-0 pr-3">
-                              <div className="flex items-center gap-2">
-                                <p className="text-xs font-bold text-main truncate capitalize">{item.name}</p>
-                                {isBeingReplaced && (
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className={`text-xs font-bold truncate capitalize ${isInsufficient ? "text-red-200" : "text-main"}`}>{item.name}</p>
+                                {isBeingReplaced ? (
                                   <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-amber-500 text-black">
                                     Replacing
+                                  </span>
+                                ) : isOutOfStock ? (
+                                  <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-red-500/20 text-red-400 border border-red-500/40 flex items-center gap-1">
+                                    <AlertCircle size={10} /> Out of Stock (0 in branch)
+                                  </span>
+                                ) : isInsufficient ? (
+                                  <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center gap-1">
+                                    <AlertCircle size={10} /> Insufficient (Only {stock} available, needs {item.quantity})
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                    Stock: {stock}
                                   </span>
                                 )}
                               </div>
@@ -3387,10 +3491,12 @@ export default function SalesPage() {
                                 }}
                                 className={`px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition-all ${
                                   isBeingReplaced
-                                    ? "bg-amber-500 text-black shadow-sm"
+                                    ? "bg-amber-500 text-black shadow-sm font-extrabold"
+                                    : isInsufficient
+                                    ? "bg-amber-500/20 border border-amber-500/60 text-amber-400 hover:bg-amber-500 hover:text-black font-extrabold shadow-sm"
                                     : "bg-brand-surface border border-brand-border text-brand-muted hover:text-amber-400 hover:border-amber-400/40"
                                 }`}
-                                title="Replace product with another from branch inventory"
+                                title={isInsufficient ? "Replace out-of-stock product with an in-stock branch product" : "Replace product with another from branch inventory"}
                               >
                                 <ArrowLeftRight size={12} />
                                 <span>{isBeingReplaced ? "Cancel" : "Replace"}</span>
@@ -3546,11 +3652,25 @@ export default function SalesPage() {
                   <button
                     type="button"
                     onClick={handleConfirmAddBundleToOrder}
-                    disabled={bundleCustomItems.length === 0}
-                    className="btn-premium h-11 px-7 rounded-full text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-lg disabled:opacity-50"
+                    disabled={bundleCustomItems.length === 0 || bundleStockIssues.length > 0}
+                    className={`btn-premium h-11 px-7 rounded-full text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-lg transition-all ${
+                      bundleStockIssues.length > 0
+                        ? "opacity-50 cursor-not-allowed bg-brand-surface text-brand-muted border border-brand-border shadow-none"
+                        : "disabled:opacity-50"
+                    }`}
+                    title={bundleStockIssues.length > 0 ? `Cannot add: ${bundleStockIssues.length} out-of-stock item(s) must be replaced or removed` : undefined}
                   >
-                    <ShoppingCart size={15} />
-                    <span>Add to Transaction</span>
+                    {bundleStockIssues.length > 0 ? (
+                      <>
+                        <Lock size={15} className="text-brand-muted" />
+                        <span>Cannot Proceed (Out of Stock)</span>
+                      </>
+                    ) : (
+                      <>
+                        <ShoppingCart size={15} />
+                        <span>Add to Transaction</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
