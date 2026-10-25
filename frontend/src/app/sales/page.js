@@ -3,6 +3,12 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { ThermalReceiptModal } from "@/components/ThermalReceipt";
 import Sidebar from "@/components/Sidebar";
+import {
+  generateQuickPaymentOptions,
+  validateCashInput,
+  formatPeso,
+  MAX_INPUT_LENGTH
+} from "@/utils/paymentValidation";
 import { useLayout } from "@/context/LayoutContext";
 import { useAuthGuard } from "@/lib/useAuthGuard";
 import { useTheme } from "@/context/ThemeContext";
@@ -404,6 +410,7 @@ export default function SalesPage() {
   const [productSearch, setProductSearch] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("Cash");
   const [cashPaid, setCashPaid] = useState("");
+  const [overpaymentConfirmed, setOverpaymentConfirmed] = useState(false);
   const [proofFile, setProofFile] = useState(null);
   const [success, setSuccess] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -1462,6 +1469,14 @@ export default function SalesPage() {
   const vatableSales = grandTotal / 1.12;
   const tax        = grandTotal - vatableSales; // Extracted VAT (grandTotal * 12 / 112)
 
+  const cashValidation = useMemo(() => {
+    return validateCashInput(cashPaid, grandTotal);
+  }, [cashPaid, grandTotal]);
+
+  const quickPaymentOptions = useMemo(() => {
+    return generateQuickPaymentOptions(grandTotal);
+  }, [grandTotal]);
+
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
     if (cart.length === 0 || processing) return;
@@ -1471,9 +1486,15 @@ export default function SalesPage() {
       return;
     }
     
-    if (paymentMethod === "Cash" && (!cashPaid || parseFloat(cashPaid) < grandTotal)) {
-      showError(t[language].insufficientCash);
-      return;
+    if (paymentMethod === "Cash") {
+      if (!cashValidation.isValid) {
+        showError(cashValidation.error || t[language].insufficientCash);
+        return;
+      }
+      if (cashValidation.isSuspiciousOverpayment && !overpaymentConfirmed) {
+        showError("Please confirm the unusually large cash overpayment before completing the order.");
+        return;
+      }
     }
     setProcessing(true);
     const token = localStorage.getItem("token");
@@ -1500,8 +1521,8 @@ export default function SalesPage() {
         customer_id:   selectedCustomer?.id   || undefined,
         payment_method: backendPaymentMethod,
         branch_id:     resolvedBranch,
-        amount_paid:   paymentMethod === "Cash" ? parseFloat(cashPaid) : grandTotal,
-        change_amount: paymentMethod === "Cash" ? Math.max(0, parseFloat(cashPaid) - grandTotal) : 0,
+        amount_paid:   paymentMethod === "Cash" ? cashValidation.parsedAmount : grandTotal,
+        change_amount: paymentMethod === "Cash" ? cashValidation.changeAmount : 0,
         notes:         combinedNotes,
         items:         cart.map(item => ({
           item_type: item.item_type || (item.isService ? "service" : "product"),
@@ -1555,6 +1576,7 @@ export default function SalesPage() {
         setShowReceiptModal(true);
         setProofFile(null);
         setCashPaid("");
+        setOverpaymentConfirmed(false);
         setIsReviewOpen(false);
         setCheckoutStep("review");
         fetchInventory(selectedBranchId);
@@ -2971,31 +2993,145 @@ export default function SalesPage() {
                             </p>
                           </div>
 
-                          {/* Cash Drawer cashier inputs */}
-                          <div>
-                            <label className="block text-[10px] font-black uppercase tracking-widest text-brand-muted mb-2">
-                              {t[language].cashReceived}
-                            </label>
-                            <input
-                              type="number"
-                              min={grandTotal}
-                              step="any"
-                              value={cashPaid}
-                              onChange={e => setCashPaid(e.target.value)}
-                              placeholder={`Min: ₱${grandTotal.toLocaleString()}`}
-                              className="w-full bg-brand-panel border border-brand-border rounded-xl p-3.5 text-sm font-bold text-main outline-none focus:border-brand-neonblue/40"
-                            />
-                            
-                            {cashPaid && parseFloat(cashPaid) >= grandTotal && (
-                              <div className="flex justify-between items-center mt-3 px-4 py-2.5 bg-green-500/10 border border-green-500/20 rounded-xl">
-                                <span className="text-[10px] font-black text-green-500 uppercase tracking-widest">{t[language].change}</span>
-                                <span className="text-base font-black text-green-500">
-                                  ₱{(parseFloat(cashPaid) - grandTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          {/* Dynamic Quick-Payment Suggestions */}
+                          {quickPaymentOptions.length > 0 && (
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-brand-muted">
+                                  Quick Cash Tender
+                                </label>
+                                <span className="text-[9px] text-brand-muted/70 font-semibold">
+                                  Auto-suggested denominations
                                 </span>
                               </div>
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                {quickPaymentOptions.map((opt, idx) => {
+                                  const isSelected = cashPaid === String(opt.amount) || (Number(cashPaid) === opt.amount && cashValidation.isValid);
+                                  return (
+                                    <button
+                                      key={idx}
+                                      type="button"
+                                      onClick={() => {
+                                        setCashPaid(String(opt.amount));
+                                        setOverpaymentConfirmed(false);
+                                      }}
+                                      className={`py-2 px-3 rounded-xl border text-center transition-all flex flex-col items-center justify-center gap-0.5 active:scale-95 ${
+                                        isSelected
+                                          ? "bg-amber-500 text-black border-amber-400 font-extrabold shadow-sm"
+                                          : opt.isExact
+                                          ? "bg-brand-panel hover:bg-brand-hover text-brand-neonblue border-brand-neonblue/30 hover:border-brand-neonblue/60"
+                                          : "bg-brand-panel hover:bg-brand-hover text-main border-brand-border hover:border-brand-neonblue/30"
+                                      }`}
+                                    >
+                                      <span className="text-[8px] uppercase font-black tracking-wider opacity-80 leading-none">
+                                        {opt.isExact ? "Exact Amount" : "Pay"}
+                                      </span>
+                                      <span className="text-xs font-mono font-black leading-none">
+                                        {opt.isExact ? `₱${formatPeso(opt.amount)}` : opt.label}
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Cash Drawer cashier inputs */}
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <label className="block text-[10px] font-black uppercase tracking-widest text-brand-muted">
+                                {t[language].cashReceived} (₱)
+                              </label>
+                              <span className="text-[10px] font-mono text-brand-muted font-bold">
+                                Due: ₱{formatPeso(grandTotal)}
+                              </span>
+                            </div>
+
+                            <div className="relative">
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                maxLength={MAX_INPUT_LENGTH}
+                                value={cashPaid}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  if (val === "" || /^[0-9]*\.?[0-9]*$/.test(val)) {
+                                    setCashPaid(val);
+                                    setOverpaymentConfirmed(false);
+                                  }
+                                }}
+                                placeholder={`Enter cash amount (Min: ₱${formatPeso(grandTotal)})`}
+                                className={`w-full bg-brand-panel border rounded-xl p-3.5 text-sm font-bold font-mono text-main outline-none transition-all ${
+                                  cashPaid && !cashValidation.isValid
+                                    ? "border-red-500/50 focus:border-red-500"
+                                    : cashPaid && cashValidation.isSuspiciousOverpayment
+                                    ? "border-amber-500/50 focus:border-amber-500"
+                                    : "border-brand-border focus:border-brand-neonblue/40"
+                                }`}
+                              />
+                              {cashPaid && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setCashPaid("");
+                                    setOverpaymentConfirmed(false);
+                                  }}
+                                  className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-muted hover:text-main text-xs p-1"
+                                  title="Clear cash input"
+                                >
+                                  ✕
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Validation Error Banner */}
+                            {cashPaid && !cashValidation.isValid && (
+                              <div className="mt-2.5 p-3 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center justify-between text-xs text-red-400">
+                                <div className="flex items-center gap-2">
+                                  <AlertTriangle size={15} className="shrink-0 text-red-400" />
+                                  <span className="font-bold">{cashValidation.error}</span>
+                                </div>
+                              </div>
                             )}
-                            {cashPaid && parseFloat(cashPaid) < grandTotal && (
-                              <p className="text-[9px] font-bold text-red-500 mt-1 uppercase tracking-wider">{t[language].insufficientCash}</p>
+
+                            {/* Suspicious Overpayment Warning */}
+                            {cashValidation.isValid && cashValidation.isSuspiciousOverpayment && (
+                              <div className="mt-3 p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-2">
+                                <div className="flex items-start gap-2.5 text-xs text-amber-300">
+                                  <AlertTriangle size={16} className="text-amber-400 shrink-0 mt-0.5" />
+                                  <div>
+                                    <p className="font-black uppercase tracking-wide text-amber-400">
+                                      Unusually Large Overpayment
+                                    </p>
+                                    <p className="text-[11px] text-amber-200/90 mt-0.5 leading-relaxed">
+                                      Cash received of <strong className="font-mono text-amber-300">₱{formatPeso(cashValidation.parsedAmount)}</strong> requires returning <strong className="font-mono text-amber-300">₱{formatPeso(cashValidation.changeAmount)}</strong> in change. Please verify the actual cash handed by the customer.
+                                    </p>
+                                  </div>
+                                </div>
+                                <label className="flex items-center gap-2.5 pt-1.5 border-t border-amber-500/20 cursor-pointer select-none">
+                                  <input
+                                    type="checkbox"
+                                    checked={overpaymentConfirmed}
+                                    onChange={e => setOverpaymentConfirmed(e.target.checked)}
+                                    className="w-4 h-4 rounded text-amber-500 border-amber-500/40 bg-brand-surface focus:ring-amber-400"
+                                  />
+                                  <span className="text-[11px] font-black uppercase tracking-wider text-amber-300">
+                                    I confirm the customer provided ₱{formatPeso(cashValidation.parsedAmount)} in cash
+                                  </span>
+                                </label>
+                              </div>
+                            )}
+
+                            {/* Change Box (Contained, no overflow, perfectly formatted) */}
+                            {cashValidation.isValid && (
+                              <div className="flex justify-between items-center mt-3 px-4 py-3 bg-emerald-500/10 border border-emerald-500/25 rounded-xl overflow-hidden min-w-0">
+                                <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest shrink-0 mr-2">
+                                  CHANGE TO RETURN
+                                </span>
+                                <span className="text-base sm:text-lg font-black text-emerald-400 font-mono truncate text-right">
+                                  ₱{formatPeso(cashValidation.changeAmount)}
+                                </span>
+                              </div>
                             )}
                           </div>
                         </motion.div>
@@ -3253,8 +3389,15 @@ export default function SalesPage() {
                           {t[language].saveDraft}
                         </button>
                         <button
+                          type="button"
                           onClick={handleSubmit}
-                          disabled={processing || (paymentMethod === "Cash" && (!cashPaid || parseFloat(cashPaid) < grandTotal))}
+                          disabled={
+                            processing ||
+                            (paymentMethod === "Cash" && (
+                              !cashValidation.isValid ||
+                              (cashValidation.isSuspiciousOverpayment && !overpaymentConfirmed)
+                            ))
+                          }
                           className={`w-full h-13 py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 text-white bg-green-600 hover:bg-green-700 transition-all active:scale-98 shadow-md disabled:opacity-50 disabled:grayscale border-transparent`}
                         >
                           {processing ? (

@@ -7,6 +7,7 @@ const {
   Product, Inventory, Category, StockMovement, Branch, User,
   Service, ServiceJob, AuditLog
 } = require('../models');
+const { validateCashPayment } = require('../utils/paymentValidation');
 
 // ─────────────────────────────────────────────────────────────────
 // HELPERS
@@ -240,9 +241,19 @@ const createSale = async (req, res) => {
     sale.totalAmount    = totalAmount;
     sale.sale_type      = saleType;
     
-    // Set fallback payment summary for non-cash if not specified by frontend
+    // Validate and record payment summary ───────────────────────────
     const grandTotal = totalAmount; // Shelf prices are VAT-inclusive (Philippine retail standard)
-    if (payment_method !== 'cash' || !amount_paid) {
+    const normalizedPaymentMethod = (payment_method || 'cash').toLowerCase();
+
+    if (normalizedPaymentMethod === 'cash') {
+      const validation = validateCashPayment(amount_paid, grandTotal);
+      if (!validation.isValid) {
+        await transaction.rollback();
+        return res.status(400).json({ error: validation.error });
+      }
+      sale.amountPaid = validation.amountPaid;
+      sale.changeAmount = validation.changeAmount;
+    } else {
       sale.amountPaid = grandTotal;
       sale.changeAmount = 0.00;
     }

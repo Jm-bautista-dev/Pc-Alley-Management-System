@@ -48,6 +48,10 @@ router.post('/', [
   body('payment_method')
     .isIn(['cash', 'card', 'transfer', 'gcash', 'bank_transfer', 'mixed'])
     .withMessage('Invalid payment method'),
+  body('amount_paid')
+    .optional({ checkFalsy: true })
+    .isFloat({ min: 0, max: 10000000 })
+    .withMessage('amount_paid must be a valid number between 0 and 10,000,000'),
   validate,
   createSale
 ]);
