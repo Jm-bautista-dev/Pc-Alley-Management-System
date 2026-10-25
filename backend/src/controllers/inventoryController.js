@@ -95,6 +95,20 @@ const updateStock = async (req, res) => {
   try {
     const { product_id, branch_id, quantity, low_stock_threshold, price, enabled } = req.body;
     
+    // Enforce 5,000 units maximum limit
+    if (quantity !== undefined && quantity !== null && quantity !== "") {
+      const parsedQty = parseInt(quantity, 10);
+      if (isNaN(parsedQty) || parsedQty < 0 || parsedQty > 5000) {
+        return res.status(400).json({ error: 'Stock quantity must be an integer between 0 and 5,000 units.' });
+      }
+    }
+    if (low_stock_threshold !== undefined && low_stock_threshold !== null && low_stock_threshold !== "") {
+      const parsedThreshold = parseInt(low_stock_threshold, 10);
+      if (isNaN(parsedThreshold) || parsedThreshold < 0 || parsedThreshold > 5000) {
+        return res.status(400).json({ error: 'Low stock threshold must be an integer between 0 and 5,000 units.' });
+      }
+    }
+
     // Support updating all branches for superadmin
     if (branch_id === 'all' || branch_id === 'ALL') {
       if (req.user.role !== 'super_admin' && req.user.role !== 'superadmin' && req.user.role !== 'admin_manager') {
@@ -530,11 +544,19 @@ const adjustStock = async (req, res) => {
     const inventory = await Inventory.findOne({ where: { product_id, branch_id } });
     if (!inventory) return res.status(404).json({ message: 'Inventory record not found.' });
 
+    const parsedQty = parseInt(quantity, 10);
+    if (isNaN(parsedQty) || Math.abs(parsedQty) > 5000) {
+      return res.status(400).json({ error: 'Quantity adjustment must be between -5,000 and 5,000 units.' });
+    }
+
     const previous_stock = inventory.quantity;
-    const new_stock = previous_stock + parseInt(quantity);
+    const new_stock = previous_stock + parsedQty;
     
     if (new_stock < 0) {
       return res.status(400).json({ error: 'Adjustment would result in negative stock level.' });
+    }
+    if (new_stock > 5000) {
+      return res.status(400).json({ error: 'Adjustment would result in stock level exceeding 5,000 units.' });
     }
 
     inventory.quantity = new_stock;

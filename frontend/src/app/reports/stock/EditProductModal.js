@@ -260,7 +260,29 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
     return fd;
   };
 
+  const isQuantityInvalid = stockData.quantity !== "" && stockData.quantity !== undefined && stockData.quantity !== null && (
+    isNaN(Number(stockData.quantity)) ||
+    !Number.isInteger(Number(stockData.quantity)) ||
+    Number(stockData.quantity) < 0 ||
+    Number(stockData.quantity) > 5000
+  );
+
+  const isThresholdInvalid = stockData.low_stock_threshold !== "" && stockData.low_stock_threshold !== undefined && stockData.low_stock_threshold !== null && (
+    isNaN(Number(stockData.low_stock_threshold)) ||
+    !Number.isInteger(Number(stockData.low_stock_threshold)) ||
+    Number(stockData.low_stock_threshold) < 0 ||
+    Number(stockData.low_stock_threshold) > 5000
+  );
+
   const handleSaveProduct = async () => {
+    if (isQuantityInvalid) {
+      showError("Stock quantity must be an integer between 0 and 5,000 units.");
+      return;
+    }
+    if (isThresholdInvalid) {
+      showError("Low stock alert threshold must be an integer between 0 and 5,000 units.");
+      return;
+    }
     setUpdating(true);
     const token = localStorage.getItem("token");
     try {
@@ -340,6 +362,14 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
   const handleAdjustStock = async () => {
     if (!stockData.branch_id) {
       showError("Select a branch first");
+      return;
+    }
+    if (isQuantityInvalid) {
+      showError("Stock quantity must be an integer between 0 and 5,000 units.");
+      return;
+    }
+    if (isThresholdInvalid) {
+      showError("Low stock alert threshold must be an integer between 0 and 5,000 units.");
       return;
     }
     setUpdating(true);
@@ -693,14 +723,29 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
               </select>
             </div>
             <div>
-              <label className="block text-[10px] uppercase font-black text-muted mb-1">Set/Adjust Stock Quantity</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-[10px] uppercase font-black text-muted">Set/Adjust Stock Quantity</label>
+                <span className="text-[9px] font-bold text-muted/70 uppercase">Max: 5,000</span>
+              </div>
               <input
                 type="number"
+                min="0"
+                max="5000"
                 value={stockData.quantity}
-                onChange={e => setStockData({ ...stockData, quantity: e.target.value })}
-                placeholder={stockData.branch_id === "all" ? "Apply to all branches" : `Current: ${currentStock}`}
-                className="w-full bg-brand-bgbase border border-border text-main rounded-lg px-3 py-2 text-sm font-bold"
+                onChange={e => {
+                  const val = e.target.value;
+                  if (val === "" || /^\d{0,5}$/.test(val)) {
+                    setStockData(prev => ({ ...prev, quantity: val }));
+                  }
+                }}
+                placeholder={stockData.branch_id === "all" ? "Apply to all branches (Max: 5,000)" : `Current: ${currentStock}`}
+                className={`w-full bg-brand-bgbase border ${isQuantityInvalid ? "border-red-500 focus:border-red-500 text-red-400" : "border-border text-main"} rounded-lg px-3 py-2 text-sm font-bold transition-colors`}
               />
+              {isQuantityInvalid && (
+                <p className="text-[10px] text-red-400 font-bold mt-1 flex items-center gap-1">
+                  <span>⚠️</span> Stock quantity must be between 0 and 5,000 units.
+                </p>
+              )}
             </div>
           </div>
 
@@ -709,6 +754,8 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
               <label className="block text-[10px] uppercase font-black text-muted mb-1">Branch Price Override (₱)</label>
               <input
                 type="number"
+                min="0"
+                step="0.01"
                 value={stockData.price}
                 onChange={e => setStockData({ ...stockData, price: e.target.value })}
                 placeholder={`Global: ₱${Number(product.global_price || product.price || 0).toLocaleString()}`}
@@ -716,13 +763,28 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
               />
             </div>
             <div>
-              <label className="block text-[10px] uppercase font-black text-muted mb-1">Low Stock Alert Threshold</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-[10px] uppercase font-black text-muted">Low Stock Alert Threshold</label>
+                <span className="text-[9px] font-bold text-muted/70 uppercase">Max: 5,000</span>
+              </div>
               <input
                 type="number"
+                min="0"
+                max="5000"
                 value={stockData.low_stock_threshold}
-                onChange={e => setStockData({ ...stockData, low_stock_threshold: e.target.value })}
-                className="w-full bg-brand-bgbase border border-border text-main rounded-lg px-3 py-2 text-sm font-bold"
+                onChange={e => {
+                  const val = e.target.value;
+                  if (val === "" || /^\d{0,5}$/.test(val)) {
+                    setStockData(prev => ({ ...prev, low_stock_threshold: val }));
+                  }
+                }}
+                className={`w-full bg-brand-bgbase border ${isThresholdInvalid ? "border-red-500 focus:border-red-500 text-red-400" : "border-border text-main"} rounded-lg px-3 py-2 text-sm font-bold transition-colors`}
               />
+              {isThresholdInvalid && (
+                <p className="text-[10px] text-red-400 font-bold mt-1 flex items-center gap-1">
+                  <span>⚠️</span> Threshold must be between 0 and 5,000 units.
+                </p>
+              )}
             </div>
           </div>
 
@@ -749,14 +811,14 @@ export default function EditProductModal({ product, isOpen, onClose, onUpdate, b
           <div className="flex gap-2">
             <button
               onClick={handleAdjustStock}
-              disabled={updating}
+              disabled={updating || isQuantityInvalid || isThresholdInvalid}
               className="px-4 py-2 rounded-lg bg-green-600 text-white text-xs font-black uppercase tracking-wider hover:bg-green-700 disabled:opacity-50"
             >
               Update Stock
             </button>
             <button
               onClick={handleSaveProduct}
-              disabled={updating}
+              disabled={updating || isQuantityInvalid || isThresholdInvalid}
               className="px-4 py-2 rounded-lg bg-brand-neonblue text-white text-xs font-black uppercase tracking-wider hover:bg-blue-600 disabled:opacity-50"
             >
               Save Product

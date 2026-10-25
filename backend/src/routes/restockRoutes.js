@@ -10,7 +10,7 @@ router.use(authenticateToken);
 router.post('/', [
   authorizeRoles('super_admin', 'branch_admin', 'employee'),
   body('product_id').isInt().withMessage('Product ID must be an integer.'),
-  body('quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1.'),
+  body('quantity').isInt({ min: 1, max: 5000 }).withMessage('Quantity must be between 1 and 5,000.'),
   body('cost_price').optional({ checkFalsy: true }).isNumeric().withMessage('Cost price must be a number.'),
   body('supplier_id').optional({ checkFalsy: true }).isInt().withMessage('Supplier ID must be an integer.'),
   body('branch_id').optional({ checkFalsy: true }).isInt().withMessage('Branch ID must be an integer.'),

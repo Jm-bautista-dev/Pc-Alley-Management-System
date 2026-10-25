@@ -31,7 +31,7 @@ router.post('/', [
   authorizeRoles('super_admin', 'branch_admin', 'employee'),
   body('items').isArray({ min: 1 }).withMessage('Items must be a non-empty array.'),
   body('items.*.product_id').isInt().withMessage('Product ID must be an integer.'),
-  body('items.*.quantity_requested').isInt({ min: 1, max: 1000000 }).withMessage('Quantity requested must be between 1 and 1,000,000.'),
+  body('items.*.quantity_requested').isInt({ min: 1, max: 5000 }).withMessage('Quantity requested must be between 1 and 5,000.'),
   body('source_branch_id').optional({ nullable: true }).isInt().withMessage('Source branch ID must be an integer.'),
   body('notes').optional({ checkFalsy: true }).isString().trim().isLength({ max: 500 }).withMessage('Notes cannot exceed 500 characters.'),
   body('priority').optional({ checkFalsy: true }).isIn(['low', 'normal', 'urgent']).withMessage('Invalid priority.'),

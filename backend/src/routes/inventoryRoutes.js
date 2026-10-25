@@ -32,8 +32,8 @@ router.patch('/stock', [
   authorizeRoles('super_admin', 'branch_admin'),
   body('product_id').notEmpty().withMessage('Product reference required'),
   body('branch_id').notEmpty().withMessage('Sector target required'),
-  body('quantity').optional().isInt({ min: 0, max: 1000000 }).withMessage('Quantity must be between 0 and 1,000,000'),
-  body('low_stock_threshold').optional().isInt({ min: 0, max: 100000 }).withMessage('Threshold must be between 0 and 100,000'),
+  body('quantity').optional().isInt({ min: 0, max: 5000 }).withMessage('Stock quantity must be between 0 and 5,000 units'),
+  body('low_stock_threshold').optional().isInt({ min: 0, max: 5000 }).withMessage('Low stock threshold must be between 0 and 5,000 units'),
   body('price').optional().custom(val => val === null || val === "" || (!isNaN(parseFloat(val)) && parseFloat(val) >= 0 && parseFloat(val) <= 99999999.99)).withMessage('Price must be a valid number between ₱0.00 and ₱99,999,999.99'),
   body('enabled').optional().isBoolean().withMessage('Enabled must be a boolean value'),
   validate,
@@ -45,7 +45,7 @@ router.post('/adjust-stock', [
   authorizeRoles('super_admin'),
   body('product_id').notEmpty().withMessage('Product ID is required'),
   body('branch_id').notEmpty().withMessage('Branch ID is required'),
-  body('quantity').isInt({ min: -1000000, max: 1000000 }).withMessage('Quantity adjustment must be between -1,000,000 and 1,000,000'),
+  body('quantity').isInt({ min: -5000, max: 5000 }).withMessage('Quantity adjustment must be between -5,000 and 5,000 units'),
   validate,
   adjustStock
 ]);

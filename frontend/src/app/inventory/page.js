@@ -121,6 +121,17 @@ export default function InventoryPage() {
 
   const handleUpdateStock = async (e) => {
     e.preventDefault();
+    const parsedQty = parseInt(adjustValue, 10);
+    if (isNaN(parsedQty) || parsedQty < 0 || parsedQty > 5000) {
+      showError("Stock quantity must be between 0 and 5,000 units.");
+      return;
+    }
+    const parsedThresh = parseInt(adjustThreshold, 10);
+    if (isNaN(parsedThresh) || parsedThresh < 0 || parsedThresh > 5000) {
+      showError("Low stock alert threshold must be between 0 and 5,000 units.");
+      return;
+    }
+
     const token = localStorage.getItem("token");
     try {
       const res = await fetch(apiUrl("/api/inventory/stock"), {
@@ -132,8 +143,8 @@ export default function InventoryPage() {
         body: JSON.stringify({
           product_id: editingItem.Product.id,
           branch_id: editingItem.branch_id,
-          quantity: parseInt(adjustValue),
-          low_stock_threshold: parseInt(adjustThreshold)
+          quantity: parsedQty,
+          low_stock_threshold: parsedThresh
         })
       });
 
@@ -588,8 +599,13 @@ export default function InventoryPage() {
                            <input 
                              type="number" 
                              required
+                             min="0"
+                             max="5000"
                              value={adjustValue}
-                             onChange={(e) => setAdjustValue(e.target.value)}
+                             onChange={(e) => {
+                               const v = e.target.value;
+                               if (v === "" || /^\d{0,5}$/.test(v)) setAdjustValue(v);
+                             }}
                              className="flex-1 bg-brand-bgbase border border-border rounded-2xl py-4 px-6 text-xl font-rajdhani font-bold text-brand-neonblue focus:outline-none focus:border-brand-neonblue transition-all"
                            />
                            <div className="px-5 py-4 bg-brand-surface border border-border rounded-2xl flex flex-col items-center">
@@ -603,9 +619,13 @@ export default function InventoryPage() {
                         <input 
                           type="number" 
                           min="0"
+                          max="5000"
                           required
                           value={adjustThreshold}
-                          onChange={(e) => setAdjustThreshold(e.target.value)}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            if (v === "" || /^\d{0,5}$/.test(v)) setAdjustThreshold(v);
+                          }}
                           className="w-full mt-2 bg-brand-bgbase border border-border rounded-2xl py-4 px-6 text-sm text-main focus:outline-none focus:border-brand-crimson/50 transition-all font-bold"
                         />
                      </div>

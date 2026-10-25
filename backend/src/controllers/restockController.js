@@ -12,8 +12,9 @@ const createRequest = async (req, res) => {
     }
 
     // Validate quantity
-    if (!quantity || parseInt(quantity) < 1) {
-      return res.status(400).json({ message: 'Quantity must be at least 1.' });
+    const parsedQty = parseInt(quantity, 10);
+    if (!quantity || isNaN(parsedQty) || parsedQty < 1 || parsedQty > 5000) {
+      return res.status(400).json({ message: 'Quantity must be between 1 and 5,000.' });
     }
 
     const request = await RestockRequest.create({

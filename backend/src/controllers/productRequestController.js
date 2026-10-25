@@ -93,9 +93,10 @@ const createRequest = async (req, res) => {
       const item = items[i];
       const { product_id, quantity_requested } = item;
 
-      if (!quantity_requested || parseInt(quantity_requested) < 1) {
+      const parsedQty = parseInt(quantity_requested, 10);
+      if (!quantity_requested || isNaN(parsedQty) || parsedQty < 1 || parsedQty > 5000) {
         await transaction.rollback();
-        return res.status(400).json({ message: 'Quantity requested must be at least 1.' });
+        return res.status(400).json({ message: 'Quantity requested must be between 1 and 5,000.' });
       }
 
       const product = await Product.findByPk(product_id);

@@ -89,8 +89,8 @@ export default function RestockRequestModal({ inventoryItem, product: legacyProd
     e.preventDefault();
 
     const qty = parseInt(quantity);
-    if (isNaN(qty) || qty < 1 || qty > 1000000) {
-      showError("Please enter a valid restock quantity between 1 and 1,000,000.");
+    if (isNaN(qty) || qty < 1 || qty > 5000) {
+      showError("Please enter a valid restock quantity between 1 and 5,000.");
       return;
     }
 
@@ -221,18 +221,26 @@ export default function RestockRequestModal({ inventoryItem, product: legacyProd
           <form onSubmit={handleSubmit} className="px-5 py-3.5 sm:px-6 space-y-3.5">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[9.5px] uppercase tracking-wider font-bold text-muted mb-1.5 ml-0.5">
-                  Quantity to Request
-                </label>
+                <div className="flex items-center justify-between mb-1.5 ml-0.5">
+                  <label className="block text-[9.5px] uppercase tracking-wider font-bold text-muted">
+                    Quantity to Request
+                  </label>
+                  <span className="text-[9px] font-bold text-muted/70 uppercase">Max: 5,000</span>
+                </div>
                 <div className="relative">
                   <ShoppingCart size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
                   <input
                     type="number"
                     min="1"
-                    max="1000000"
+                    max="5000"
                     required
                     value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === "" || /^\d{0,5}$/.test(val)) {
+                        setQuantity(val);
+                      }
+                    }}
                     className="w-full bg-brand-bgbase border border-border rounded-xl pl-9 pr-3 py-2 text-sm font-rajdhani font-black text-main focus:outline-none focus:border-brand-neonblue transition-all"
                     placeholder="0"
                   />
