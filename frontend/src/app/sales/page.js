@@ -555,7 +555,11 @@ export default function SalesPage() {
         const parsed = JSON.parse(savedDraft);
         if (parsed) {
           if (Array.isArray(parsed.cart) && parsed.cart.length > 0) {
-            setCart(parsed.cart);
+            const restoredCart = parsed.cart.map((c, i) => ({
+              ...c,
+              cartItemId: c.cartItemId || `cart-${c.id || i}-${c.isService ? 'svc' : 'prod'}-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`
+            }));
+            setCart(restoredCart);
           }
           if (parsed.selectedCustomer) setSelectedCustomer(parsed.selectedCustomer);
           if (parsed.customerQuery) setCustomerQuery(parsed.customerQuery);
@@ -568,7 +572,11 @@ export default function SalesPage() {
       } else if (legacyCart) {
         const parsed = JSON.parse(legacyCart);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setCart(parsed);
+          const restoredCart = parsed.map((c, i) => ({
+            ...c,
+            cartItemId: c.cartItemId || `cart-${c.id || i}-${c.isService ? 'svc' : 'prod'}-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`
+          }));
+          setCart(restoredCart);
         }
         if (legacyCustomer) {
           setCustomerQuery(legacyCustomer);
@@ -767,13 +775,18 @@ export default function SalesPage() {
   const handleOpenBundleCustomizer = (bundle) => {
     setSelectedBundleForCustomization(bundle);
     setBundleCustomItems(
-      (bundle.items || []).map(item => ({
-        id: item.Product?.id || item.product_id,
-        name: item.Product?.name || `Product #${item.product_id}`,
-        sku: item.Product?.sku || "",
-        price: parseFloat(item.Product?.price || 0),
-        quantity: item.quantity || 1
-      }))
+      (bundle.items || []).map(item => {
+        const prodId = item.Product?.id || item.product_id;
+        const invItem = inventory.find(i => (i.Product?.id || i.product_id || i.id) === prodId);
+        const livePrice = parseFloat(item.Product?.price || invItem?.Product?.price || invItem?.price || 0);
+        return {
+          id: prodId,
+          name: item.Product?.name || invItem?.Product?.name || `Product #${prodId}`,
+          sku: item.Product?.sku || invItem?.Product?.sku || "",
+          price: livePrice,
+          quantity: item.quantity || 1
+        };
+      })
     );
     setBundleProductSearch("");
     setBundleProductPickerOpen(false);
@@ -978,7 +991,7 @@ export default function SalesPage() {
 
       let effectiveUnitPrice = bundleItem.price;
       if (finalPrice > 0) {
-        if (currentRetailSum > 0) {
+        if (currentRetailSum > 0 && bundleItem.price > 0) {
           // Apportion proportionately based on each product's retail price
           if (idx === bundleCustomItems.length - 1) {
             const remaining = Math.max(0, finalPrice - runningApportionedTotal);
@@ -999,7 +1012,10 @@ export default function SalesPage() {
         }
       }
 
+      const uniqueCartItemId = `bundle-${selectedBundleForCustomization.id}-${bundleItem.id}-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`;
+
       const cartItem = {
+        cartItemId: uniqueCartItemId,
         id: bundleItem.id,
         name: bundleItem.name,
         price: effectiveUnitPrice,
@@ -1203,6 +1219,7 @@ export default function SalesPage() {
       setCart(updatedCart);
     } else {
       const cartItem = {
+        cartItemId: `prod-${item.product_id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         id: item.product_id,
         name: item.Product.name,
         price: parseFloat(item.Product.price),
@@ -1279,6 +1296,7 @@ export default function SalesPage() {
       : customNotes ? `Note: ${customNotes}` : "Standard Options";
 
     const cartItem = {
+      cartItemId: `prod-${item.product_id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       id: item.product_id,
       name: item.Product.name,
       price: parseFloat(item.Product.price),
@@ -1336,6 +1354,7 @@ export default function SalesPage() {
       setCart(updatedCart);
     } else {
       const cartItem = {
+        cartItemId: `svc-${service.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         id: service.id,
         name: service.name,
         price: parseFloat(service.base_price || 0),
@@ -1369,6 +1388,7 @@ export default function SalesPage() {
     const summary = `Fee: ₱${priceVal.toLocaleString()} | Reason: ${reason}${deviceSpecsInput ? ` | ${deviceTypeInput} (${deviceSpecsInput})` : ''}`;
 
     const cartItem = {
+      cartItemId: `svc-${selectedServiceDetail.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       id: selectedServiceDetail.id,
       name: selectedServiceDetail.name,
       price: priceVal,
@@ -1387,9 +1407,13 @@ export default function SalesPage() {
     showSuccess(`Added ${selectedServiceDetail.name} to order`);
   };
 
-  const updateQuantity = (id, delta, isServiceItem) => {
-    setCart(cart.map(item => {
-      const match = isServiceItem !== undefined ? (item.id === id && !!item.isService === !!isServiceItem) : (item.id === id);
+  const updateQuantity = (identifier, delta, isServiceItem) => {
+    setCart(prevCart => prevCart.map(item => {
+      const match = item.cartItemId
+        ? item.cartItemId === identifier
+        : isServiceItem !== undefined
+        ? (item.id === identifier && !!item.isService === !!isServiceItem)
+        : (item.id === identifier);
       if (!match) return item;
       const newQty = Math.max(1, item.quantity + delta);
       if (!item.isService && newQty > item.maxStock) {
@@ -1400,12 +1424,20 @@ export default function SalesPage() {
     }));
   };
 
-  const removeFromCart = (id, isServiceItem) => setCart(cart.filter(item => {
-    if (isServiceItem !== undefined) {
-      return !(item.id === id && !!item.isService === !!isServiceItem);
-    }
-    return item.id !== id;
-  }));
+  const removeFromCart = (identifier, isServiceItem, cartItemId) => {
+    setCart(prevCart => prevCart.filter(item => {
+      if (cartItemId && item.cartItemId) {
+        return item.cartItemId !== cartItemId;
+      }
+      if (item.cartItemId && item.cartItemId === identifier) {
+        return false;
+      }
+      if (isServiceItem !== undefined) {
+        return !(item.id === identifier && !!item.isService === !!isServiceItem);
+      }
+      return item.id !== identifier;
+    }));
+  };
 
   const productSubtotal = cart
     .filter(i => !i.isService && i.item_type !== "service")
@@ -2663,12 +2695,32 @@ export default function SalesPage() {
                   </h2>
                 </div>
                 
-                <button
-                  onClick={() => setIsReviewOpen(false)}
-                  className="w-10 h-10 rounded-full bg-brand-panel hover:bg-brand-hover flex items-center justify-center text-brand-muted border border-brand-border"
-                >
-                  <X size={18} />
-                </button>
+                <div className="flex items-center gap-2">
+                  {cart.length > 0 && checkoutStep === "review" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm("Are you sure you want to clear all items in this order?")) {
+                          setCart([]);
+                          localStorage.removeItem("pc_alley_pos_cart_draft");
+                          localStorage.removeItem("pc_alley_pos_cart");
+                          setIsReviewOpen(false);
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white border border-red-500/20 text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all"
+                    >
+                      <Trash2 size={13} />
+                      <span>Clear All</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsReviewOpen(false)}
+                    className="w-10 h-10 rounded-full bg-brand-panel hover:bg-brand-hover flex items-center justify-center text-brand-muted border border-brand-border"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
               </header>
 
               {/* Split Main Content Area */}
@@ -2679,94 +2731,144 @@ export default function SalesPage() {
                   {checkoutStep === "review" ? (
                     /* REVIEW STEP ITEMS LIST */
                     <div className="space-y-4 max-w-3xl mx-auto">
-                      {cart.map((item) => (
-                        <div
-                          key={`${item.id}-${item.isService ? 'svc' : 'prod'}`}
-                          onClick={() => {
-                            if (!item.isService) {
-                              const invItem = inventory.find(i => i.product_id === item.id);
-                              if (invItem) {
-                                handleProductCustomize(invItem);
+                      {cart.map((item, idx) => {
+                        const stock = !item.isService ? getProductBranchStock(item.id) : null;
+                        const isOutOfStock = !item.isService && stock <= 0;
+                        const isInsufficient = !item.isService && stock < item.quantity;
+                        return (
+                          <div
+                            key={item.cartItemId || `${item.id}-${item.isService ? 'svc' : 'prod'}-${idx}`}
+                            onClick={() => {
+                              if (!item.isService) {
+                                const invItem = inventory.find(i => (i.Product?.id || i.product_id || i.id) === item.id);
+                                if (invItem) {
+                                  handleProductCustomize(invItem);
+                                }
                               }
-                            }
-                          }}
-                          className={`bg-brand-surface rounded-3xl p-5 border ${
-                            item.isService ? 'border-purple-500/30' : 'border-brand-border'
-                          } shadow-sm dark:shadow-none flex items-center justify-between gap-6 cursor-pointer hover:border-brand-neonblue/20 dark:hover:border-brand-neonblue/40 transition-all`}
-                        >
-                          <div className="flex items-center gap-4 flex-1 min-w-0">
-                            {/* Image / Icon Box */}
-                            <div className={`w-16 h-16 rounded-xl ${item.isService ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'bg-brand-panel border border-brand-border'} flex items-center justify-center shrink-0 overflow-hidden`}>
-                              {item.isService ? <Wrench size={24} className="stroke-[1.5px]" /> : <Package size={24} className="text-brand-muted stroke-[1.5px]" />}
-                            </div>
-                            
-                            {/* Title / Meta */}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider ${
-                                  item.isService ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30' : 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30'
-                                }`}>
-                                  {item.isService ? 'Technical Service' : 'Physical Product'}
-                                </span>
-                                {item.isBundleItem && (
-                                  <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider flex items-center gap-1 ${
-                                    item.isCustomizedBundle
-                                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
-                                      : 'bg-brand-neonpurple/20 text-brand-neonpurple border border-brand-neonpurple/40'
+                            }}
+                            className={`bg-brand-surface rounded-3xl p-5 border ${
+                              item.isService ? 'border-purple-500/30' : isOutOfStock ? 'border-red-500/50 bg-red-500/5' : isInsufficient ? 'border-amber-500/50 bg-amber-500/5' : 'border-brand-border'
+                            } shadow-sm dark:shadow-none flex items-center justify-between gap-6 cursor-pointer hover:border-brand-neonblue/20 dark:hover:border-brand-neonblue/40 transition-all`}
+                          >
+                            <div className="flex items-center gap-4 flex-1 min-w-0">
+                              {/* Image / Icon Box */}
+                              <div className={`w-16 h-16 rounded-xl ${item.isService ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'bg-brand-panel border border-brand-border'} flex items-center justify-center shrink-0 overflow-hidden`}>
+                                {item.isService ? <Wrench size={24} className="stroke-[1.5px]" /> : <Package size={24} className="text-brand-muted stroke-[1.5px]" />}
+                              </div>
+                              
+                              {/* Title / Meta */}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider ${
+                                    item.isService ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30' : 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30'
                                   }`}>
-                                    {item.isCustomizedBundle ? <Sparkles size={10} /> : <Layers size={10} />}
-                                    <span>{item.bundleName || "Bundle Item"}</span>
+                                    {item.isService ? 'Technical Service' : 'Physical Product'}
                                   </span>
+                                  {item.isBundleItem && (
+                                    <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider flex items-center gap-1 ${
+                                      item.isCustomizedBundle
+                                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                                        : 'bg-brand-neonpurple/20 text-brand-neonpurple border border-brand-neonpurple/40'
+                                    }`}>
+                                      {item.isCustomizedBundle ? <Sparkles size={10} /> : <Layers size={10} />}
+                                      <span>{item.bundleName || "Bundle Item"}</span>
+                                    </span>
+                                  )}
+                                  {item.sku && <p className="text-[9px] font-mono text-brand-muted tracking-wider">{item.sku}</p>}
+                                </div>
+
+                                <h4 className="text-sm font-rajdhani font-black text-main uppercase tracking-wide leading-tight truncate mt-1">
+                                  {item.name}
+                                </h4>
+                                
+                                {/* Variant / Addon descriptors */}
+                                <p className="text-[10px] font-bold text-main mt-1.5 bg-brand-panel border border-brand-border inline-block px-2.5 py-0.5 rounded-lg leading-relaxed">
+                                  {item.selectionSummary}
+                                </p>
+
+                                {/* Real-time Branch Stock Indicator */}
+                                {!item.isService && (
+                                  <div className="mt-2 flex items-center gap-1.5">
+                                    {isOutOfStock ? (
+                                      <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-red-500/20 text-red-400 border border-red-500/40 flex items-center gap-1">
+                                        <AlertTriangle size={10} /> Out of Stock (0 in branch)
+                                      </span>
+                                    ) : isInsufficient ? (
+                                      <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center gap-1">
+                                        <AlertTriangle size={10} /> Insufficient (Only {stock} available, needs {item.quantity})
+                                      </span>
+                                    ) : (
+                                      <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                                        Branch Stock: {stock}
+                                      </span>
+                                    )}
+                                  </div>
                                 )}
-                                {item.sku && <p className="text-[9px] font-mono text-brand-muted tracking-wider">{item.sku}</p>}
+                              </div>
+                            </div>
+
+                            {/* Quantity Counter & Price Column */}
+                            <div className="flex items-center gap-6" onClick={e => e.stopPropagation()}>
+                              <div className="flex items-center gap-3 bg-brand-panel border border-brand-border rounded-xl p-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateQuantity(item.cartItemId || item.id, -1, item.isService);
+                                  }}
+                                  className="w-7 h-7 bg-brand-surface rounded-lg hover:bg-brand-hover flex items-center justify-center text-main transition-colors border border-brand-border"
+                                >
+                                  <Minus size={12} />
+                                </button>
+                                <span className="text-xs font-black min-w-[20px] text-center text-main">
+                                  {item.quantity}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateQuantity(item.cartItemId || item.id, 1, item.isService);
+                                  }}
+                                  className="w-7 h-7 bg-brand-surface rounded-lg hover:bg-brand-hover flex items-center justify-center text-main transition-colors border border-brand-border"
+                                >
+                                  <Plus size={12} />
+                                </button>
                               </div>
 
-                              <h4 className="text-sm font-rajdhani font-black text-main uppercase tracking-wide leading-tight truncate mt-1">
-                                {item.name}
-                              </h4>
-                              
-                              {/* Variant / Addon descriptors */}
-                              <p className="text-[10px] font-bold text-main mt-1.5 bg-brand-panel border border-brand-border inline-block px-2.5 py-0.5 rounded-lg leading-relaxed">
-                                {item.selectionSummary}
-                              </p>
+                              <div className="text-right min-w-[90px]">
+                                {item.price > 0 ? (
+                                  <span className="text-sm font-rajdhani font-black text-main">
+                                    ₱{(item.price * item.quantity).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                  </span>
+                                ) : item.isBundleItem ? (
+                                  <div className="flex flex-col items-end">
+                                    <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider bg-brand-neonpurple/20 text-brand-neonpurple border border-brand-neonpurple/30">
+                                      Included in Package
+                                    </span>
+                                    <span className="text-[10px] font-mono text-brand-muted mt-0.5">₱0.00</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-sm font-rajdhani font-black text-main">
+                                    ₱0.00
+                                  </span>
+                                )}
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  removeFromCart(item.cartItemId || item.id, item.isService, item.cartItemId);
+                                }}
+                                className="p-1.5 text-brand-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                                title="Remove item"
+                              >
+                                <Trash2 size={16} />
+                              </button>
                             </div>
                           </div>
-
-                          {/* Quantity Counter & Price Column */}
-                          <div className="flex items-center gap-6" onClick={e => e.stopPropagation()}>
-                            <div className="flex items-center gap-3 bg-brand-panel border border-brand-border rounded-xl p-1 shrink-0">
-                              <button
-                                onClick={() => updateQuantity(item.id, -1, item.isService)}
-                                className="w-7 h-7 bg-brand-surface rounded-lg hover:bg-brand-hover flex items-center justify-center text-main transition-colors border border-brand-border"
-                              >
-                                <Minus size={12} />
-                              </button>
-                              <span className="text-xs font-black min-w-[20px] text-center text-main">
-                                {item.quantity}
-                              </span>
-                              <button
-                                onClick={() => updateQuantity(item.id, 1, item.isService)}
-                                className="w-7 h-7 bg-brand-surface rounded-lg hover:bg-brand-hover flex items-center justify-center text-main transition-colors border border-brand-border"
-                              >
-                                <Plus size={12} />
-                              </button>
-                            </div>
-
-                            <div className="text-right min-w-[80px]">
-                              <span className="text-sm font-rajdhani font-black text-main">
-                                ₱{(item.price * item.quantity).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                              </span>
-                            </div>
-
-                            <button
-                              onClick={() => removeFromCart(item.id, item.isService)}
-                              className="text-brand-muted hover:text-red-500 transition-colors"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     /* PAYMENT STEP DETAILS */
