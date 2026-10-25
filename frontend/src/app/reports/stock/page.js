@@ -40,6 +40,7 @@ export default function StockReportPage() {
   const [activeHistory, setActiveHistory] = useState(null);
   const [activeDelete, setActiveDelete] = useState(null);
   const [activeEdit, setActiveEdit] = useState(null);
+  const [exporting, setExporting] = useState(false);
 
   // Pagination & sorting state
   const [page, setPage] = useState(1);
@@ -293,30 +294,64 @@ export default function StockReportPage() {
     incoming: 0
   };
 
-  const handleExport = () => {
-    const exportData = filteredData.map(i => ({
-      'Product Name': i.name,
-      'Category': i.category,
-      'Current Stock': i.stock,
-      '30-Day Sales': i.sold30,
-      'Daily Sales Trend': i.dailySales,
-      'Days Remaining': i.daysRemaining,
-      'Status': i.statusGroup
-    }));
-    const exportOptions = {
-      title: 'PC ALLEY - INVENTORY INTELLIGENCE REPORT',
-      subtitle: `Target Branch: All Branches | Filter: ${filterStatus}`,
-      summary: {
-        'Total Unique SKUs': kpis.total,
-        'In Stock Items': kpis.inStock,
-        'Stock Alert Count': kpis.low,
-        'Critical Stock Items': kpis.critical,
-        'Out of Stock Items': kpis.outOfStock,
-        'Report Accuracy': 'High (Live System Data)'
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const token = localStorage.getItem("token");
+
+      // 1. Fetch Transfer History for Super Admin & Branch Admin
+      let transfers = [];
+      try {
+        const tRes = await fetch(apiUrl("/api/stock-transfers"), {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (tRes.ok) {
+          const tData = await tRes.json();
+          transfers = Array.isArray(tData) ? tData : [];
+        }
+      } catch (err) {
+        console.warn("Could not fetch transfers for export:", err);
       }
-    };
-    try { exportToExcel(exportData, `PCA_Stock_Report`, 'Inventory', exportOptions); showSuccess("Excel Intelligence Report Generated"); }
-    catch (error) { showError("Export Protocol Failed"); }
+
+      // 2. Authoritative KPI Metrics
+      const totalStock = filteredData.reduce((sum, i) => sum + (Number(i.stock) || 0), 0);
+      const totalInventoryVal = filteredData.reduce((sum, i) => sum + ((Number(i.stock) || 0) * (Number(i.price) || 0)), 0);
+      const totalSalesVal = filteredData.reduce((sum, i) => sum + ((Number(i.sold30) || 0) * (Number(i.price) || 0)), 0);
+
+      // Branch Label
+      let branchLabel = "All Branches";
+      if (filterBranch && branches.length > 0) {
+        const foundB = branches.find(b => String(b.id) === String(filterBranch));
+        if (foundB) branchLabel = foundB.name;
+      } else if (user?.role === "branch_admin" && user?.branch_id && branches.length > 0) {
+        const foundB = branches.find(b => String(b.id) === String(user.branch_id));
+        if (foundB) branchLabel = foundB.name;
+      }
+
+      const exportOptions = {
+        isStockReport: true,
+        branchName: branchLabel,
+        filterCategory: filterCategory || "All",
+        filterStatus: filterStatus || "All",
+        kpis: {
+          totalSkus: kpis.total,
+          inStock: kpis.inStock,
+          outOfStock: kpis.outOfStock,
+          totalStock: totalStock,
+          totalSales: totalSalesVal,
+          totalInventoryValue: totalInventoryVal
+        },
+        transfers: transfers
+      };
+
+      await exportToExcel(filteredData, 'PCA_Inventory_Intelligence_Report', 'Inventory', exportOptions);
+      showSuccess("Excel Intelligence Report with Transfer History Generated");
+    } catch (error) {
+      console.error("Export Protocol Failed:", error);
+      showError("Export Protocol Failed");
+    } finally {
+      setExporting(false);
+    }
   };
 
   const setSort = (field) => {
@@ -602,10 +637,12 @@ export default function StockReportPage() {
 
                 <button 
                   onClick={handleExport} 
-                  className="bg-brand-bgbase border border-border text-muted hover:text-main h-9 px-3.5 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all hover:bg-brand-surface"
+                  disabled={exporting}
+                  className="bg-brand-bgbase border border-border text-muted hover:text-main h-9 px-3.5 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all hover:bg-brand-surface disabled:opacity-50"
+                  title="Export executive inventory report with transfer ledger"
                 >
-                  <FileDown size={14} className="text-brand-neonblue" /> 
-                  <span>Export</span>
+                  <FileDown size={14} className={exporting ? "animate-bounce text-brand-neonblue" : "text-brand-neonblue"} /> 
+                  <span>{exporting ? "Generating..." : "Export"}</span>
                 </button>
               </div>
             </div>
