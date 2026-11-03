@@ -1193,11 +1193,11 @@ export default function StockTransfersPage() {
                                       </span>
                                       {prod.available > 0 ? (
                                         <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-brand-neonblue/10 border border-brand-neonblue/30 text-brand-neonblue">
-                                          Transferable: {prod.maxTransferable}
+                                          Transferable: {prod.available}
                                         </span>
                                       ) : (
-                                        <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-yellow-500/10 border border-yellow-500/30 text-yellow-500">
-                                          Reserve Limit (0)
+                                        <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-brand-crimson/10 border border-brand-crimson/30 text-brand-crimson">
+                                          Out of Stock (0)
                                         </span>
                                       )}
                                       {isSelected && <Check size={14} className="text-brand-neonblue shrink-0" />}
@@ -1274,7 +1274,7 @@ export default function StockTransfersPage() {
                                 <div className="flex items-center gap-1.5 w-full sm:w-auto">
                                   <button
                                     type="button"
-                                    onClick={() => setItemQuantity(q => Math.max(1, q - 1))}
+                                    onClick={() => setItemQuantity(q => Math.max(1, (parseInt(q, 10) || 1) - 1))}
                                     className="w-8 h-8 rounded-lg bg-brand-bgbase border border-border text-main hover:bg-main/5 flex items-center justify-center font-bold"
                                   >
                                     -
@@ -1283,17 +1283,33 @@ export default function StockTransfersPage() {
                                     type="number"
                                     min={1}
                                     max={selectedProduct.available}
-                                    value={itemQuantity}
-                                    onChange={e => setItemQuantity(parseInt(e.target.value || "0", 10))}
+                                    value={itemQuantity === "" ? "" : itemQuantity}
+                                    onFocus={e => e.target.select()}
+                                    onChange={e => {
+                                      let raw = e.target.value;
+                                      if (raw === "") {
+                                        setItemQuantity("");
+                                        return;
+                                      }
+                                      // Strip leading zeros so typing 2 doesn't become "02"
+                                      raw = raw.replace(/^0+(?=\d)/, "");
+                                      const parsed = parseInt(raw, 10);
+                                      setItemQuantity(isNaN(parsed) ? "" : parsed);
+                                    }}
+                                    onBlur={() => {
+                                      if (itemQuantity === "" || itemQuantity <= 0) {
+                                        setItemQuantity(selectedProduct.available > 0 ? 1 : 0);
+                                      }
+                                    }}
                                     className={`w-20 px-2 py-1.5 bg-brand-bgbase border rounded-lg text-xs font-mono text-center text-main focus:outline-none ${
-                                      itemQuantity > selectedProduct.available || itemQuantity <= 0
+                                      itemQuantity !== "" && (Number(itemQuantity) > selectedProduct.available || Number(itemQuantity) <= 0)
                                         ? "border-brand-crimson text-brand-crimson"
                                         : "border-border focus:border-brand-neonblue"
                                     }`}
                                   />
                                   <button
                                     type="button"
-                                    onClick={() => setItemQuantity(q => Math.min(selectedProduct.available, q + 1))}
+                                    onClick={() => setItemQuantity(q => Math.min(selectedProduct.available, (parseInt(q, 10) || 0) + 1))}
                                     className="w-8 h-8 rounded-lg bg-brand-bgbase border border-border text-main hover:bg-main/5 flex items-center justify-center font-bold"
                                   >
                                     +
@@ -1311,7 +1327,7 @@ export default function StockTransfersPage() {
                                 <button
                                   type="button"
                                   onClick={handleAddItem}
-                                  disabled={itemQuantity <= 0 || itemQuantity > selectedProduct.available}
+                                  disabled={!itemQuantity || Number(itemQuantity) <= 0 || Number(itemQuantity) > selectedProduct.available}
                                   className="w-full sm:w-auto sm:ml-auto px-4 py-2 rounded-xl bg-brand-neonblue disabled:opacity-30 disabled:cursor-not-allowed text-black font-rajdhani font-bold text-xs uppercase tracking-wider hover:opacity-90 transition-all flex items-center justify-center gap-1.5 shadow-sm"
                                 >
                                   <Plus size={14} className="stroke-[3]" />
@@ -1320,18 +1336,18 @@ export default function StockTransfersPage() {
                               </div>
 
                               {/* Realtime Live Validation Feedback */}
-                              {itemQuantity > selectedProduct.available ? (
+                              {itemQuantity !== "" && Number(itemQuantity) > selectedProduct.available ? (
                                 <p className="text-[11px] text-brand-crimson font-semibold flex items-center gap-1.5 bg-brand-crimson/10 border border-brand-crimson/20 p-2 rounded-lg">
                                   <AlertTriangle size={14} className="shrink-0" />
                                   <span>
                                     Exceeds available stock! Only <strong>{selectedProduct.available} units</strong> can be transferred from {getSelectedSourceBranchName()}.
                                   </span>
                                 </p>
-                              ) : itemQuantity > 0 ? (
+                              ) : itemQuantity !== "" && Number(itemQuantity) > 0 ? (
                                 <p className="text-[11px] text-green-500 flex items-center gap-1.5 font-mono">
                                   <Check size={13} className="stroke-[3]" />
                                   <span>
-                                    {selectedProduct.available - itemQuantity} units will remain in {getSelectedSourceBranchName()} after transfer.
+                                    {selectedProduct.available - Number(itemQuantity)} units will remain in {getSelectedSourceBranchName()} after transfer.
                                   </span>
                                 </p>
                               ) : (
@@ -1426,7 +1442,7 @@ export default function StockTransfersPage() {
                       </span>
                     ) : selectedProduct ? (
                       <span className="text-brand-neonblue font-mono">
-                        Ready to transfer: <strong>{selectedProduct.name}</strong> ({itemQuantity} units)
+                        Ready to transfer: <strong>{selectedProduct.name}</strong> ({itemQuantity || 0} units)
                       </span>
                     ) : (
                       <span className="text-main/40 italic">Select a product above to stage for transfer</span>
@@ -1564,12 +1580,28 @@ export default function StockTransfersPage() {
                               <input
                                 type="number"
                                 min="1"
-                                value={item.quantity}
+                                value={item.quantity === "" ? "" : item.quantity}
+                                onFocus={e => e.target.select()}
                                 onChange={e => {
-                                  const val = parseInt(e.target.value, 10) || 1;
+                                  let raw = e.target.value;
+                                  if (raw === "") {
+                                    const updated = [...editForm.items];
+                                    updated[idx].quantity = "";
+                                    setEditForm({ ...editForm, items: updated });
+                                    return;
+                                  }
+                                  raw = raw.replace(/^0+(?=\d)/, "");
+                                  const val = parseInt(raw, 10);
                                   const updated = [...editForm.items];
-                                  updated[idx].quantity = val;
+                                  updated[idx].quantity = isNaN(val) ? "" : Math.max(1, val);
                                   setEditForm({ ...editForm, items: updated });
+                                }}
+                                onBlur={() => {
+                                  if (!item.quantity || Number(item.quantity) < 1) {
+                                    const updated = [...editForm.items];
+                                    updated[idx].quantity = 1;
+                                    setEditForm({ ...editForm, items: updated });
+                                  }
                                 }}
                                 className="w-20 px-2 py-1 rounded-lg bg-brand-bgbase border border-border text-right text-xs text-main font-bold focus:outline-none focus:border-brand-neonblue"
                               />

@@ -610,17 +610,23 @@ export default function InventoryPage() {
                         <label className="text-[9px] font-black uppercase tracking-[3px] text-muted ml-2">New Quantity</label>
                         <div className="flex items-center gap-4 mt-2">
                            <input 
-                             type="number" 
-                             required
-                             min="0"
-                             max="5000"
-                             value={adjustValue}
-                             onChange={(e) => {
-                               const v = e.target.value;
-                               if (v === "" || /^\d{0,5}$/.test(v)) setAdjustValue(v);
-                             }}
-                             className="flex-1 bg-brand-bgbase border border-border rounded-2xl py-4 px-6 text-xl font-rajdhani font-bold text-brand-neonblue focus:outline-none focus:border-brand-neonblue transition-all"
-                           />
+                            type="number" 
+                            required
+                            min="0"
+                            max="5000"
+                            value={adjustValue}
+                            onFocus={e => e.target.select()}
+                            onChange={(e) => {
+                              let v = e.target.value;
+                              if (v === "") { setAdjustValue(""); return; }
+                              v = v.replace(/^0+(?=\d)/, "");
+                              if (/^\d{0,5}$/.test(v)) setAdjustValue(v);
+                            }}
+                            onBlur={() => {
+                              if (adjustValue === "") setAdjustValue("0");
+                            }}
+                            className="flex-1 bg-brand-bgbase border border-border rounded-2xl py-4 px-6 text-xl font-rajdhani font-bold text-brand-neonblue focus:outline-none focus:border-brand-neonblue transition-all"
+                          />
                            <div className="px-5 py-4 bg-brand-surface border border-border rounded-2xl flex flex-col items-center">
                               <span className="text-[8px] font-black text-muted uppercase tracking-widest mb-1">Current</span>
                               <span className="text-sm font-black text-main">{editingItem?.quantity}</span>

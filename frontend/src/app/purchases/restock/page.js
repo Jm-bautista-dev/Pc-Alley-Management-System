@@ -1811,8 +1811,20 @@ export default function ProcurementPage() {
                     type="number"
                     min={1}
                     max={activeReq.quantity_requested}
-                    value={approvedQty}
-                    onChange={(e) => setApprovedQty(Math.max(1, parseInt(e.target.value) || 1))}
+                    value={approvedQty === "" ? "" : approvedQty}
+                    onFocus={e => e.target.select()}
+                    onChange={(e) => {
+                      let raw = e.target.value;
+                      if (raw === "") { setApprovedQty(""); return; }
+                      raw = raw.replace(/^0+(?=\d)/, "");
+                      const val = parseInt(raw, 10);
+                      setApprovedQty(isNaN(val) ? "" : Math.max(1, Math.min(activeReq.quantity_requested, val)));
+                    }}
+                    onBlur={() => {
+                      if (!approvedQty || Number(approvedQty) < 1) {
+                        setApprovedQty(1);
+                      }
+                    }}
                     className="w-full bg-brand-bgbase border border-border rounded-xl px-4 py-2.5 text-xs font-mono font-bold text-main focus:outline-none focus:border-emerald-400/40"
                   />
                 </div>

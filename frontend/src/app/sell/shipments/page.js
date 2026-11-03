@@ -311,7 +311,18 @@ export default function ShipmentsPage() {
                   </div>
                   <div>
                     <label className="text-[9px] font-black uppercase tracking-[3px] text-muted ml-1">Items</label>
-                    <input type="number" min="1" value={form.items_count} onChange={e => setForm({ ...form, items_count: parseInt(e.target.value) })}
+                    <input type="number" min="1" value={form.items_count === "" ? "" : form.items_count} onFocus={e => e.target.select()} onChange={e => {
+                        let raw = e.target.value;
+                        if (raw === "") { setForm({ ...form, items_count: "" }); return; }
+                        raw = raw.replace(/^0+(?=\d)/, "");
+                        const parsed = parseInt(raw, 10);
+                        setForm({ ...form, items_count: isNaN(parsed) ? "" : Math.max(1, parsed) });
+                      }}
+                      onBlur={() => {
+                        if (!form.items_count || Number(form.items_count) < 1) {
+                          setForm({ ...form, items_count: 1 });
+                        }
+                      }}
                       className="w-full mt-1.5 bg-brand-bgbase border border-border rounded-2xl py-3 px-4 text-sm text-main focus:outline-none focus:border-brand-neonblue transition-all" />
                   </div>
                 </div>
