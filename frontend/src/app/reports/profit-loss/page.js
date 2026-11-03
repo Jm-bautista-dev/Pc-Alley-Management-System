@@ -41,6 +41,7 @@ import {
 import { Line, Bar } from 'react-chartjs-2';
 import { apiUrl } from "@/lib/api";
 import { getChartTheme } from "@/lib/chartTheme";
+import { useTheme } from "@/context/ThemeContext";
 import { exportToExcel } from "@/lib/excelExport";
 import { showSuccess, showError } from "@/context/ModalContext";
 
@@ -84,6 +85,8 @@ export default function ProfitLossPage() {
     monthly: []
   });
 
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   const chartTheme = getChartTheme();
 
   useEffect(() => {
@@ -279,7 +282,7 @@ export default function ProfitLossPage() {
         display: true,
         position: 'top',
         labels: {
-          color: 'rgba(255, 255, 255, 0.75)',
+          color: isDark ? 'rgba(255, 255, 255, 0.85)' : '#1E293B',
           font: { family: 'DM Sans', size: 11, weight: 'bold' },
           usePointStyle: true,
           boxWidth: 8,
@@ -306,9 +309,9 @@ export default function ProfitLossPage() {
       y: {
         type: scaleType === 'logarithmic' ? 'logarithmic' : 'linear',
         min: scaleType === 'logarithmic' ? 50 : undefined,
-        grid: { color: 'rgba(255, 255, 255, 0.05)', drawBorder: false },
+        grid: { color: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.08)', drawBorder: false },
         ticks: { 
-          color: 'rgba(255, 255, 255, 0.4)', 
+          color: isDark ? 'rgba(255, 255, 255, 0.55)' : '#475569', 
           font: { size: 10, family: 'DM Sans' },
           callback: (value) => {
             if (value >= 1000000) return `₱${(value / 1000000).toFixed(1)}M`;
@@ -319,7 +322,7 @@ export default function ProfitLossPage() {
       },
       x: {
         grid: { display: false },
-        ticks: { color: 'rgba(255, 255, 255, 0.4)', font: { size: 10, family: 'DM Sans' } }
+        ticks: { color: isDark ? 'rgba(255, 255, 255, 0.55)' : '#475569', font: { size: 10, family: 'DM Sans' } }
       }
     }
   };

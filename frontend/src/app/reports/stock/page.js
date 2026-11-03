@@ -7,6 +7,7 @@ import TopBar from "@/components/TopBar";
 import { PackageCheck, Search, Download, Plus, RefreshCw, AlertCircle, TrendingUp, Edit, Clock, ShieldAlert, CheckCircle2, FileDown, Trash2, UploadCloud, Image as ImageIcon, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiUrl } from "@/lib/api";
+import { resolveProductImageUrl, handleProductImageError } from "@/lib/imageHelper";
 import { useTheme } from "@/context/ThemeContext";
 import { showSuccess, showError, showInfo, showWarning, showConfirm, showModal } from "@/context/ModalContext";
 import { useRouter } from "next/navigation";
@@ -680,8 +681,8 @@ export default function StockReportPage() {
                           <td className="py-2.5 px-3.5 align-middle">
                             <div className="flex items-center gap-2.5">
                               <div className="w-7 h-7 rounded-lg bg-brand-bgbase border border-border/40 flex items-center justify-center shrink-0 overflow-hidden text-muted">
-                                {item.image_url || item.product_image ? (
-                                  <img src={item.image_url || item.product_image} alt="" className="w-full h-full object-cover" />
+                                {resolveProductImageUrl(item, "thumbnail") ? (
+                                  <img src={resolveProductImageUrl(item, "thumbnail")} alt={item.name || ""} className="w-full h-full object-cover" loading="lazy" onError={handleProductImageError} />
                                 ) : (
                                   <PackageCheck size={14} className="text-brand-neonblue/70" />
                                 )}

@@ -33,6 +33,7 @@ import {
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import { getChartTheme } from "@/lib/chartTheme";
+import { useTheme } from "@/context/ThemeContext";
 import { exportToExcel } from "@/lib/excelExport";
 import { showSuccess, showError } from "@/context/ModalContext";
 import { apiUrl } from "@/lib/api";
@@ -57,6 +58,8 @@ export default function ForecastPage() {
   const [selectedBranch, setSelectedBranch] = useState("");
   const [period, setPeriod] = useState(3); // 1, 3, or 6 months
   const [user, setUser] = useState(null);
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
 
   useEffect(() => {
     const userData = localStorage.getItem("user");
@@ -188,7 +191,7 @@ export default function ForecastPage() {
       legend: {
         display: true,
         labels: {
-          color: 'rgba(255, 255, 255, 0.7)',
+          color: isDark ? 'rgba(255, 255, 255, 0.85)' : '#1E293B',
           font: { family: 'DM Sans', size: 11 }
         }
       },
@@ -205,16 +208,16 @@ export default function ForecastPage() {
     },
     scales: {
       y: {
-        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+        grid: { color: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.08)' },
         ticks: {
-          color: 'rgba(255, 255, 255, 0.4)',
+          color: isDark ? 'rgba(255, 255, 255, 0.55)' : '#475569',
           font: { size: 10, family: 'DM Sans' },
           callback: (value) => `₱${(value / 1000).toFixed(0)}k`
         }
       },
       x: {
         grid: { display: false },
-        ticks: { color: 'rgba(255, 255, 255, 0.4)', font: { size: 10, family: 'DM Sans' } }
+        ticks: { color: isDark ? 'rgba(255, 255, 255, 0.55)' : '#475569', font: { size: 10, family: 'DM Sans' } }
       }
     }
   };

@@ -29,6 +29,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuthGuard } from "@/lib/useAuthGuard";
+import { useTheme } from "@/context/ThemeContext";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -66,6 +67,8 @@ function ForecastingPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, isChecking } = useAuthGuard();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
@@ -514,7 +517,7 @@ function ForecastingPageContent() {
     maintainAspectRatio: false,
     plugins: {
       legend: {
-        labels: { color: 'rgba(255, 255, 255, 0.7)', font: { family: 'DM Sans', size: 10 } }
+        labels: { color: isDark ? 'rgba(255, 255, 255, 0.85)' : '#1E293B', font: { family: 'DM Sans', size: 10 } }
       },
       tooltip: {
         callbacks: {
@@ -533,7 +536,7 @@ function ForecastingPageContent() {
         position: 'left',
         min: 0,
         suggestedMax: 1000,
-        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+        grid: { color: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.08)' },
         ticks: { 
           color: '#00F2FF', 
           font: { size: 9 },
@@ -554,7 +557,7 @@ function ForecastingPageContent() {
       },
       x: {
         grid: { display: false },
-        ticks: { color: 'rgba(255, 255, 255, 0.4)', font: { size: 9 } }
+        ticks: { color: isDark ? 'rgba(255, 255, 255, 0.55)' : '#475569', font: { size: 9 } }
       }
     }
   };
@@ -603,12 +606,12 @@ function ForecastingPageContent() {
     scales: {
       y: {
         grid: { display: false },
-        ticks: { color: 'rgba(255, 255, 255, 0.7)', font: { size: 10 } }
+        ticks: { color: isDark ? 'rgba(255, 255, 255, 0.85)' : '#1E293B', font: { size: 10 } }
       },
       x: {
         min: 0,
-        grid: { color: 'rgba(255, 255, 255, 0.05)' },
-        ticks: { color: 'rgba(255, 255, 255, 0.4)', font: { size: 9 } }
+        grid: { color: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.08)' },
+        ticks: { color: isDark ? 'rgba(255, 255, 255, 0.55)' : '#475569', font: { size: 9 } }
       }
     }
   };
@@ -618,7 +621,7 @@ function ForecastingPageContent() {
     maintainAspectRatio: false,
     plugins: {
       legend: {
-        labels: { color: 'rgba(255, 255, 255, 0.7)', font: { family: 'DM Sans', size: 10 } }
+        labels: { color: isDark ? 'rgba(255, 255, 255, 0.85)' : '#1E293B', font: { family: 'DM Sans', size: 10 } }
       },
       tooltip: {
         callbacks: {
@@ -629,16 +632,16 @@ function ForecastingPageContent() {
     scales: {
       y: {
         min: 0,
-        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+        grid: { color: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.08)' },
         ticks: { 
-          color: 'rgba(255, 255, 255, 0.4)', 
+          color: isDark ? 'rgba(255, 255, 255, 0.55)' : '#475569', 
           font: { size: 9 },
           callback: (value) => `₱${(value / 1000).toFixed(0)}k`
         }
       },
       x: {
         grid: { display: false },
-        ticks: { color: 'rgba(255, 255, 255, 0.4)', font: { size: 9 } }
+        ticks: { color: isDark ? 'rgba(255, 255, 255, 0.55)' : '#475569', font: { size: 9 } }
       }
     }
   };
