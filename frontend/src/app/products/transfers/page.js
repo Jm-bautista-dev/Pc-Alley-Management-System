@@ -176,19 +176,13 @@ export default function StockTransfersPage() {
           const items = (raw.data || []).map(row => {
             const available = row.quantity || 0;
             // Reserve buffer: low_stock_threshold or default 10 so branch never goes out of stock
-            const threshold = (row.low_stock_threshold !== undefined && row.low_stock_threshold !== null && row.low_stock_threshold > 0)
-              ? row.low_stock_threshold
-              : 10;
-            const reserveBuffer = Math.max(1, threshold);
-            const maxTransferable = Math.max(0, available - reserveBuffer);
+            
 
             return {
               id: row.Product?.id || row.product_id,
               name: row.Product?.name || `Product #${row.product_id}`,
               sku: row.Product?.sku || "N/A",
               available,
-              reserveBuffer,
-              maxTransferable,
               image: row.Product?.image_url || row.Product?.product_image || null
             };
           }).filter(i => i.available > 0);
@@ -223,19 +217,13 @@ export default function StockTransfersPage() {
           const raw = await res.json();
           const searchedItems = (raw.data || []).map(row => {
             const available = row.quantity || 0;
-            const threshold = (row.low_stock_threshold !== undefined && row.low_stock_threshold !== null && row.low_stock_threshold > 0)
-              ? row.low_stock_threshold
-              : 10;
-            const reserveBuffer = Math.max(1, threshold);
-            const maxTransferable = Math.max(0, available - reserveBuffer);
+            
 
             return {
               id: row.Product?.id || row.product_id,
               name: row.Product?.name || `Product #${row.product_id}`,
               sku: row.Product?.sku || "N/A",
               available,
-              reserveBuffer,
-              maxTransferable,
               image: row.Product?.image_url || row.Product?.product_image || null
             };
           }).filter(i => i.available > 0);
@@ -292,16 +280,16 @@ export default function StockTransfersPage() {
     if (!qty || qty <= 0) {
       return showError("Invalid Quantity", "Quantity must be at least 1 unit.");
     }
-    if (selectedProduct.maxTransferable <= 0) {
+    if (selectedProduct.available <= 0) {
       return showError(
         "Cannot Transfer Item",
-        `"${selectedProduct.name}" only has ${selectedProduct.available} units in stock, which is at or below the safety reserve buffer (${selectedProduct.reserveBuffer} units). Transferring this item would leave ${getSelectedSourceBranchName()} out of stock.`
+        `"${selectedProduct.name}" is out of stock in ${getSelectedSourceBranchName()}.`
       );
     }
-    if (qty > selectedProduct.maxTransferable) {
+    if (qty > selectedProduct.available) {
       return showError(
-        "Exceeds Transferable Stock",
-        `Only ${selectedProduct.maxTransferable} units can be transferred for "${selectedProduct.name}". The source branch (${getSelectedSourceBranchName()}) must retain at least ${selectedProduct.reserveBuffer} units as a safety reserve so it does not run out of stock (available: ${selectedProduct.available}).`
+        "Exceeds Available Stock",
+        `Only ${selectedProduct.available} units available for "${selectedProduct.name}" in ${getSelectedSourceBranchName()}.`
       );
     }
 
@@ -310,10 +298,10 @@ export default function StockTransfersPage() {
     if (existingIndex >= 0) {
       const updated = [...transferItems];
       const newQty = updated[existingIndex].quantity + qty;
-      if (newQty > selectedProduct.maxTransferable) {
+      if (newQty > selectedProduct.available) {
         return showError(
-          "Exceeds Transferable Stock",
-          `Total transfer quantity (${newQty}) exceeds the maximum transferable limit (${selectedProduct.maxTransferable} units). Source branch must retain at least ${selectedProduct.reserveBuffer} units.`
+          "Exceeds Available Stock",
+          `Total transfer quantity (${newQty}) exceeds the available stock (${selectedProduct.available} units).`
         );
       }
       updated[existingIndex].quantity = newQty;
@@ -326,8 +314,6 @@ export default function StockTransfersPage() {
           name: selectedProduct.name,
           sku: selectedProduct.sku,
           available: selectedProduct.available,
-          reserveBuffer: selectedProduct.reserveBuffer,
-          maxTransferable: selectedProduct.maxTransferable,
           quantity: qty
         }
       ]);
@@ -357,15 +343,13 @@ export default function StockTransfersPage() {
     let itemsToSubmit = [...transferItems];
     if (itemsToSubmit.length === 0 && selectedProduct) {
       const qty = parseInt(itemQuantity, 10);
-      if (qty > 0 && qty <= selectedProduct.maxTransferable) {
+      if (qty > 0 && qty <= selectedProduct.available) {
         itemsToSubmit = [
           {
             productId: selectedProduct.id,
             name: selectedProduct.name,
             sku: selectedProduct.sku,
             available: selectedProduct.available,
-            reserveBuffer: selectedProduct.reserveBuffer,
-            maxTransferable: selectedProduct.maxTransferable,
             quantity: qty
           }
         ];
@@ -1189,7 +1173,7 @@ export default function StockTransfersPage() {
                                     key={prod.id}
                                     onClick={() => {
                                       setSelectedProduct(prod);
-                                      setItemQuantity(prod.maxTransferable > 0 ? 1 : 0);
+                                      setItemQuantity(prod.available > 0 ? 1 : 0);
                                       setIsProductPickerOpen(false);
                                     }}
                                     className={`p-2.5 rounded-lg border cursor-pointer transition-all flex items-center justify-between gap-3 ${
@@ -1207,7 +1191,7 @@ export default function StockTransfersPage() {
                                       <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-main/5 border border-border text-main/70">
                                         Stock: <strong className="text-main">{prod.available}</strong>
                                       </span>
-                                      {prod.maxTransferable > 0 ? (
+                                      {prod.available > 0 ? (
                                         <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-brand-neonblue/10 border border-brand-neonblue/30 text-brand-neonblue">
                                           Transferable: {prod.maxTransferable}
                                         </span>
@@ -1234,7 +1218,7 @@ export default function StockTransfersPage() {
                             const found = sourceInventory.find(p => String(p.id) === e.target.value);
                             setSelectedProduct(found || null);
                             if (found) {
-                              setItemQuantity(found.maxTransferable > 0 ? 1 : 0);
+                              setItemQuantity(found.available > 0 ? 1 : 0);
                             }
                           }}
                           className="w-full px-3 py-2.5 rounded-xl bg-brand-surface border border-border text-xs text-main focus:outline-none focus:border-brand-neonblue transition-colors cursor-pointer"
@@ -1244,7 +1228,7 @@ export default function StockTransfersPage() {
                           </option>
                           {availableProductOptions.map(prod => (
                             <option key={prod.id} value={String(prod.id)}>
-                              [{prod.sku}] {prod.name} — Stock: {prod.available} | Max Transfer: {prod.maxTransferable} {prod.maxTransferable === 0 ? "(Zero Transferable - Below Reserve)" : ""}
+                              [{prod.sku}] {prod.name} — Available Stock: {prod.available} units
                             </option>
                           ))}
                         </select>
@@ -1263,30 +1247,23 @@ export default function StockTransfersPage() {
                             </span>
                           </div>
 
-                          {/* 3 Metric Badges: Available, Safety Reserve, Max Transferable */}
-                          <div className="grid grid-cols-3 gap-2 text-center">
+                          {/* Stock & Transfer Info Badges */}
+                          <div className="grid grid-cols-2 gap-2 text-center">
                             <div className="p-2.5 rounded-lg bg-main/5 border border-border">
                               <p className="text-[9px] uppercase font-mono text-main/50 mb-0.5">Available Stock</p>
-                              <p className="text-base font-rajdhani font-black text-main">{selectedProduct.available} units</p>
+                              <p className="text-base font-rajdhani font-black text-brand-neonblue">{selectedProduct.available} units</p>
                             </div>
-                            <div className="p-2.5 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-                              <p className="text-[9px] uppercase font-mono text-yellow-500/80 mb-0.5">Safety Reserve</p>
-                              <p className="text-base font-rajdhani font-black text-yellow-500">{selectedProduct.reserveBuffer} units</p>
-                              <p className="text-[8px] text-yellow-500/60 font-mono">Keeps branch in stock</p>
-                            </div>
-                            <div className="p-2.5 rounded-lg bg-brand-neonblue/10 border border-brand-neonblue/20">
-                              <p className="text-[9px] uppercase font-mono text-brand-neonblue/80 mb-0.5">Max Transferable</p>
-                              <p className="text-base font-rajdhani font-black text-brand-neonblue">{selectedProduct.maxTransferable} units</p>
-                              <p className="text-[8px] text-brand-neonblue/60 font-mono">Max allowable limit</p>
+                            <div className="p-2.5 rounded-lg bg-main/5 border border-border">
+                              <p className="text-[9px] uppercase font-mono text-main/50 mb-0.5">Transfer Destination</p>
+                              <p className="text-sm font-rajdhani font-black text-main truncate pt-0.5">{getSelectedDestBranchName() || "Destination Branch"}</p>
                             </div>
                           </div>
 
-                          {/* Zero Transferable Warning */}
-                          {selectedProduct.maxTransferable <= 0 ? (
-                            <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-yellow-500 text-xs flex items-center gap-2">
+                          {selectedProduct.available <= 0 ? (
+                            <div className="p-3 rounded-lg bg-brand-crimson/10 border border-brand-crimson/30 text-brand-crimson text-xs flex items-center gap-2">
                               <AlertTriangle size={15} className="shrink-0" />
                               <span>
-                                <strong>Transfer Restricted:</strong> Current stock ({selectedProduct.available} units) is at or below the safety reserve buffer ({selectedProduct.reserveBuffer} units). Transferring this product would cause {getSelectedSourceBranchName()} to go out of stock.
+                                <strong>Out of Stock:</strong> This product has 0 units in {getSelectedSourceBranchName()}.
                               </span>
                             </div>
                           ) : (
@@ -1305,18 +1282,18 @@ export default function StockTransfersPage() {
                                   <input
                                     type="number"
                                     min={1}
-                                    max={selectedProduct.maxTransferable}
+                                    max={selectedProduct.available}
                                     value={itemQuantity}
                                     onChange={e => setItemQuantity(parseInt(e.target.value || "0", 10))}
                                     className={`w-20 px-2 py-1.5 bg-brand-bgbase border rounded-lg text-xs font-mono text-center text-main focus:outline-none ${
-                                      itemQuantity > selectedProduct.maxTransferable || itemQuantity <= 0
+                                      itemQuantity > selectedProduct.available || itemQuantity <= 0
                                         ? "border-brand-crimson text-brand-crimson"
                                         : "border-border focus:border-brand-neonblue"
                                     }`}
                                   />
                                   <button
                                     type="button"
-                                    onClick={() => setItemQuantity(q => Math.min(selectedProduct.maxTransferable, q + 1))}
+                                    onClick={() => setItemQuantity(q => Math.min(selectedProduct.available, q + 1))}
                                     className="w-8 h-8 rounded-lg bg-brand-bgbase border border-border text-main hover:bg-main/5 flex items-center justify-center font-bold"
                                   >
                                     +
@@ -1324,17 +1301,17 @@ export default function StockTransfersPage() {
 
                                   <button
                                     type="button"
-                                    onClick={() => setItemQuantity(selectedProduct.maxTransferable)}
+                                    onClick={() => setItemQuantity(selectedProduct.available)}
                                     className="px-2.5 py-1.5 rounded-lg bg-brand-neonblue/10 hover:bg-brand-neonblue/20 text-brand-neonblue border border-brand-neonblue/30 text-[10px] font-mono font-bold uppercase transition-colors"
                                   >
-                                    MAX ({selectedProduct.maxTransferable})
+                                    MAX ({selectedProduct.available})
                                   </button>
                                 </div>
 
                                 <button
                                   type="button"
                                   onClick={handleAddItem}
-                                  disabled={itemQuantity <= 0 || itemQuantity > selectedProduct.maxTransferable}
+                                  disabled={itemQuantity <= 0 || itemQuantity > selectedProduct.available}
                                   className="w-full sm:w-auto sm:ml-auto px-4 py-2 rounded-xl bg-brand-neonblue disabled:opacity-30 disabled:cursor-not-allowed text-black font-rajdhani font-bold text-xs uppercase tracking-wider hover:opacity-90 transition-all flex items-center justify-center gap-1.5 shadow-sm"
                                 >
                                   <Plus size={14} className="stroke-[3]" />
@@ -1343,23 +1320,23 @@ export default function StockTransfersPage() {
                               </div>
 
                               {/* Realtime Live Validation Feedback */}
-                              {itemQuantity > selectedProduct.maxTransferable ? (
+                              {itemQuantity > selectedProduct.available ? (
                                 <p className="text-[11px] text-brand-crimson font-semibold flex items-center gap-1.5 bg-brand-crimson/10 border border-brand-crimson/20 p-2 rounded-lg">
                                   <AlertTriangle size={14} className="shrink-0" />
                                   <span>
-                                    Exceeds limit! Only <strong>{selectedProduct.maxTransferable} units</strong> can be transferred. {getSelectedSourceBranchName()} must keep a safety reserve of <strong>{selectedProduct.reserveBuffer} units</strong> to not go out of stock.
+                                    Exceeds available stock! Only <strong>{selectedProduct.available} units</strong> can be transferred from {getSelectedSourceBranchName()}.
                                   </span>
                                 </p>
                               ) : itemQuantity > 0 ? (
                                 <p className="text-[11px] text-green-500 flex items-center gap-1.5 font-mono">
                                   <Check size={13} className="stroke-[3]" />
                                   <span>
-                                    {selectedProduct.available - itemQuantity} units will remain in {getSelectedSourceBranchName()} (Safe & In Stock).
+                                    {selectedProduct.available - itemQuantity} units will remain in {getSelectedSourceBranchName()} after transfer.
                                   </span>
                                 </p>
                               ) : (
                                 <p className="text-[11px] text-main/40 font-mono">
-                                  Enter a transfer quantity between 1 and {selectedProduct.maxTransferable} units.
+                                  Enter a transfer quantity between 1 and {selectedProduct.available} units.
                                 </p>
                               )}
                             </div>
@@ -1384,7 +1361,7 @@ export default function StockTransfersPage() {
                             <div className="flex-1 pr-2">
                               <p className="font-semibold text-main truncate max-w-xs">{item.name}</p>
                               <p className="text-[10px] text-main/40 font-mono">
-                                SKU: {item.sku} • Stock: {item.available} units (Reserve: {item.reserveBuffer})
+                                SKU: {item.sku} • Source Stock: {item.available} units
                               </p>
                             </div>
                             <div className="flex items-center gap-3">

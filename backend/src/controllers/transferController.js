@@ -78,26 +78,24 @@ const createTransfer = async (req, res) => {
       return res.status(403).json({ message: 'Forbidden: You cannot transfer stock out of another branch.' });
     }
 
-    // Pre-validate stock availability at source branch including reserve buffer
+    // Pre-validate stock availability at source branch
     for (const item of items) {
       const inv = await Inventory.findOne({
         where: { product_id: item.productId, branch_id: fromBranchId }
       });
       const available = inv ? inv.quantity : 0;
-      const reserve = Math.max(1, inv?.low_stock_threshold || 10);
-      const maxTransferable = Math.max(0, available - reserve);
       const prod = await Product.findByPk(item.productId);
       const name = prod ? prod.name : `Product #${item.productId}`;
 
-      if (available <= reserve) {
+      if (available <= 0) {
         return res.status(400).json({
-          message: `Cannot transfer "${name}". Source branch only has ${available} units in stock, which is required as safety reserve (${reserve} units) so the branch does not run out of stock.`
+          message: `Cannot transfer "${name}". Source branch has 0 units in stock.`
         });
       }
 
-      if (item.quantity > maxTransferable) {
+      if (item.quantity > available) {
         return res.status(400).json({
-          message: `Cannot transfer ${item.quantity} units of "${name}". Available stock is ${available}, and a safety reserve of ${reserve} units must be retained so the branch does not run out of stock. Maximum transferable is ${maxTransferable} units.`
+          message: `Cannot transfer ${item.quantity} units of "${name}". Source branch only has ${available} units available in stock.`
         });
       }
     }
