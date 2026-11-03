@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import { motion, AnimatePresence } from "framer-motion";
@@ -22,9 +22,12 @@ import {
   AlertCircle,
   Tag,
   ArrowRight,
-  Info
+  Info,
+  UploadCloud,
+  Image as ImageIcon
 } from "lucide-react";
 import { apiUrl } from "@/lib/api";
+import { resolveProductImageUrl, handleProductImageError } from "@/lib/imageHelper";
 import { useAuthGuard } from "@/lib/useAuthGuard";
 import { showSuccess, showError, showConfirm } from "@/context/ModalContext";
 
@@ -52,6 +55,10 @@ export default function BundlesPage() {
   const [formPrice, setFormPrice] = useState("");
   const [formSelectedBranches, setFormSelectedBranches] = useState([]);
   const [formSelectedItems, setFormSelectedItems] = useState([]); // [{ product, quantity }]
+  const [formImageFile, setFormImageFile] = useState(null);
+  const [formImagePreview, setFormImagePreview] = useState(null);
+  const [formRemoveImage, setFormRemoveImage] = useState(false);
+  const imageInputRef = useRef(null);
 
   // Product Selection / Search inside modal
   const [productSearchQuery, setProductSearchQuery] = useState("");
@@ -127,6 +134,9 @@ export default function BundlesPage() {
     // Default to selecting all branches if super admin
     setFormSelectedBranches(branches.map(b => b.id));
     setFormSelectedItems([]);
+    setFormImageFile(null);
+    setFormImagePreview(null);
+    setFormRemoveImage(false);
     setProductSearchQuery("");
     setIsProductPickerOpen(false);
     setIsFormModalOpen(true);
@@ -145,9 +155,38 @@ export default function BundlesPage() {
         quantity: item.quantity || 1
       }))
     );
+    setFormImageFile(null);
+    setFormImagePreview(bundle.image_url ? resolveProductImageUrl(bundle, "medium") : null);
+    setFormRemoveImage(false);
     setProductSearchQuery("");
     setIsProductPickerOpen(false);
     setIsFormModalOpen(true);
+  };
+
+  const handleImageFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      showError("Invalid file format. Please select a JPG, PNG, or WEBP image.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      showError("Image file size cannot exceed 10MB.");
+      return;
+    }
+    setFormImageFile(file);
+    setFormImagePreview(URL.createObjectURL(file));
+    setFormRemoveImage(false);
+  };
+
+  const handleClearBundleImage = () => {
+    setFormImageFile(null);
+    setFormImagePreview(null);
+    setFormRemoveImage(true);
+    if (imageInputRef.current) {
+      imageInputRef.current.value = "";
+    }
   };
 
   // Open View Modal (Branch Admin & Super Admin)
@@ -214,16 +253,28 @@ export default function BundlesPage() {
       }, 0);
     }
 
-    const payload = {
-      name: trimmedName,
-      description: formDescription.trim() || undefined,
-      price: parsedPrice,
-      items: formSelectedItems.map(item => ({
-        product_id: item.product.id,
-        quantity: item.quantity
-      })),
-      branch_ids: formSelectedBranches
-    };
+    const fd = new FormData();
+    fd.append("name", trimmedName);
+    if (formDescription.trim()) {
+      fd.append("description", formDescription.trim());
+    }
+    fd.append("price", String(parsedPrice));
+    fd.append(
+      "items",
+      JSON.stringify(
+        formSelectedItems.map(item => ({
+          product_id: item.product.id,
+          quantity: item.quantity
+        }))
+      )
+    );
+    fd.append("branch_ids", JSON.stringify(formSelectedBranches));
+
+    if (formImageFile) {
+      fd.append("image", formImageFile);
+    } else if (editingBundle && formRemoveImage) {
+      fd.append("remove_image", "true");
+    }
 
     setSubmitting(true);
     try {
@@ -235,10 +286,9 @@ export default function BundlesPage() {
       const res = await fetch(url, {
         method,
         headers: {
-          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify(payload)
+        body: fd
       });
 
       if (res.ok) {
@@ -510,6 +560,23 @@ export default function BundlesPage() {
                         )}
                       </div>
 
+                      {/* Bundle Image Banner */}
+                      <div className="w-full h-36 bg-brand-bgbase rounded-2xl border border-brand-border/60 mb-3.5 overflow-hidden relative flex items-center justify-center">
+                        <div className="flex flex-col items-center justify-center text-brand-neonpurple/50">
+                          <Layers size={32} className="stroke-[1.5px] mb-1" />
+                          <span className="text-[8px] font-black uppercase tracking-widest">Bundle Package</span>
+                        </div>
+                        {resolveProductImageUrl(bundle, "medium") && (
+                          <img
+                            src={resolveProductImageUrl(bundle, "medium")}
+                            alt={bundle.name}
+                            className="absolute inset-0 w-full h-full object-cover z-10 group-hover:scale-105 transition-transform duration-300"
+                            loading="lazy"
+                            onError={handleProductImageError}
+                          />
+                        )}
+                      </div>
+
                       {/* Title & Description */}
                       <h3 className="text-base font-rajdhani font-black text-main uppercase tracking-wide leading-tight line-clamp-1 group-hover:text-brand-neonpurple transition-colors mb-1">
                         {bundle.name}
@@ -663,6 +730,17 @@ export default function BundlesPage() {
 
               {/* Body */}
               <div className="p-6 overflow-y-auto custom-scrollbar space-y-6">
+                {resolveProductImageUrl(viewingBundle, "original") && (
+                  <div className="w-full h-52 bg-brand-bgbase rounded-2xl border border-brand-border overflow-hidden relative flex items-center justify-center">
+                    <img
+                      src={resolveProductImageUrl(viewingBundle, "original")}
+                      alt={viewingBundle.name}
+                      className="w-full h-full object-contain"
+                      onError={handleProductImageError}
+                    />
+                  </div>
+                )}
+
                 {/* Pricing & Description Cards */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-brand-bgbase p-4 rounded-2xl border border-brand-border">
@@ -875,6 +953,75 @@ export default function BundlesPage() {
                     placeholder="Provide a brief summary of what this bundle includes or warranty details..."
                     className="w-full bg-brand-bgbase border border-brand-border rounded-xl py-2.5 px-4 text-xs font-medium text-main focus:outline-none focus:border-brand-neonpurple/50 transition-colors"
                   />
+                </div>
+
+                {/* Bundle Package Image Upload */}
+                <div className="bg-brand-bgbase p-5 rounded-2xl border border-brand-border">
+                  <div className="flex justify-between items-center mb-3">
+                    <div>
+                      <label className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[2px] text-main">
+                        <ImageIcon size={14} className="text-brand-neonpurple" />
+                        <span>Bundle Package Image (Optional)</span>
+                      </label>
+                      <p className="text-[10px] text-brand-muted mt-0.5">
+                        Upload a promotional photo or package preview (JPG, PNG, WEBP — max 10MB)
+                      </p>
+                    </div>
+                    {formImagePreview && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => imageInputRef.current?.click()}
+                          className="px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-brand-surface border border-brand-border text-brand-neonpurple hover:border-brand-neonpurple/40 transition-colors"
+                        >
+                          Change Image
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleClearBundleImage}
+                          className="px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-brand-crimson/10 border border-brand-crimson/30 text-brand-crimson hover:bg-brand-crimson/20 transition-colors"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/jpeg,image/jpg,image/png,image/webp"
+                    onChange={handleImageFileChange}
+                    className="hidden"
+                  />
+
+                  {formImagePreview ? (
+                    <div
+                      onClick={() => imageInputRef.current?.click()}
+                      className="w-full h-44 rounded-xl border border-brand-neonpurple/30 bg-brand-surface overflow-hidden relative flex items-center justify-center cursor-pointer group"
+                    >
+                      <img
+                        src={formImagePreview}
+                        alt="Bundle Preview"
+                        className="w-full h-full object-contain p-2"
+                        onError={handleProductImageError}
+                      />
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <span className="px-3 py-1.5 rounded-full bg-brand-neonpurple text-white text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-lg">
+                          <UploadCloud size={14} /> Click to Replace Image
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => imageInputRef.current?.click()}
+                      className="w-full h-32 rounded-xl border-2 border-dashed border-brand-border hover:border-brand-neonpurple/50 bg-brand-surface/50 hover:bg-brand-neonpurple/5 transition-all flex flex-col items-center justify-center cursor-pointer gap-1.5 text-brand-muted hover:text-brand-neonpurple"
+                    >
+                      <UploadCloud size={26} />
+                      <span className="text-xs font-bold">Click to upload bundle image</span>
+                      <span className="text-[10px] text-brand-muted">Supports JPG, PNG, WEBP (Auto-compressed to WebP)</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Branch Availability Selection Field */}

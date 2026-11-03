@@ -611,6 +611,10 @@ const migrateSchema = async () => {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
       console.log('DATABASE: Verified bundles, bundle_items, and bundle_branches tables.');
+      await addColumnIfMissing(queryInterface, 'bundles', 'image_url', {
+        type: DataTypes.STRING(500),
+        allowNull: true
+      });
     } catch (bErr) {
       console.warn('DATABASE: Bundles tables migration warning:', bErr.message);
     }

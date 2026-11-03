@@ -24,6 +24,10 @@ const Bundle = sequelize.define('Bundle', {
     type: DataTypes.STRING(50),
     allowNull: false,
     defaultValue: 'active'
+  },
+  image_url: {
+    type: DataTypes.STRING(500),
+    allowNull: true
   }
 }, {
   tableName: 'bundles',

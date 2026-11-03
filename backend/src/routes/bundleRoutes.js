@@ -3,6 +3,7 @@ const router = express.Router();
 const { body, param } = require('express-validator');
 const validate = require('../middleware/validate');
 const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
+const upload = require('../middleware/uploadMiddleware');
 const {
   getBundles,
   getBundleById,
@@ -10,6 +11,23 @@ const {
   updateBundle,
   deleteBundle
 } = require('../controllers/bundleController');
+
+// Parse JSON fields when request is sent via multipart/form-data
+const parseMultipartJsonFields = (req, res, next) => {
+  if (req.body) {
+    if (typeof req.body.items === 'string') {
+      try {
+        req.body.items = JSON.parse(req.body.items);
+      } catch (e) {}
+    }
+    if (typeof req.body.branch_ids === 'string') {
+      try {
+        req.body.branch_ids = JSON.parse(req.body.branch_ids);
+      } catch (e) {}
+    }
+  }
+  next();
+};
 
 // All bundle endpoints require authentication
 router.use(authenticateToken);
@@ -26,6 +44,8 @@ router.get('/:id', [
 // POST /api/bundles - Super Admin only
 router.post('/', [
   authorizeRoles('super_admin'),
+  upload.single('image'),
+  parseMultipartJsonFields,
   body('name')
     .trim()
     .notEmpty().withMessage('Bundle name is required.')
@@ -54,6 +74,8 @@ router.post('/', [
 // PUT /api/bundles/:id - Super Admin only
 router.put('/:id', [
   authorizeRoles('super_admin'),
+  upload.single('image'),
+  parseMultipartJsonFields,
   param('id').isInt().withMessage('Invalid bundle ID.'),
   body('name')
     .optional()

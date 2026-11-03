@@ -1,6 +1,7 @@
 const { Bundle, BundleItem, BundleBranch, Product, Branch } = require('../models');
 const sequelize = require('../db');
 const { Op } = require('sequelize');
+const imageService = require('../services/imageService');
 
 /**
  * Get all bundles with item details and available branches
@@ -171,12 +172,24 @@ const createBundle = async (req, res) => {
       }, 0);
     }
 
+    // Process uploaded bundle image if provided
+    let image_url = null;
+    if (req.file) {
+      try {
+        image_url = await imageService.processProductImage(req.file.buffer);
+      } catch (imgError) {
+        await transaction.rollback();
+        return res.status(400).json({ message: 'Image processing failed: ' + imgError.message });
+      }
+    }
+
     // 1. Create Bundle
     const bundle = await Bundle.create({
       name: name.trim(),
       description: description ? description.trim() : null,
       price: finalPrice,
-      status: status || 'active'
+      status: status || 'active',
+      image_url
     }, { transaction });
 
     // 2. Create Bundle Items
@@ -235,7 +248,7 @@ const updateBundle = async (req, res) => {
   const transaction = await sequelize.transaction();
   try {
     const { id } = req.params;
-    const { name, description, price, status, items, branch_ids } = req.body;
+    const { name, description, price, status, items, branch_ids, remove_image } = req.body;
 
     const bundle = await Bundle.findByPk(id, { transaction });
     if (!bundle) {
@@ -250,6 +263,25 @@ const updateBundle = async (req, res) => {
       if (!isNaN(p) && p >= 0) bundle.price = p;
     }
     if (status) bundle.status = status;
+
+    // Handle bundle image upload or removal
+    if (req.file) {
+      try {
+        const newImageUrl = await imageService.processProductImage(req.file.buffer);
+        if (bundle.image_url && bundle.image_url.startsWith('/uploads/products/')) {
+          imageService.deleteProductImageFiles(bundle.image_url);
+        }
+        bundle.image_url = newImageUrl;
+      } catch (imgError) {
+        await transaction.rollback();
+        return res.status(400).json({ message: 'Image processing failed: ' + imgError.message });
+      }
+    } else if (remove_image === 'true' || remove_image === true) {
+      if (bundle.image_url && bundle.image_url.startsWith('/uploads/products/')) {
+        imageService.deleteProductImageFiles(bundle.image_url);
+      }
+      bundle.image_url = null;
+    }
 
     await bundle.save({ transaction });
 
@@ -324,11 +356,15 @@ const deleteBundle = async (req, res) => {
       return res.status(404).json({ message: 'Bundle not found' });
     }
 
+    const oldImageUrl = bundle.image_url;
     await BundleItem.destroy({ where: { bundle_id: bundle.id }, transaction });
     await BundleBranch.destroy({ where: { bundle_id: bundle.id }, transaction });
     await bundle.destroy({ transaction });
 
     await transaction.commit();
+    if (oldImageUrl && oldImageUrl.startsWith('/uploads/products/')) {
+      imageService.deleteProductImageFiles(oldImageUrl);
+    }
     return res.status(200).json({ message: 'Bundle deleted successfully' });
   } catch (error) {
     await transaction.rollback();

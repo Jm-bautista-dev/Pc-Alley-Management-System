@@ -2009,10 +2009,15 @@ export default function SalesPage() {
                           )}
                         </div>
 
-                        <div className="w-full h-28 bg-brand-neonpurple/5 rounded-2xl border border-brand-neonpurple/10 mb-4 flex flex-col items-center justify-center text-brand-neonpurple group-hover:scale-102 transition-transform">
+                        <div className="w-full h-28 bg-brand-neonpurple/5 rounded-2xl border border-brand-neonpurple/10 mb-4 flex flex-col items-center justify-center text-brand-neonpurple overflow-hidden relative group-hover:scale-102 transition-transform">
                           <Layers size={36} className="stroke-[1.5px] mb-1" />
                           <span className="text-[8px] font-black uppercase tracking-widest text-brand-neonpurple/70">
                             Customizable Package
+                          </span>
+                          {resolveProductImageUrl(bundle, "medium") && (
+                            <img src={resolveProductImageUrl(bundle, "medium")} alt={bundle.name} className="absolute inset-0 w-full h-full object-cover z-10" loading="lazy" onError={handleProductImageError} />
+                          )}
+                          <span className="hidden">
                           </span>
                         </div>
 
