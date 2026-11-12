@@ -7,8 +7,9 @@ const { PurchaseOrder, PurchaseOrderItem, Inventory, Product, StockMovement, Not
  */
 const receivePurchaseOrder = async (poId, userId, ipAddress) => {
   const transaction = await sequelize.transaction();
+  let po;
   try {
-    const po = await PurchaseOrder.findByPk(poId, {
+    po = await PurchaseOrder.findByPk(poId, {
       include: [PurchaseOrderItem]
     });
 
@@ -17,24 +18,24 @@ const receivePurchaseOrder = async (poId, userId, ipAddress) => {
     }
 
     if (po.status === 'Received') {
-      throw new Error('Purchase Order has already been received.');
+      throw new Error('Purchase Order has already been marked as Received.');
     }
 
-    // 1. Update PO Status
+    // 1. Update PO status
     po.status = 'Received';
+    po.receivedDate = new Date();
     await po.save({ transaction });
 
-    // 2. Loop and update inventory for each item
+    // 2. Iterate over items, update Inventory and create StockMovements
     for (const item of po.PurchaseOrderItems) {
       const product = await Product.findByPk(item.productId);
       if (!product) continue;
 
-      // Find or initialize inventory record
       let inventory = await Inventory.findOne({
         where: { product_id: product.id, branch_id: po.branchId }
       });
 
-      let previous_stock = 0;
+      let prevStock = 0;
       if (!inventory) {
         inventory = await Inventory.create({
           product_id: product.id,
@@ -43,7 +44,7 @@ const receivePurchaseOrder = async (poId, userId, ipAddress) => {
           low_stock_threshold: 5
         }, { transaction });
       } else {
-        previous_stock = inventory.quantity;
+        prevStock = inventory.quantity;
         inventory.quantity += item.quantity;
         await inventory.save({ transaction });
       }
@@ -53,40 +54,52 @@ const receivePurchaseOrder = async (poId, userId, ipAddress) => {
         product_id: product.id,
         type: 'RESTOCK',
         quantity: item.quantity,
-        previous_stock,
+        previous_stock: prevStock,
         new_stock: inventory.quantity,
         user_id: userId,
-        note: `PO Ingestion: ${po.poNumber}`
+        note: `Purchase Order Received (PO: ${po.poNumber})`
       }, { transaction });
 
-      // Update Product's last purchase price
-      product.last_purchase_price = item.unitCost;
+      // Update unit cost if provided
+      if (item.unitCost > 0) {
+        product.cost_price = item.unitCost;
+      }
       await product.save({ transaction });
     }
 
-    // 3. Create Notification for the receiving user
-    await Notification.create({
-      user_id: userId,
-      title: 'Purchase Order Received',
-      message: `Purchase Order ${po.poNumber} has been received and added to inventory.`,
-      type: 'purchase_order',
-      link: '/purchases'
-    }, { transaction });
-
-    // 4. Log to AuditLog
-    await AuditLog.create({
-      action: 'RECEIVE_PURCHASE_ORDER',
-      user_id: userId,
-      details: `Purchase Order ${po.poNumber} marked as Received. Branch: ${po.branchId}`,
-      ip_address: ipAddress || null
-    }, { transaction });
+    // 3. Log to AuditLog
+    if (userId) {
+      await AuditLog.create({
+        action: 'RECEIVE_PURCHASE_ORDER',
+        user_id: userId,
+        details: `Purchase Order ${po.poNumber} marked as Received. Branch: ${po.branchId}`,
+        ip_address: ipAddress || null
+      }, { transaction });
+    }
 
     await transaction.commit();
-    return po;
   } catch (error) {
     if (transaction) await transaction.rollback();
     throw error;
   }
+
+  // 4. Post-commit: Create Notification for the receiving user
+  try {
+    if (userId) {
+      await Notification.create({
+        userId: userId,
+        branchId: po.branchId,
+        title: 'Purchase Order Received',
+        message: `Purchase Order ${po.poNumber} has been received and added to inventory.`,
+        type: 'purchase_order',
+        link: '/purchases'
+      });
+    }
+  } catch (notifErr) {
+    console.warn('[Notification Warning in PO Receive]:', notifErr.message);
+  }
+
+  return po;
 };
 
 module.exports = { receivePurchaseOrder };

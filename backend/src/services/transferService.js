@@ -7,8 +7,9 @@ const { StockTransfer, StockTransferItem, Inventory, Product, StockMovement, Not
  */
 const completeStockTransfer = async (transferId, userId, ipAddress) => {
   const transaction = await sequelize.transaction();
+  let transfer;
   try {
-    const transfer = await StockTransfer.findByPk(transferId, {
+    transfer = await StockTransfer.findByPk(transferId, {
       include: [StockTransferItem]
     });
 
@@ -84,37 +85,47 @@ const completeStockTransfer = async (transferId, userId, ipAddress) => {
       }, { transaction });
     }
 
-    // 3. Notify Branch Admins of completed transfer
-    const branchAdmins = await User.findAll({
-      where: { role: 'branch_admin', branch_id: [transfer.fromBranchId, transfer.toBranchId] }
-    });
-
-    const notifications = branchAdmins.map(admin => ({
-      user_id: admin.id,
-      title: 'Stock Transfer Completed',
-      message: `Stock Transfer #${transfer.id} has been processed and completed successfully.`,
-      type: 'stock_transfer',
-      link: '/inventory'
-    }));
-
-    if (notifications.length > 0) {
-      await Notification.bulkCreate(notifications, { transaction });
+    // 3. Log Audit Log
+    if (userId) {
+      await AuditLog.create({
+        action: 'COMPLETE_STOCK_TRANSFER',
+        user_id: userId,
+        details: `Stock Transfer #${transfer.id} completed. Source branch ${transfer.fromBranchId} -> Dest branch ${transfer.toBranchId}`,
+        ip_address: ipAddress || null
+      }, { transaction });
     }
 
-    // 4. Log Audit Log
-    await AuditLog.create({
-      action: 'COMPLETE_STOCK_TRANSFER',
-      user_id: userId,
-      details: `Stock Transfer #${transfer.id} completed. Source branch ${transfer.fromBranchId} -> Dest branch ${transfer.toBranchId}`,
-      ip_address: ipAddress || null
-    }, { transaction });
-
     await transaction.commit();
-    return transfer;
   } catch (error) {
     if (transaction) await transaction.rollback();
     throw error;
   }
+
+  // 4. Post-commit: Notify Branch Admins of completed transfer
+  try {
+    const branchAdmins = await User.findAll({
+      where: { role: 'branch_admin', branch_id: [transfer.fromBranchId, transfer.toBranchId] }
+    });
+
+    const notifications = branchAdmins
+      .filter(admin => admin && admin.id)
+      .map(admin => ({
+        userId: admin.id,
+        branchId: admin.branch_id,
+        title: 'Stock Transfer Completed',
+        message: `Stock Transfer #${transfer.id} has been processed and completed successfully.`,
+        type: 'stock_transfer',
+        link: '/inventory'
+      }));
+
+    if (notifications.length > 0) {
+      await Notification.bulkCreate(notifications);
+    }
+  } catch (notifErr) {
+    console.warn('[Notification Warning in Transfer Complete]:', notifErr.message);
+  }
+
+  return transfer;
 };
 
 module.exports = { completeStockTransfer };
